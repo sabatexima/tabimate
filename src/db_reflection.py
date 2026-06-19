@@ -127,8 +127,9 @@ def get_trips(user_id: str) -> list:
       - stickers_preview: カードのバッジ用、代表付箋の言葉を最新2枚まで（list）
     を相関サブクエリで付与する（N+1を避けるため1クエリで取得）。
 
-    付箋プレビューは GROUP_CONCAT で最新順に連結し（区切りは制御文字0x1f）、
-    SUBSTRING_INDEX で先頭2件に絞ったものを Python 側で list へ分解する。
+    付箋プレビューは GROUP_CONCAT の区切り指定が TiDB で扱いづらいため、
+    最新・2番目の2つのスカラーサブクエリ（LIMIT offset）で取得し、
+    Python 側で None を除いた list にまとめる。
     """
     with get_engine().connect() as conn:
         _ensure_all(conn)
@@ -138,9 +139,10 @@ def get_trips(user_id: str) -> list:
                 "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
                 "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
                 "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path, "
-                "  (SELECT SUBSTRING_INDEX("
-                "       GROUP_CONCAT(s.text ORDER BY s.id DESC SEPARATOR 0x1f), 0x1f, 2) "
-                "     FROM stickers s WHERE s.trip_id = t.id) AS sticker_badges "
+                "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
+                "     ORDER BY s.id DESC LIMIT 1) AS sticker1, "
+                "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
+                "     ORDER BY s.id DESC LIMIT 1 OFFSET 1) AS sticker2 "
                 "FROM trips t WHERE t.user_id = :uid ORDER BY t.created_at DESC"
             ),
             {"uid": user_id},
@@ -151,8 +153,7 @@ def get_trips(user_id: str) -> list:
         for k in ("start_date", "end_date", "created_at"):
             if d.get(k) is not None:
                 d[k] = str(d[k])
-        badges = d.pop("sticker_badges", None)
-        d["stickers_preview"] = badges.split("\x1f") if badges else []
+        d["stickers_preview"] = [s for s in (d.pop("sticker1", None), d.pop("sticker2", None)) if s]
         result.append(d)
     return result
 

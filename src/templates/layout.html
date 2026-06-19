@@ -22,7 +22,8 @@
     @media (max-width: 768px) {
       html, body { overflow: hidden; }
       .wrapper { height: 100%; min-height: unset; }
-      .main { overflow: hidden; }
+      /* .main を縦スクロール可能な領域にする（長いページでもスクロールできるように） */
+      .main { overflow-y: auto; -webkit-overflow-scrolling: touch; }
     }
 
     /* ハンバーガーボタン（モバイルのみ表示）*/

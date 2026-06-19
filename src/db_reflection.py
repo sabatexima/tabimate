@@ -121,11 +121,14 @@ def get_trip(trip_id: int, user_id: str) -> dict | None:
 def get_trips(user_id: str) -> list:
     """ユーザーの旅一覧を返す。
 
-    一覧カードをリッチに描画するため、各旅に
-      - photo_count    : 写真枚数
-      - cover_path     : サムネイルに使う代表写真の storage_path（最古の1枚／無ければ None）
-      - sticker_teaser : 代表付箋の言葉（最新の1枚／無ければ None）
+    一覧カード（SNSフィード風）をリッチに描画するため、各旅に
+      - photo_count     : 写真枚数
+      - cover_path      : 大きく見せる代表写真の storage_path（最古の1枚／無ければ None）
+      - stickers_preview: カードのバッジ用、代表付箋の言葉を最新2枚まで（list）
     を相関サブクエリで付与する（N+1を避けるため1クエリで取得）。
+
+    付箋プレビューは GROUP_CONCAT で最新順に連結し（区切りは制御文字0x1f）、
+    SUBSTRING_INDEX で先頭2件に絞ったものを Python 側で list へ分解する。
     """
     with get_engine().connect() as conn:
         _ensure_all(conn)
@@ -135,8 +138,9 @@ def get_trips(user_id: str) -> list:
                 "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
                 "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
                 "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path, "
-                "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
-                "     ORDER BY s.id DESC LIMIT 1) AS sticker_teaser "
+                "  (SELECT SUBSTRING_INDEX("
+                "       GROUP_CONCAT(s.text ORDER BY s.id DESC SEPARATOR 0x1f), 0x1f, 2) "
+                "     FROM stickers s WHERE s.trip_id = t.id) AS sticker_badges "
                 "FROM trips t WHERE t.user_id = :uid ORDER BY t.created_at DESC"
             ),
             {"uid": user_id},
@@ -147,6 +151,8 @@ def get_trips(user_id: str) -> list:
         for k in ("start_date", "end_date", "created_at"):
             if d.get(k) is not None:
                 d[k] = str(d[k])
+        badges = d.pop("sticker_badges", None)
+        d["stickers_preview"] = badges.split("\x1f") if badges else []
         result.append(d)
     return result
 

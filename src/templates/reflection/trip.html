@@ -28,27 +28,38 @@
   .btn.secondary { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
   .btn:disabled { opacity: 0.6; cursor: default; }
 
+  /* 付箋ボード（主役・最上部） */
+  .sticker-section { border-color: rgba(108,92,231,0.28); }
+  .sticker-board {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px;
+  }
+  .sticker {
+    position: relative;
+    background: linear-gradient(135deg, #fff8e1 0%, #fffdf5 100%);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 4px;
+    padding: 14px 16px;
+    font-weight: 700; color: var(--text-main); font-size: 1.0em;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    max-width: 240px;
+  }
+  /* 付箋らしく1枚ずつ少し傾ける（派手にしない範囲で） */
+  .sticker:nth-child(3n+1) { transform: rotate(-1.5deg); }
+  .sticker:nth-child(3n+2) { transform: rotate(1deg); }
+  .sticker:nth-child(3n)   { transform: rotate(-0.5deg); }
+  .sticker .del {
+    position: absolute; top: 2px; right: 4px;
+    background: none; border: none; cursor: pointer;
+    color: #c3c0b0; font-size: 0.9em; line-height: 1; padding: 2px 4px;
+    opacity: 0; transition: opacity 0.1s;
+  }
+  .sticker:hover .del { opacity: 1; }
+  .sticker .del:hover { color: #e74c3c; }
+  .sticker-empty { color: var(--text-muted); font-size: 0.9em; margin-top: 14px; }
+
   .photo-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .photo-grid img { width: 92px; height: 92px; object-fit: cover; border-radius: 8px; }
   .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
-
-  .ach-list { display: flex; flex-direction: column; gap: 10px; }
-  .ach {
-    border: 1px dashed rgba(108,92,231,0.4); border-radius: 10px; padding: 12px 14px;
-    background: linear-gradient(135deg, #f8f7ff 0%, #fff 100%);
-  }
-  .ach .title { font-weight: 700; color: var(--primary-color); }
-  .ach .flavor { font-size: 0.88em; color: var(--text-main); margin-top: 4px; }
-
-  .tone-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .tone-row select, .tone-row input {
-    border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 0.88em;
-  }
-  .report-body {
-    white-space: pre-wrap; line-height: 1.8; font-size: 0.95em; color: var(--text-main);
-    background: #faf9ff; border-radius: 10px; padding: 16px; margin-top: 12px;
-  }
-  .report-meta { font-size: 0.78em; color: var(--text-muted); margin-top: 6px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
 
   .danger-zone { border-color: rgba(231,76,60,0.3); }
@@ -66,57 +77,39 @@
   {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
 </div>
 
+<!-- 付箋ボード（主役）-->
+<div class="section sticker-section">
+  <h2>🪧 旅の付箋</h2>
+  <p class="hint">写真から、旅の空気感をそっと言葉にしました。「なにそれ?」と思ったら、下の写真を見返してみてください。</p>
+  <button class="btn" id="sticker-btn">付箋を作る</button>
+  <div class="sticker-board" id="sticker-board">
+    {% for s in stickers %}
+      <div class="sticker" data-id="{{ s.id }}">
+        {{ s.text }}<button class="del" aria-label="削除">×</button>
+      </div>
+    {% endfor %}
+  </div>
+  {% if not stickers %}
+    <div class="sticker-empty" id="sticker-empty">写真を入れると、ここに旅の付箋が並びます。</div>
+  {% endif %}
+</div>
+
 <!-- 写真 -->
 <div class="section">
   <h2>📷 写真</h2>
-  <p class="hint">旅の写真をまとめてアップロード。撮影時刻や位置情報（あれば）から、あとで振り返りを生成します。</p>
+  <p class="hint">旅の写真をまとめてアップロード。ここから付箋を生成します。</p>
   <div class="photo-grid" id="photo-grid">
     {% for p in photos %}<img src="{{ p.url }}" alt="photo" loading="lazy">{% endfor %}
   </div>
   <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
   <input type="file" id="photo-input" accept="image/*" multiple style="margin-bottom:10px;">
-  <div><button class="btn" id="upload-btn">アップロード</button></div>
-</div>
-
-<!-- 称号（機能A）-->
-<div class="section">
-  <h2>🏅 謎アチーブメント</h2>
-  <p class="hint">あなたの旅のクセを、そっと称号にしました。狙っては取れません。</p>
-  <button class="btn secondary" id="ach-btn">称号を生成</button>
-  <div class="ach-list" id="ach-list" style="margin-top:14px;">
-    {% for a in achievements %}
-      <div class="ach"><div class="title">{{ a.title }}</div><div class="flavor">{{ a.flavor_text }}</div></div>
-    {% else %}
-      <div class="muted" id="ach-empty">まだ称号はありません。</div>
-    {% endfor %}
-  </div>
-</div>
-
-<!-- 旅レポート（機能B）-->
-<div class="section">
-  <h2>📝 AI旅レポート</h2>
-  <p class="hint">写真から「こんな旅でしたね」を実況・講評します。</p>
-  <div class="tone-row">
-    <select id="tone-select">
-      <option value="playful">陽気（ボケ多め）</option>
-      <option value="roast">辛口（愛のあるイジり）</option>
-      <option value="gentle">やさしい（じんわり）</option>
-    </select>
-    <input type="text" id="area-input" placeholder="エリアを絞る（任意 例: 嵐山）" maxlength="60">
-    <button class="btn" id="report-btn">レポート生成</button>
-  </div>
-  <div id="report-output">
-    {% for r in reports %}
-      <div class="report-body">{{ r.body }}</div>
-      <div class="report-meta">トーン: {{ r.tone }}{% if r.area %} ／ エリア: {{ r.area }}{% endif %} ／ {{ r.created_at }}</div>
-    {% endfor %}
-  </div>
+  <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
 
 <!-- 危険ゾーン（旅の削除）-->
 <div class="section danger-zone">
   <h2>🗑 この旅を削除</h2>
-  <p class="hint">写真・称号・旅レポートをすべて削除します。元には戻せません。</p>
+  <p class="hint">写真・付箋をすべて削除します。元には戻せません。</p>
   <button class="btn danger" id="delete-trip-btn">この旅を削除する</button>
 </div>
 
@@ -153,55 +146,51 @@
     uploadBtn.disabled = false; uploadBtn.textContent = 'アップロード';
   });
 
-  // --- 称号生成 ---
-  const achBtn = document.getElementById('ach-btn');
-  achBtn.addEventListener('click', async () => {
-    achBtn.disabled = true; achBtn.textContent = '生成中...';
+  // --- 付箋生成 ---
+  const board = document.getElementById('sticker-board');
+  function renderStickers(items) {
+    board.innerHTML = items.map(s =>
+      `<div class="sticker">${esc(s.text)}<button class="del" aria-label="削除">×</button></div>`
+    ).join('');
+    const empty = document.getElementById('sticker-empty');
+    if (empty) empty.style.display = items.length ? 'none' : '';
+  }
+
+  const stickerBtn = document.getElementById('sticker-btn');
+  stickerBtn.addEventListener('click', async () => {
+    stickerBtn.disabled = true; stickerBtn.textContent = '付箋を作っています...';
     try {
-      const res = await fetch(`/reflection/trips/${TRIP_ID}/achievements/generate`, { method: 'POST' });
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/stickers/generate`, { method: 'POST' });
       const data = await res.json();
-      const list = document.getElementById('ach-list');
       if (res.ok) {
-        list.innerHTML = data.achievements.map(a =>
-          `<div class="ach"><div class="title">${esc(a.title)}</div><div class="flavor">${esc(a.flavor_text)}</div></div>`
-        ).join('') || '<div class="muted">称号を作れませんでした。</div>';
+        renderStickers(data.stickers || []);
       } else {
-        alert(data.error || '生成に失敗しました');
+        alert(data.error || '付箋を作れませんでした');
       }
-    } catch (e) { alert('生成に失敗しました'); }
-    achBtn.disabled = false; achBtn.textContent = '称号を生成';
+    } catch (e) { alert('付箋を作れませんでした'); }
+    stickerBtn.disabled = false; stickerBtn.textContent = '付箋を作る';
   });
 
-  // --- レポート生成 ---
-  const reportBtn = document.getElementById('report-btn');
-  reportBtn.addEventListener('click', async () => {
-    const tone = document.getElementById('tone-select').value;
-    const area = document.getElementById('area-input').value.trim();
-    reportBtn.disabled = true; reportBtn.textContent = '生成中...';
+  // --- 付箋を1枚削除 ---
+  board.addEventListener('click', async (ev) => {
+    const del = ev.target.closest('.del');
+    if (!del) return;
+    const card = del.closest('.sticker');
+    const id = card.dataset.id;
+    // 生成直後（未保存IDなし）の場合は見た目だけ消す
+    if (!id) { card.remove(); return; }
     try {
-      const res = await fetch(`/reflection/trips/${TRIP_ID}/report/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tone, area: area || null }),
-      });
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/stickers/${id}`, { method: 'DELETE' });
       const data = await res.json();
-      const out = document.getElementById('report-output');
-      if (res.ok) {
-        const meta = `トーン: ${esc(data.tone)}${data.area ? ' ／ エリア: ' + esc(data.area) : ''}`;
-        out.insertAdjacentHTML('afterbegin',
-          `<div class="report-body">${esc(data.body)}</div><div class="report-meta">${meta} ／ たった今</div>`);
-      } else {
-        alert(data.error || '生成に失敗しました');
-      }
-    } catch (e) { alert('生成に失敗しました'); }
-    reportBtn.disabled = false; reportBtn.textContent = 'レポート生成';
+      if (res.ok && data.deleted) card.remove();
+    } catch (e) { /* 失敗時は何もしない（次の生成で整合する） */ }
   });
 
-  // --- 旅の削除（写真・称号・レポートもまとめて消える） ---
+  // --- 旅の削除（写真・付箋もまとめて消える） ---
   const deleteBtn = document.getElementById('delete-trip-btn');
   deleteBtn.addEventListener('click', async () => {
     const title = {{ trip.title|tojson }};
-    if (!confirm(`「${title}」を削除しますか？\n写真・称号・旅レポートもすべて消え、元に戻せません。`)) return;
+    if (!confirm(`「${title}」を削除しますか？\n写真・付箋もすべて消え、元に戻せません。`)) return;
     deleteBtn.disabled = true; deleteBtn.textContent = '削除中...';
     try {
       const res = await fetch(`/reflection/trips/${TRIP_ID}`, { method: 'DELETE' });

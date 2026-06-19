@@ -32,7 +32,13 @@
   }
   .field.title-field input { width: 100%; box-sizing: border-box; }
   .field.date-field { flex: 0 1 160px; }
-  .new-trip input[type="date"] { width: 100%; box-sizing: border-box; }
+  /* iOS Safari は date入力を固有幅で描画し width 指定を無視するため、
+     -webkit-appearance:none でネイティブ装飾を外して幅指定を効かせる。 */
+  .new-trip input[type="date"] {
+    width: 100%; min-width: 0; box-sizing: border-box;
+    -webkit-appearance: none; appearance: none;
+    min-height: 38px; background: #fff;
+  }
   .new-trip button {
     background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
     padding: 9px 20px; font-weight: 600; cursor: pointer; font-size: 0.92em;
@@ -43,8 +49,9 @@
      iOSの日付入力が固有幅でカードからはみ出さないよう min-width:0 で縮ませる。 */
   @media (max-width: 600px) {
     .new-trip .row { gap: 8px; }
-    .field.title-field { flex: 1 1 100%; }
-    .field.date-field { flex: 1 1 0; min-width: 0; }
+    /* 確実にはみ出さないよう、各欄を縦に全幅で積む */
+    .field.title-field,
+    .field.date-field { flex: 1 1 100%; }
     .new-trip button { flex: 1 1 100%; margin-top: 2px; }
   }
 

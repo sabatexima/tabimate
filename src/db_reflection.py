@@ -65,6 +65,20 @@ CREATE TABLE IF NOT EXISTS trip_reports (
 ) CHARACTER SET utf8mb4
 """
 
+# 付箋（sticker）: 旅の写真から生成する短い言葉。アプリの主役。
+# text   = ユーザーに見せる短い付箋の言葉（例:「曇り空が同行者」）
+# basis  = 生成根拠（写真の何から来たか）。内部用でユーザーには返さない。
+_CREATE_STICKERS_TABLE = """
+CREATE TABLE IF NOT EXISTS stickers (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    trip_id     INT NOT NULL,
+    text        VARCHAR(255) NOT NULL,
+    basis       TEXT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_sticker_trip (trip_id)
+) CHARACTER SET utf8mb4
+"""
+
 
 def _row_to_dict(row) -> dict:
     return dict(row._mapping)
@@ -75,6 +89,7 @@ def _ensure_all(conn) -> None:
     conn.execute(text(_CREATE_PHOTOS_TABLE))
     conn.execute(text(_CREATE_ACHIEVEMENTS_TABLE))
     conn.execute(text(_CREATE_REPORTS_TABLE))
+    conn.execute(text(_CREATE_STICKERS_TABLE))
 
 
 # ----------------------------------------------------------------------
@@ -140,6 +155,7 @@ def delete_trip(trip_id: int, user_id: str) -> bool:
         conn.execute(text("DELETE FROM photos WHERE trip_id = :id"), {"id": trip_id})
         conn.execute(text("DELETE FROM achievements WHERE trip_id = :id"), {"id": trip_id})
         conn.execute(text("DELETE FROM trip_reports WHERE trip_id = :id"), {"id": trip_id})
+        conn.execute(text("DELETE FROM stickers WHERE trip_id = :id"), {"id": trip_id})
         result = conn.execute(
             text("DELETE FROM trips WHERE id = :id AND user_id = :uid"),
             {"id": trip_id, "uid": user_id},
@@ -217,6 +233,53 @@ def get_achievements(trip_id: int) -> list:
             d["created_at"] = str(d["created_at"])
         result.append(d)
     return result
+
+
+# ----------------------------------------------------------------------
+# stickers（付箋）: アプリの主役。再生成時は付け直す。
+# ----------------------------------------------------------------------
+def replace_stickers(trip_id: int, items: list) -> None:
+    """既存の付箋を消して付け直す（再生成時の重複防止）。items=[{text, basis}]"""
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        conn.execute(text("DELETE FROM stickers WHERE trip_id = :tid"), {"tid": trip_id})
+        for it in items:
+            conn.execute(
+                text(
+                    "INSERT INTO stickers (trip_id, text, basis) "
+                    "VALUES (:tid, :text, :basis)"
+                ),
+                {"tid": trip_id, "text": it.get("text", ""), "basis": it.get("basis", "")},
+            )
+
+
+def get_stickers(trip_id: int) -> list:
+    """付箋一覧を返す。basis（生成根拠）はユーザー非表示なので含めない。"""
+    with get_engine().connect() as conn:
+        _ensure_all(conn)
+        rows = conn.execute(
+            text("SELECT id, text, created_at FROM stickers "
+                 "WHERE trip_id = :tid ORDER BY id ASC"),
+            {"tid": trip_id},
+        ).fetchall()
+    result = []
+    for row in rows:
+        d = _row_to_dict(row)
+        if d.get("created_at") is not None:
+            d["created_at"] = str(d["created_at"])
+        result.append(d)
+    return result
+
+
+def delete_sticker(sticker_id: int, trip_id: int) -> bool:
+    """付箋を1枚削除する（本人の旅に紐づくものだけ）。"""
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        result = conn.execute(
+            text("DELETE FROM stickers WHERE id = :sid AND trip_id = :tid"),
+            {"sid": sticker_id, "tid": trip_id},
+        )
+        return result.rowcount > 0
 
 
 # ----------------------------------------------------------------------

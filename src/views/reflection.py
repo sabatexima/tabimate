@@ -105,6 +105,20 @@ def create_trip():
     return jsonify({"id": trip_id, "title": title}), 201
 
 
+@reflection.route("/trips/<int:trip_id>", methods=["PATCH"])
+@login_required
+def rename_trip(trip_id: int):
+    """旅のタイトルを後から編集する。"""
+    _require_trip(trip_id)
+    data = request.get_json(silent=True) or request.form
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "タイトルは必須です"}), 400
+    ok = repo.rename_trip(trip_id, _uid(), title)
+    logger.info("旅のタイトル変更: trip_id=%s user=%s", trip_id, _uid())
+    return jsonify({"updated": ok, "title": title})
+
+
 @reflection.route("/trips/<int:trip_id>", methods=["DELETE"])
 @login_required
 def delete_trip(trip_id: int):

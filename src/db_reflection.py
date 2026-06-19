@@ -158,6 +158,17 @@ def get_trips(user_id: str) -> list:
     return result
 
 
+def rename_trip(trip_id: int, user_id: str, title: str) -> bool:
+    """旅のタイトルを更新する（本人の旅のみ）。更新できたら True。"""
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        result = conn.execute(
+            text("UPDATE trips SET title = :title WHERE id = :id AND user_id = :uid"),
+            {"title": title, "id": trip_id, "uid": user_id},
+        )
+        return result.rowcount > 0
+
+
 def delete_trip(trip_id: int, user_id: str) -> bool:
     with get_engine().begin() as conn:
         _ensure_all(conn)

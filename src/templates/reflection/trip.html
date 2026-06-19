@@ -10,7 +10,19 @@
     --text-muted: #636e72;
   }
   .back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }
-  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin: 8px 0 2px; }
+  .title-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
+  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+  .title-edit {
+    background: none; border: none; cursor: pointer; color: var(--text-muted);
+    font-size: 1.05rem; padding: 4px 8px; border-radius: 8px; line-height: 1;
+  }
+  .title-edit:hover { background: #f0eefb; color: var(--primary-color); }
+  .title-editor { display: flex; gap: 8px; align-items: center; margin: 8px 0 2px; flex-wrap: wrap; }
+  .title-editor[hidden] { display: none; }
+  .title-editor input {
+    flex: 1 1 200px; min-width: 0; border: 1px solid #ddd; border-radius: 8px;
+    padding: 9px 12px; font-size: 1.1rem; font-weight: 700;
+  }
   .trip-dates { color: var(--text-muted); font-size: 0.88em; margin-bottom: 24px; }
 
   .section {
@@ -71,7 +83,15 @@
 
 {% block content %}
 <a class="back" href="{{ url_for('reflection.index') }}">‹ 一覧へ戻る</a>
-<div class="trip-title">{{ trip.title }}</div>
+<div class="title-row">
+  <div class="trip-title" id="trip-title">{{ trip.title }}</div>
+  <button class="title-edit" id="title-edit" aria-label="タイトルを編集">✎</button>
+</div>
+<div class="title-editor" id="title-editor" hidden>
+  <input id="title-input" type="text" maxlength="100" value="{{ trip.title }}">
+  <button class="btn" id="title-save">保存</button>
+  <button class="btn secondary" id="title-cancel">キャンセル</button>
+</div>
 <div class="trip-dates">
   {% if trip.start_date %}{{ trip.start_date }}{% endif %}
   {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
@@ -118,6 +138,49 @@
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // --- タイトル編集 ---
+  const titleEl = document.getElementById('trip-title');
+  const titleRow = titleEl.parentElement;
+  const titleEditor = document.getElementById('title-editor');
+  const titleInput = document.getElementById('title-input');
+  const titleSave = document.getElementById('title-save');
+  const titleCancel = document.getElementById('title-cancel');
+
+  function openTitleEdit() {
+    titleInput.value = titleEl.textContent.trim();
+    titleRow.hidden = true; titleEditor.hidden = false;
+    titleInput.focus(); titleInput.select();
+  }
+  function closeTitleEdit() { titleEditor.hidden = true; titleRow.hidden = false; }
+
+  document.getElementById('title-edit').addEventListener('click', openTitleEdit);
+  titleCancel.addEventListener('click', closeTitleEdit);
+  titleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); titleSave.click(); }
+    if (e.key === 'Escape') closeTitleEdit();
+  });
+  titleSave.addEventListener('click', async () => {
+    const title = titleInput.value.trim();
+    if (!title) { alert('タイトルを入力してください'); return; }
+    titleSave.disabled = true; titleSave.textContent = '保存中...';
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      const data = await res.json();
+      if (res.ok && data.updated) {
+        titleEl.textContent = data.title;
+        document.title = data.title + ' — 旅の振り返り';
+        closeTitleEdit();
+      } else {
+        alert(data.error || '更新に失敗しました');
+      }
+    } catch (e) { alert('更新に失敗しました'); }
+    titleSave.disabled = false; titleSave.textContent = '保存';
+  });
 
   // --- 写真アップロード ---
   const uploadBtn = document.getElementById('upload-btn');
@@ -189,7 +252,7 @@
   // --- 旅の削除（写真・付箋もまとめて消える） ---
   const deleteBtn = document.getElementById('delete-trip-btn');
   deleteBtn.addEventListener('click', async () => {
-    const title = {{ trip.title|tojson }};
+    const title = titleEl.textContent.trim() || 'この旅';
     if (!confirm(`「${title}」を削除しますか？\n写真・付箋もすべて消え、元に戻せません。`)) return;
     deleteBtn.disabled = true; deleteBtn.textContent = '削除中...';
     try {

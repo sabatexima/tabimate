@@ -131,3 +131,39 @@ def read_local(storage_path: str) -> bytes | None:
     if not path.is_file():
         return None
     return path.read_bytes()
+
+
+def delete(storage_path: str) -> bool:
+    """保存実体を削除する（GCS/ローカルどちらでも）。
+
+    旅や写真の削除時に呼び、ストレージ上の孤立ファイル（＝無駄なコスト）を防ぐ。
+    対象が存在しなくても True を返す（冪等）。失敗時のみ False。
+    """
+    if using_gcs():
+        try:
+            bucket = _get_gcs_client().bucket(_GCS_BUCKET)
+            # 既に無い場合でもエラーにしない
+            bucket.blob(storage_path).delete(if_generation_match=None)
+            logger.info("GCSから削除: bucket=%s key=%s", _GCS_BUCKET, storage_path)
+            return True
+        except Exception as e:
+            # NotFound は許容（既に消えている）
+            if e.__class__.__name__ == "NotFound":
+                return True
+            logger.warning("GCSからの削除に失敗: %s", storage_path, exc_info=True)
+            return False
+
+    # ローカルFS
+    path = (_LOCAL_DIR / storage_path).resolve()
+    # ディレクトリトラバーサル防止
+    if not str(path).startswith(str(_LOCAL_DIR.resolve())):
+        logger.warning("不正なパスの削除を拒否: %s", storage_path)
+        return False
+    try:
+        if path.is_file():
+            path.unlink()
+            logger.info("ローカルから削除: path=%s", path)
+        return True
+    except Exception:
+        logger.warning("ローカルからの削除に失敗: %s", storage_path, exc_info=True)
+        return False

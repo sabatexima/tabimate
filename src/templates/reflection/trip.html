@@ -50,6 +50,11 @@
   }
   .report-meta { font-size: 0.78em; color: var(--text-muted); margin-top: 6px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
+
+  .danger-zone { border-color: rgba(231,76,60,0.3); }
+  .danger-zone h2 { color: #e74c3c; }
+  .btn.danger { background: #e74c3c; }
+  .btn.danger:hover { background: #d63a2a; }
 </style>
 {% endblock %}
 
@@ -106,6 +111,13 @@
       <div class="report-meta">トーン: {{ r.tone }}{% if r.area %} ／ エリア: {{ r.area }}{% endif %} ／ {{ r.created_at }}</div>
     {% endfor %}
   </div>
+</div>
+
+<!-- 危険ゾーン（旅の削除）-->
+<div class="section danger-zone">
+  <h2>🗑 この旅を削除</h2>
+  <p class="hint">写真・称号・旅レポートをすべて削除します。元には戻せません。</p>
+  <button class="btn danger" id="delete-trip-btn">この旅を削除する</button>
 </div>
 
 <script>
@@ -183,6 +195,27 @@
       }
     } catch (e) { alert('生成に失敗しました'); }
     reportBtn.disabled = false; reportBtn.textContent = 'レポート生成';
+  });
+
+  // --- 旅の削除（写真・称号・レポートもまとめて消える） ---
+  const deleteBtn = document.getElementById('delete-trip-btn');
+  deleteBtn.addEventListener('click', async () => {
+    const title = {{ trip.title|tojson }};
+    if (!confirm(`「${title}」を削除しますか？\n写真・称号・旅レポートもすべて消え、元に戻せません。`)) return;
+    deleteBtn.disabled = true; deleteBtn.textContent = '削除中...';
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.deleted) {
+        location.href = '{{ url_for("reflection.index") }}';
+      } else {
+        alert('削除に失敗しました');
+        deleteBtn.disabled = false; deleteBtn.textContent = 'この旅を削除する';
+      }
+    } catch (e) {
+      alert('削除に失敗しました');
+      deleteBtn.disabled = false; deleteBtn.textContent = 'この旅を削除する';
+    }
   });
 </script>
 {% endblock %}

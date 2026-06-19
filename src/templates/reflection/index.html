@@ -36,8 +36,9 @@
   .new-trip button:disabled { opacity: 0.6; cursor: default; }
 
   #trips { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+  .trip-row { display: flex; align-items: stretch; gap: 8px; }
   .trip-card {
-    display: flex; align-items: center; justify-content: space-between;
+    flex: 1; display: flex; align-items: center; justify-content: space-between;
     background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
     padding: 14px 16px; text-decoration: none; color: var(--text-main);
     box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.1s;
@@ -46,6 +47,13 @@
   .trip-card .t { font-weight: 700; }
   .trip-card .m { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
   .trip-card .go { color: var(--primary-color); font-size: 1.3em; }
+  .del-btn {
+    flex: 0 0 auto; background: #fff; border: 1px solid #ffd0d0; color: #e74c3c;
+    border-radius: 12px; padding: 0 14px; font-size: 1.1em; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: background 0.1s;
+  }
+  .del-btn:hover { background: #fff5f5; }
+  .del-btn:disabled { opacity: 0.5; cursor: default; }
 
   .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
   .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
@@ -68,16 +76,20 @@
 
 <div id="trips">
   {% for trip in trips %}
-    <a class="trip-card" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
-      <div>
-        <div class="t">{{ trip.title }}</div>
-        <div class="m">
-          {% if trip.start_date %}{{ trip.start_date }}{% endif %}
-          {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
+    <div class="trip-row" data-id="{{ trip.id }}">
+      <a class="trip-card" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
+        <div>
+          <div class="t">{{ trip.title }}</div>
+          <div class="m">
+            {% if trip.start_date %}{{ trip.start_date }}{% endif %}
+            {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
+          </div>
         </div>
-      </div>
-      <span class="go">›</span>
-    </a>
+        <span class="go">›</span>
+      </a>
+      <button class="del-btn" data-id="{{ trip.id }}" data-title="{{ trip.title }}"
+              title="この旅を削除">🗑</button>
+    </div>
   {% else %}
     <div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>
   {% endfor %}
@@ -106,6 +118,35 @@
       }
     } catch (e) {
       alert('作成に失敗しました'); createBtn.disabled = false; createBtn.textContent = '作成';
+    }
+  });
+
+  // --- 旅の削除（写真・称号・レポートもまとめて消える） ---
+  document.getElementById('trips').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.del-btn');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const title = btn.dataset.title || 'この旅';
+    if (!confirm(`「${title}」を削除しますか？\n写真・称号・旅レポートもすべて消え、元に戻せません。`)) return;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res = await fetch(`/reflection/trips/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.deleted) {
+        const row = btn.closest('.trip-row');
+        row.remove();
+        // 全部消えたら空状態を表示
+        if (!document.querySelector('.trip-row')) {
+          document.getElementById('trips').innerHTML =
+            '<div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>';
+        }
+      } else {
+        alert('削除に失敗しました');
+        btn.disabled = false; btn.textContent = '🗑';
+      }
+    } catch (e) {
+      alert('削除に失敗しました');
+      btn.disabled = false; btn.textContent = '🗑';
     }
   });
 </script>

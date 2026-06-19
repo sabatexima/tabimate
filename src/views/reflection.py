@@ -106,8 +106,18 @@ def create_trip():
 @reflection.route("/trips/<int:trip_id>", methods=["DELETE"])
 @login_required
 def delete_trip(trip_id: int):
+    """旅とその関連データ（写真・称号・レポート）をまとめて削除する。
+
+    DBレコードを消す前に、ストレージ上の写真実体も削除して
+    孤立ファイル（無駄なコスト）を残さないようにする。
+    """
     _require_trip(trip_id)
+    # 先に写真の実体をストレージから削除（DB削除後はパスが取れなくなるため）
+    photos = repo.get_photos(trip_id)
+    for p in photos:
+        storage.delete(p["storage_path"])
     ok = repo.delete_trip(trip_id, _uid())
+    logger.info("旅を削除: trip_id=%s user=%s photos=%d", trip_id, _uid(), len(photos))
     return jsonify({"deleted": ok})
 
 

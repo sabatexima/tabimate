@@ -70,6 +70,7 @@
   .card-link { display: block; text-decoration: none; color: var(--text-main); }
 
   .cover {
+    position: relative;
     width: 100%; aspect-ratio: 4 / 3; background: #f1eefc;
     display: flex; align-items: center; justify-content: center;
   }
@@ -84,14 +85,22 @@
   .card-body .m { font-size: 0.84em; color: var(--text-muted); margin-top: 4px; }
   .card-body .meta { font-size: 0.8em; color: var(--text-muted); margin-top: 2px; }
 
-  /* 付箋バッジ（1〜2個）*/
-  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  /* 付箋バッジ（1〜2個）: 写真の左下にふせんを貼ったようにオーバーレイ */
+  .badges {
+    position: absolute; bottom: 12px; left: 12px; z-index: 2;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    max-width: calc(100% - 24px);
+  }
   .badge {
     font-size: 0.82em; font-weight: 700; color: var(--primary-color);
-    background: #f4f2fd; border: 1px solid rgba(108,92,231,0.18);
-    border-radius: 999px; padding: 4px 12px;
+    background: rgba(255,255,255,0.92); border: 1px solid rgba(108,92,231,0.25);
+    border-radius: 8px; padding: 5px 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
     max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  /* ふせんらしく軽く傾ける（既存の紫トーンは維持）*/
+  .badge:nth-child(1) { transform: rotate(-2deg); }
+  .badge:nth-child(2) { transform: rotate(1.5deg); }
 
   /* 「…」メニュー（削除導線。写真の上に控えめに重ねる）*/
   .card-menu { position: absolute; top: 8px; right: 8px; z-index: 5; }
@@ -159,6 +168,11 @@
             {% else %}
               <span class="cover-empty">🧳</span>
             {% endif %}
+            {% if trip.stickers_preview %}
+              <div class="badges">
+                {% for s in trip.stickers_preview %}<span class="badge">🪧 {{ s }}</span>{% endfor %}
+              </div>
+            {% endif %}
           </div>
           <div class="card-body">
             <div class="t">{{ trip.title }}</div>
@@ -166,11 +180,6 @@
               <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
             {% endif %}
             <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
-            {% if trip.stickers_preview %}
-              <div class="badges">
-                {% for s in trip.stickers_preview %}<span class="badge">🪧 {{ s }}</span>{% endfor %}
-              </div>
-            {% endif %}
           </div>
         </a>
         <div class="card-menu">

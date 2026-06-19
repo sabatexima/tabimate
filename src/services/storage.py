@@ -73,6 +73,22 @@ def get_url(storage_path: str) -> str:
     return f"/reflection/photo/{storage_path}"
 
 
+def read_bytes(storage_path: str) -> bytes | None:
+    """保存実体のバイト列を返す（GCS/ローカルどちらでも）。取得不可は None。
+
+    解釈エンジンへ代表画像を送る（任意機能）際に使う。
+    """
+    if using_gcs():
+        try:
+            bucket = _get_gcs_client().bucket(_GCS_BUCKET)
+            blob = bucket.blob(storage_path)
+            return blob.download_as_bytes()
+        except Exception:
+            logger.warning("GCSからの読み出しに失敗: %s", storage_path, exc_info=True)
+            return None
+    return read_local(storage_path)
+
+
 def read_local(storage_path: str) -> bytes | None:
     """ローカルFS保存の写真を読み出す（GCS時は使わない）。"""
     if using_gcs():

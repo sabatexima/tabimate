@@ -38,6 +38,27 @@ def _require_trip(trip_id: int) -> dict:
     return trip
 
 
+def _collect_images(photos: list) -> list:
+    """画像送付オプション有効時のみ、代表画像のバイト列を集める（既定は空）。
+
+    コスト保護のため全枚数は送らず、均等サンプリングで数枚に絞る。
+    実際の枚数上限・縮小は解釈エンジン側でも担保する。
+    """
+    if not trip_interpreter.send_images_enabled() or not photos:
+        return []
+    # 均等に最大8枚サンプリング（エンジン側で更に_MAX_IMAGESへ絞る）
+    sample_n = min(8, len(photos))
+    step = max(1, len(photos) // sample_n)
+    sampled = photos[::step][:sample_n]
+    images = []
+    for p in sampled:
+        data = storage.read_bytes(p["storage_path"])
+        if data:
+            images.append(data)
+    logger.info("代表画像を収集: %d枚（送付オプション有効）", len(images))
+    return images
+
+
 # ----------------------------------------------------------------------
 # 画面（UIの詳細はテンプレート側。ここでは入口のみ）
 # ----------------------------------------------------------------------
@@ -161,7 +182,8 @@ def generate_achievements(trip_id: int):
     _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     feat = features.aggregate(photos)
-    items, usage = trip_interpreter.interpret_achievements(feat)
+    images = _collect_images(photos)
+    items, usage = trip_interpreter.interpret_achievements(feat, images=images)
     repo.replace_achievements(trip_id, items)
     logger.info("称号生成: trip_id=%s count=%d tokens(in/out)=%d/%d",
                 trip_id, len(items), usage["input_tokens"], usage["output_tokens"])
@@ -187,7 +209,8 @@ def generate_report(trip_id: int):
     area = request.args.get("area") or (request.get_json(silent=True) or {}).get("area") or None
     photos = repo.get_photos(trip_id)
     feat = features.aggregate(photos)
-    body, usage = trip_interpreter.interpret_report(feat, tone=tone, area=area)
+    images = _collect_images(photos)
+    body, usage = trip_interpreter.interpret_report(feat, tone=tone, area=area, images=images)
     repo.save_report(
         trip_id, body=body, tone=tone, area=area,
         token_in=usage["input_tokens"], token_out=usage["output_tokens"],

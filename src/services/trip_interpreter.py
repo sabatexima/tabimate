@@ -8,10 +8,13 @@
 高度な推論は不要なため安価な Gemini モデル（環境変数で差替可能）を使う。
 全呼び出しで input/output トークン数をログ出力し、推定コストを算出する。
 """
+import base64
+import io
 import json
 import os
 from typing import List, Optional
 
+from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
@@ -23,6 +26,41 @@ logger = get_logger("services.trip_interpreter")
 # --- モデル設定（環境変数で差替可能）---
 _MODEL = os.getenv("INTERPRETER_MODEL", "gemini-2.5-flash")
 _SEND_IMAGES_DEFAULT = os.getenv("INTERPRETER_SEND_IMAGES", "false").lower() == "true"
+
+# 画像送付（任意機能）のコスト保護: 送る最大枚数と縮小後の最大辺(px)。
+_MAX_IMAGES = int(os.getenv("INTERPRETER_MAX_IMAGES", "4"))
+_IMAGE_MAX_EDGE = int(os.getenv("INTERPRETER_IMAGE_MAX_EDGE", "512"))
+
+
+def send_images_enabled() -> bool:
+    """画像送付オプションが有効か（既定オフ）。呼び出し側の判定用。"""
+    return _SEND_IMAGES_DEFAULT
+
+
+def _prepare_image_blocks(images: Optional[list]) -> list:
+    """生画像バイト列を縮小・JPEG化し、Gemini用の image_url ブロックに変換する。
+
+    images: bytes のリスト。コスト保護のため _MAX_IMAGES 枚に制限し、
+    各画像は長辺 _IMAGE_MAX_EDGE px 以内へ縮小する。失敗画像はスキップ。
+    """
+    if not images:
+        return []
+    blocks = []
+    for data in images[:_MAX_IMAGES]:
+        if not data:
+            continue
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(data))
+            img = img.convert("RGB")
+            img.thumbnail((_IMAGE_MAX_EDGE, _IMAGE_MAX_EDGE))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=80)
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            blocks.append({"type": "image_url", "image_url": f"data:image/jpeg;base64,{b64}"})
+        except Exception:
+            logger.debug("画像の前処理に失敗（スキップ）", exc_info=True)
+    return blocks
 
 # 推定コスト（USD / 100万トークン）。実価格に合わせて環境変数で上書き可。
 _PRICE_IN = float(os.getenv("INTERPRETER_PRICE_INPUT_PER_M", "0.30"))
@@ -59,8 +97,11 @@ class ReportOutput(BaseModel):
 # ----------------------------------------------------------------------
 # 共通呼び出し（トークンログ付き）
 # ----------------------------------------------------------------------
-def _invoke(schema, prompt: str, tag: str):
-    """structured_output を include_raw=True で呼び、parsed と usage を返す。"""
+def _invoke(schema, prompt, tag: str):
+    """structured_output を include_raw=True で呼び、parsed と usage を返す。
+
+    prompt は文字列、または HumanMessage を含むメッセージ列（画像送付時）。
+    """
     structured = _llm.with_structured_output(schema, include_raw=True)
     result = invoke_with_retry(structured, prompt)
 
@@ -88,6 +129,17 @@ def _features_block(features: dict) -> str:
     return json.dumps(features, ensure_ascii=False, indent=2)
 
 
+def _build_input(prompt_text: str, images: Optional[list], tag: str):
+    """画像があればマルチモーダルのメッセージ列を、なければ文字列をそのまま返す。"""
+    blocks = _prepare_image_blocks(images)
+    if not blocks:
+        return prompt_text
+    logger.info("[画像送付] task=%s images=%d（最大%d, 長辺%dpxに縮小）",
+                tag, len(blocks), _MAX_IMAGES, _IMAGE_MAX_EDGE)
+    content = [{"type": "text", "text": prompt_text}] + blocks
+    return [HumanMessage(content=content)]
+
+
 # ----------------------------------------------------------------------
 # 機能A: 謎アチーブメント（短い解釈）
 # ----------------------------------------------------------------------
@@ -107,7 +159,8 @@ def interpret_achievements(features: dict, images: Optional[list] = None):
 ・flavor_text は一言。データの数値をそのまま書かず、行動を面白く解釈すること。
 ・特徴量が乏しい場合でも、無難に2個はひねり出すこと。
 """
-    parsed, usage = _invoke(AchievementsOutput, prompt, tag="achievements")
+    model_input = _build_input(prompt, images, tag="achievements")
+    parsed, usage = _invoke(AchievementsOutput, model_input, tag="achievements")
     items = []
     if parsed and getattr(parsed, "achievements", None):
         items = [{"title": a.title, "flavor_text": a.flavor_text} for a in parsed.achievements]
@@ -147,6 +200,7 @@ def interpret_report(features: dict, tone: str = "playful",
 ・特徴量の数値を箇条書きで並べるのではなく、読み物として自然な文章にすること。
 ・データが乏しくても、その乏しさ自体をネタにして書くこと。
 """
-    parsed, usage = _invoke(ReportOutput, prompt, tag="report")
+    model_input = _build_input(prompt, images, tag="report")
+    parsed, usage = _invoke(ReportOutput, model_input, tag="report")
     body = parsed.body if parsed and getattr(parsed, "body", None) else ""
     return body, usage

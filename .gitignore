@@ -1,0 +1,11 @@
+.env
+src/.env
+__pycache__/
+*.pyc
+.DS_Store
+src/logs/
+*.log
+*.ibd
+docker-mysql/DB/app_db/
+# ローカル写真保存（FSフォールバック）
+src/uploads/

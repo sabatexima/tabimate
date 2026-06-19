@@ -1,0 +1,64 @@
+import os
+from functools import wraps
+from flask import Blueprint, redirect, url_for, session, request, flash
+from authlib.integrations.flask_client import OAuth
+from chat.logger import get_logger
+
+auth = Blueprint('auth', __name__, url_prefix='/auth')
+oauth = OAuth()
+logger = get_logger("views.auth")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('user_id'):
+            logger.debug("未ログインアクセス: %s", request.path)
+            return redirect(url_for('auth.login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def init_oauth(app):
+    oauth.init_app(app)
+    oauth.register(
+        name='google',
+        client_id=os.getenv('GOOGLE_CLIENT_ID'),
+        client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'},
+    )
+
+
+@auth.route('/login')
+def login():
+    redirect_uri = url_for('auth.callback', _external=True)
+    logger.info("ログイン開始: redirect_uri=%s", redirect_uri)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@auth.route('/callback')
+def callback():
+    try:
+        token = oauth.google.authorize_access_token()
+        user = token.get('userinfo')
+        if user:
+            session['user_id']    = user['sub']
+            session['user_email'] = user['email']
+            session['user_name']  = user.get('name', user['email'])
+            logger.info("ログイン成功: email=%s", user['email'])
+        else:
+            logger.warning("Google callback で userinfo が取得できませんでした")
+            session['login_error'] = 'ログインに失敗しました。もう一度お試しください。'
+    except Exception as e:
+        logger.exception("Google OAuth callback でエラー: %s", e)
+        session['login_error'] = 'ログインに失敗しました。もう一度お試しください。'
+    return redirect(url_for('planner.home'))
+
+
+@auth.route('/logout')
+def logout():
+    user_email = session.get('user_email')
+    session.clear()
+    logger.info("ログアウト: email=%s", user_email)
+    return redirect(url_for('planner.home'))

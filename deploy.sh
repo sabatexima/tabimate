@@ -4,6 +4,8 @@ set -e
 PROJECT_ID="august-bot-462013-g2"
 SERVICE_NAME="kabu-app"
 REGION="asia-northeast1"
+# 振り返り機能の写真保存先（Cloud Storage バケット）
+GCS_BUCKET="${GCS_BUCKET:-kabu-trip-photos}"
 
 source "$(dirname "$0")/src/.env"
 
@@ -13,6 +15,8 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   secretmanager.googleapis.com \
+  storage.googleapis.com \
+  iamcredentials.googleapis.com \
   --project "$PROJECT_ID"
 
 # Cloud Run がデフォルトで使うサービスアカウント（Compute SA）
@@ -48,6 +52,28 @@ for secret in GOOGLE_API_KEY TAVILY_API_KEY GOOGLE_CLIENT_SECRET DB_PASS SECRET_
     --project "$PROJECT_ID" 2>/dev/null || true
 done
 
+echo "=== 写真用 Cloud Storage バケットを作成/確認 ==="
+if ! gcloud storage buckets describe "gs://${GCS_BUCKET}" --project "$PROJECT_ID" &>/dev/null; then
+  gcloud storage buckets create "gs://${GCS_BUCKET}" \
+    --location="$REGION" \
+    --uniform-bucket-level-access \
+    --project "$PROJECT_ID"
+fi
+
+echo "=== バケットへの読み書き権限を付与 ==="
+gcloud storage buckets add-iam-policy-binding "gs://${GCS_BUCKET}" \
+  --member="serviceAccount:${SA}" \
+  --role="roles/storage.objectAdmin" \
+  --project "$PROJECT_ID"
+
+echo "=== 署名付きURL生成（IAM signBlob）権限を付与 ==="
+# Cloud Run のデフォルトSAは秘密鍵を持たないため、自分自身に対する
+# serviceAccountTokenCreator 権限で signBlob 署名を行う。
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --member="serviceAccount:${SA}" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project "$PROJECT_ID"
+
 echo "=== Cloud Run にデプロイ ==="
 gcloud run deploy "$SERVICE_NAME" \
   --source . \
@@ -55,7 +81,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --platform managed \
   --allow-unauthenticated \
   --add-cloudsql-instances "${PROJECT_ID}:${REGION}:kabu-db" \
-  --set-env-vars "CLOUD_SQL_INSTANCE=${PROJECT_ID}:${REGION}:kabu-db,DB_USER=${DB_USER},DB_NAME=${DB_NAME},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
+  --set-env-vars "CLOUD_SQL_INSTANCE=${PROJECT_ID}:${REGION}:kabu-db,DB_USER=${DB_USER},DB_NAME=${DB_NAME},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GCS_BUCKET=${GCS_BUCKET}" \
   --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,TAVILY_API_KEY=TAVILY_API_KEY:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,DB_PASS=DB_PASS:latest,SECRET_KEY=SECRET_KEY:latest" \
   --project "$PROJECT_ID"
 

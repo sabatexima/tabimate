@@ -18,8 +18,11 @@ logger = get_logger("services.storage")
 _GCS_BUCKET = os.getenv("GCS_BUCKET")
 _LOCAL_DIR = Path(os.getenv("LOCAL_UPLOAD_DIR", Path(__file__).resolve().parents[1] / "uploads"))
 _SIGNED_URL_TTL = int(os.getenv("SIGNED_URL_TTL_SECONDS", "3600"))
+# 署名に使うSAを明示したい場合のみ設定（未設定ならデフォルト認証から自動取得）
+_SIGNER_SA = os.getenv("GCS_SIGNER_SA")
 
 _gcs_client = None
+_signer_credentials = None
 
 
 def _get_gcs_client():
@@ -28,6 +31,29 @@ def _get_gcs_client():
         from google.cloud import storage as gcs
         _gcs_client = gcs.Client()
     return _gcs_client
+
+
+def _get_signing_info():
+    """署名付きURL生成に必要な (service_account_email, access_token) を返す。
+
+    Cloud Run のデフォルト認証（メタデータサーバ経由）には秘密鍵が無いため、
+    通常の generate_signed_url は失敗する。代わりに IAM signBlob API を使う方式
+    （service_account_email + access_token を渡す）で署名する。
+    アクセストークンは期限切れ時のみ更新する。
+    """
+    global _signer_credentials
+    import google.auth
+    from google.auth.transport import requests as google_requests
+
+    if _signer_credentials is None:
+        _signer_credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+    if not _signer_credentials.valid:
+        _signer_credentials.refresh(google_requests.Request())
+
+    sa_email = _SIGNER_SA or getattr(_signer_credentials, "service_account_email", None)
+    return sa_email, _signer_credentials.token
 
 
 def using_gcs() -> bool:
@@ -64,10 +90,14 @@ def get_url(storage_path: str) -> str:
     if using_gcs():
         bucket = _get_gcs_client().bucket(_GCS_BUCKET)
         blob = bucket.blob(storage_path)
+        sa_email, token = _get_signing_info()
         return blob.generate_signed_url(
             version="v4",
             expiration=timedelta(seconds=_SIGNED_URL_TTL),
             method="GET",
+            # Cloud Run のデフォルトSAでも署名できるよう IAM signBlob 方式を使う
+            service_account_email=sa_email,
+            access_token=token,
         )
     # ローカル: Flask の配信ルート経由（views/reflection.py の serve_local_photo）
     return f"/reflection/photo/{storage_path}"

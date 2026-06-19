@@ -1,3 +1,15 @@
+"""プラン生成のワークフロー（LangGraph）定義と実行エントリ。
+
+各エージェント（chat.agents）をノードとして登録し、
+  transport → 観光候補/選定 → 宿泊候補/選定 → グルメ候補/選定
+  → timekeeper → cost_manager → balancer
+の順に連結する。balancer の後は route_after_balancer により
+承認なら終了、差し戻しなら該当ノードへ戻る条件分岐を行う。
+
+generate_travel_plan() が外部からの呼び出し口。
+末尾の __main__ ブロックは単体動作確認用のCLIテストハーネス。
+"""
+
 from langgraph.graph import StateGraph, START, END
 from chat.models import TravelPlanState
 from chat.agents import (
@@ -9,6 +21,7 @@ from chat.agents import (
 )
 
 
+# プラン生成の状態グラフを構築する
 workflow = StateGraph(TravelPlanState)
 
 workflow.add_node("transport", transport_agent)
@@ -51,6 +64,11 @@ graph = workflow.compile()
 
 
 def generate_travel_plan(inputs: dict):
+    """旅行条件 inputs からプラン生成ワークフローを実行し、最終状態を返す。
+
+    制御用フィールド（retry_count・各候補リスト等）を既定値で補ってから
+    グラフを実行する。recursion_limit は差し戻しループの暴走を防ぐ上限。
+    """
     inputs.setdefault("retry_count", 0)
     inputs.setdefault("prev_status", "")
     inputs.setdefault("user_feedback", "")

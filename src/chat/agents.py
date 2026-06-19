@@ -1,3 +1,20 @@
+"""プラン生成ワークフローを構成する各エージェント（ノード）の実装。
+
+各関数は TravelPlanState を受け取り、担当領域の成果物を計算して
+更新分の辞書を返す（LangGraph のノード規約）。役割:
+  - transport_agent          : 往復交通費を試算し残予算を算出
+  - sightseeing_candidates / sightseeing_expert : 観光スポットの候補抽出→選定
+  - accommodation_candidates / accommodation_agent : 宿泊施設の候補抽出→選定
+  - gourmet_candidates / gourmet_hunter         : 飲食店の候補抽出→選定
+  - timekeeper               : 時系列スケジュールの組み立て
+  - cost_manager             : 費用見積もりの作成
+  - balancer                 : プラン全体を審査し承認/差し戻しを判定
+  - route_after_balancer     : 審査結果に応じて次ノードへの分岐を決める
+
+LLM 呼び出しは llm.with_structured_output で型付き出力を得て、
+invoke_with_retry でリトライしながら実行する。
+"""
+
 import re
 from chat.models import TravelPlanState
 from chat.llm import llm, invoke_with_retry, build_search_context
@@ -16,11 +33,12 @@ MAX_BALANCER_RETRIES       = 5     # バランサー差し戻し上限回数
 
 
 def is_day_trip(duration: str) -> bool:
+    """期間文字列が日帰り（宿泊なし）かどうかを判定する。"""
     return "日帰り" in duration or bool(re.match(r'0泊', duration.strip()))
 
 
 def _pp(data, label):
-    """Plain small bubble logger for extracted entities."""
+    """抽出した項目リストをラベル付きでログに整形出力する。"""
     if not data:
         return
     log.info(label)
@@ -29,6 +47,10 @@ def _pp(data, label):
 
 
 def transport_agent(state: TravelPlanState):
+    """往復交通費を概算し、予算上限から差し引いた残予算を返す。
+
+    交通費が予算上限を超える場合は ValueError を送出して以降の処理を止める。
+    """
     log.info("[🚄 交通エージェント]: 往復交通費を試算中... destination=%s", state["destination"])
     prompt = f"""あなたは交通費の専門家です。以下の条件で往復交通費（1人あたり）を概算してください。
 
@@ -56,6 +78,7 @@ def transport_agent(state: TravelPlanState):
 
 
 def sightseeing_candidates(state: TravelPlanState):
+    """Web検索を踏まえ、観光スポットの候補（5〜8件）を抽出する。"""
     log.info("[🗺️ 観光エキスパート]: 候補スポットを抽出中... destination=%s", state["destination"])
     queries = [
         f"{state['destination']} {' '.join(state['themes'])} 観光 公式ガイド",
@@ -91,6 +114,7 @@ def sightseeing_candidates(state: TravelPlanState):
 
 
 def sightseeing_expert(state: TravelPlanState):
+    """候補スポットから動線・条件を考慮して最終的なスポット（2〜3件）を選定する。"""
     log.info("[🗺️ 観光エキスパート]: スポットを選定中... destination=%s", state["destination"])
     candidates = state.get("spot_candidates", [])
     prompt = f"""あなたは旅行のプロです。以下の候補から最適な観光スポットを選定してください。
@@ -119,6 +143,7 @@ def sightseeing_expert(state: TravelPlanState):
 
 
 def accommodation_candidates(state: TravelPlanState):
+    """宿泊施設の候補（3〜5件）を抽出する。日帰りなら空リストを返す。"""
     if is_day_trip(state["duration"]):
         log.info("[🏨 宿泊エージェント]: 日帰りのため宿泊施設なし")
         return {"accommodation_candidates": []}
@@ -156,6 +181,11 @@ def accommodation_candidates(state: TravelPlanState):
 
 
 def accommodation_agent(state: TravelPlanState):
+    """予算配分（残予算の40%）内で最適な宿泊施設(1〜2件)を選定する。
+
+    日帰りなら空リストを返す。バランサーの差し戻しやユーザー要望があれば
+    プロンプトに反映して選び直す。
+    """
     if is_day_trip(state["duration"]):
         log.info("[🏨 宿泊エージェント]: 日帰りのため宿泊施設なし")
         return {"accommodation": []}
@@ -203,6 +233,7 @@ def accommodation_agent(state: TravelPlanState):
 
 
 def gourmet_candidates(state: TravelPlanState):
+    """選定済みスポット周辺の飲食店候補（4〜6件）を抽出する。"""
     log.info("[🍣 グルメハンター]: 飲食店候補を抽出中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     queries = [
@@ -236,6 +267,7 @@ def gourmet_candidates(state: TravelPlanState):
 
 
 def gourmet_hunter(state: TravelPlanState):
+    """候補から食事回数分の飲食店を選定する（食費目安は残予算の25%）。"""
     log.info("[🍣 グルメハンター]: 飲食店を選定中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     accommodation = state.get("accommodation", [])
@@ -277,6 +309,11 @@ def gourmet_hunter(state: TravelPlanState):
 
 
 def timekeeper(state: TravelPlanState):
+    """スポット・飲食店・宿泊施設を時系列スケジュールに組み立てる。
+
+    営業時間や移動時間の整合を取り、日帰り/宿泊で出力形式を切り替える。
+    バランサーが指摘した未反映項目は強制的に組み込む。
+    """
     log.info("[⏱️ タイムキーパー]: スケジュールを組み立て中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     restaurants = state.get("restaurants", [])
@@ -358,6 +395,7 @@ def timekeeper(state: TravelPlanState):
 
 
 def _build_day_sections(duration: str) -> str:
+    """費用見積もりプロンプト用に、日別の費用項目テンプレートを生成する。"""
     if is_day_trip(duration):
         return (
             "■ 当日の費用\n"
@@ -399,6 +437,7 @@ def _build_day_sections(duration: str) -> str:
 
 
 def cost_manager(state: TravelPlanState):
+    """確定したプラン内容から、日別＋合計の費用見積もりを作成する。"""
     log.info("[💰 料金マネージャー]: 旅行の費用を試算中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     restaurants = state.get("restaurants", [])
@@ -443,6 +482,10 @@ def cost_manager(state: TravelPlanState):
 
 
 def balancer(state: TravelPlanState):
+    """プラン全体を複数観点で審査し、承認(approved)か差し戻し(fix_*)を判定する。
+
+    判定結果(status)・理由(feedback)を返し、retry_count を加算する。
+    """
     log.info("[⚖️ バランサー]: プランを審査中... destination=%s", state["destination"])
     prompt = f"""あなたは旅行代理店のシニアマネージャーです。以下のプランを審査してください。
 
@@ -492,6 +535,11 @@ def balancer(state: TravelPlanState):
 
 
 def route_after_balancer(state: TravelPlanState):
+    """バランサーの審査結果に応じて、次に実行するノード名を返す分岐関数。
+
+    承認・予算不可・リトライ上限なら終了('end')。差し戻し種別ごとに
+    やり直すノードへ振り分け、同じ問題の繰り返し時はスポット選定まで戻す。
+    """
     status = state["status"]
     prev_status = state.get("prev_status", "")
 

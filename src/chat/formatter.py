@@ -1,3 +1,5 @@
+"""完成した旅行プラン状態を、チャットに表示するHTMLカードへ整形するモジュール。"""
+
 import json
 from chat.logger import get_logger
 
@@ -6,10 +8,19 @@ logger = get_logger("formatter")
 
 
 def _format_plan(state: dict) -> str:
+    """TravelPlanState をプランカードのHTML文字列に変換する。
+
+    予算不足（budget_infeasible）の場合はエラーカードを返す。通常時は
+    概要ヘッダ＋アコーディオン（観光/グルメ/宿泊/スケジュール/費用）＋総評＋
+    保存ボタンを組み立てる。保存ボタンには再保存用のプランJSONを埋め込む。
+    ユーザー由来の文字列はすべて esc() でHTMLエスケープしてXSSを防ぐ。
+    """
     def esc(text: str) -> str:
+        """HTML特殊文字をエスケープする（XSS対策）。"""
         return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     def accordion(icon: str, label: str, items: list, open: bool = False) -> str:
+        """項目リストを <details> 折りたたみブロックのHTMLにする。"""
         items_html = "".join(f"<li>{esc(i)}</li>" for i in items)
         open_attr = " open" if open else ""
         return f"""<details{open_attr}>

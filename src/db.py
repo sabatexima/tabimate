@@ -1,3 +1,16 @@
+"""データベースアクセス層。
+
+旅行プラン（travel_plans）とチャット履歴（chat_messages）の永続化を担う。
+接続先は環境変数で切り替わる:
+  - CLOUD_SQL_INSTANCE が設定されていれば Cloud SQL Connector 経由
+  - それ以外は TiDB Cloud / 外部MySQL / ローカルDocker への通常接続
+    （DB_SSL=true で TLS を有効化。TiDB Cloud は TLS 必須）
+
+SQLAlchemy のエンジンはモジュール内で 1 つだけ生成し（QueuePool で接続を再利用）、
+各関数はそのエンジンから接続を借りて SQL を実行する。テーブルは
+CREATE TABLE IF NOT EXISTS により初回アクセス時に自動作成される。
+"""
+
 import json
 import os
 from pathlib import Path

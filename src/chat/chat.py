@@ -1,4 +1,15 @@
+"""チャットの司令塔モジュール。
+
+ユーザーの会話履歴から旅行条件（必須7項目）を構造化抽出し、
+  - 条件が揃っていなければ「次に聞く質問」を返す
+  - 揃っていれば LangGraph のプラン生成ワークフロー
+    （chat.graph.generate_travel_plan）を呼び出し、結果をHTMLに整形して返す
+という制御を担う。実際のプラン作成ロジックは agents / graph 側にある。
+"""
+
 import nest_asyncio
+# Flask(同期) から LangChain/LangGraph の非同期処理を呼ぶため、
+# 既存イベントループのネストを許可する
 nest_asyncio.apply()
 
 from typing import List, Optional
@@ -58,6 +69,20 @@ def _build_lc_messages(messages_history: list) -> list:
 
 
 def chat(user_message: str, messages_history=None, request_id=None, active_requests=None) -> str | None:
+    """1回のユーザー発話を処理し、応答テキストまたはプランHTMLを返す。
+
+    Args:
+        user_message: 今回のユーザー発話（履歴にも含まれる想定）。
+        messages_history: これまでの会話履歴（role/content の辞書リスト）。
+        request_id: リクエスト識別子。キャンセル判定に使う。
+        active_requests: 現在処理中のリクエストIDの集合。ここに request_id が
+            なくなっていればキャンセルされたとみなし None を返す。
+
+    Returns:
+        - 条件が未充足: 次にユーザーへ聞く質問文（str）
+        - 条件が充足  : 整形済みプランHTML（str）
+        - キャンセル時: None
+    """
     lc_messages = _build_lc_messages(messages_history or [])
 
     try:

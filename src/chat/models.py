@@ -1,8 +1,21 @@
+"""プラン生成ワークフローで使うデータ構造の定義。
+
+  - TravelPlanState : LangGraph の各エージェント間で受け渡す状態（TypedDict）。
+                      旅行条件・中間成果物・最終プランをまとめて保持する。
+  - 各 *Output      : LLM の構造化出力（with_structured_output）用スキーマ。
+                      これにより LLM 応答を型付きオブジェクトとして受け取れる。
+"""
+
 from typing import TypedDict, List, Literal
 from pydantic import BaseModel, Field
 
 
 class TravelPlanState(TypedDict):
+    """エージェント間で受け渡す旅行プランの全状態。
+
+    前半は入力条件、中盤は各エージェントの成果物（交通費・候補・確定リスト等）、
+    status / feedback / retry_count は balancer による審査と差し戻し制御に使う。
+    """
     destination: str
     travel_date: str
     duration: str

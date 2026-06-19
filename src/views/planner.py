@@ -1,3 +1,14 @@
+"""メイン機能（旅行プラン作成チャット）の画面・APIを束ねる Blueprint。
+
+主な責務:
+  - ホーム/保存プラン画面の表示
+  - チャット送信(/send_message)を SSE でストリーミング応答
+    （別スレッドで chat() を実行し、待機中は thinking を送出、
+      キャンセル可能にするため active_requests で状態を共有）
+  - チャット履歴・保存プランの取得/削除
+  - 簡易レートリミットによる多重リクエスト抑制
+"""
+
 import json
 import os
 import threading
@@ -16,7 +27,7 @@ logger = get_logger("views.planner")
 
 
 class _ActiveRequests:
-    """Redis-backed active request tracker with in-process fallback.
+    """処理中リクエストの追跡器（Redis優先・プロセス内フォールバック）。
 
     Redisが利用可能な場合はそちらを使い、複数ワーカー間でキャンセル状態を共有する。
     REDIS_URL未設定時はプロセス内setにフォールバックする（開発環境向け）。
@@ -71,6 +82,7 @@ _RATE_WINDOW = 60 # 秒
 
 
 def _is_rate_limited(user_id: str) -> bool:
+    """直近 _RATE_WINDOW 秒で _RATE_LIMIT 回を超えていれば True を返す。"""
     now = time.time()
     with _rate_lock:
         timestamps = _rate_log[user_id]
@@ -96,6 +108,11 @@ def saved_plans():
 @planner.route('/send_message', methods=['POST'])
 @login_required
 def send_message():
+    """ユーザー発話を受け取り、AI応答を SSE でストリーミング返却する。
+
+    chat() を別スレッドで実行し、完了までは thinking イベントを送り続ける。
+    途中でキャンセル/エラーの場合は該当リクエストのメッセージを削除する。
+    """
     from db import delete_chat_messages_by_request, get_chat_messages, save_chat_message
 
     user_id = session['user_id']

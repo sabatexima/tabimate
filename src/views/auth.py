@@ -1,3 +1,11 @@
+"""Google OAuth によるログイン/ログアウトを担う Blueprint。
+
+Authlib を使って Google の OpenID Connect で認証し、成功時に
+ユーザーID・メール・氏名をセッションへ保存する。
+login_required デコレータでログイン必須エンドポイントを保護する。
+クライアントシークレット等は環境変数から読み込む（直書きしない）。
+"""
+
 import os
 from functools import wraps
 from flask import Blueprint, redirect, url_for, session, request, flash
@@ -10,6 +18,7 @@ logger = get_logger("views.auth")
 
 
 def login_required(f):
+    """未ログインなら login へリダイレクトするビュー保護デコレータ。"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get('user_id'):
@@ -20,6 +29,7 @@ def login_required(f):
 
 
 def init_oauth(app):
+    """アプリ起動時に Google OAuth クライアントを登録・初期化する。"""
     oauth.init_app(app)
     oauth.register(
         name='google',
@@ -39,6 +49,7 @@ def login():
 
 @auth.route('/callback')
 def callback():
+    """Google からのコールバックを受け、ユーザー情報をセッションに保存する。"""
     try:
         token = oauth.google.authorize_access_token()
         user = token.get('userinfo')

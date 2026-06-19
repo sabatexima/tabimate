@@ -104,10 +104,23 @@ def get_trip(trip_id: int, user_id: str) -> dict | None:
 
 
 def get_trips(user_id: str) -> list:
+    """ユーザーの旅一覧を返す。
+
+    一覧カードをリッチに描画するため、各旅に
+      - photo_count : 写真枚数
+      - cover_path  : サムネイルに使う代表写真の storage_path（最古の1枚／無ければ None）
+    を相関サブクエリで付与する（N+1を避けるため1クエリで取得）。
+    """
     with get_engine().connect() as conn:
         _ensure_all(conn)
         rows = conn.execute(
-            text("SELECT * FROM trips WHERE user_id = :uid ORDER BY created_at DESC"),
+            text(
+                "SELECT t.*, "
+                "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
+                "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
+                "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path "
+                "FROM trips t WHERE t.user_id = :uid ORDER BY t.created_at DESC"
+            ),
             {"uid": user_id},
         ).fetchall()
     result = []

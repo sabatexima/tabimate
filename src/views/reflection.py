@@ -66,6 +66,9 @@ def _collect_images(photos: list) -> list:
 @login_required
 def index():
     trips = repo.get_trips(_uid())
+    # 一覧カードのサムネイル用に、代表写真の配信URLを付与（無ければ None）
+    for t in trips:
+        t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
     return render_template("reflection/index.html", trips=trips)
 
 

@@ -23,11 +23,14 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
   .new-trip h2 { font-size: 1.05em; margin: 0 0 12px; color: var(--text-main); }
-  .new-trip .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .new-trip .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.title-field { flex: 1 1 220px; }
+  .field label { font-size: 0.78em; color: var(--text-muted); font-weight: 600; }
   .new-trip input {
     border: 1px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 0.92em;
   }
-  .new-trip input[name="title"] { flex: 1 1 220px; }
+  .field.title-field input { width: 100%; box-sizing: border-box; }
   .new-trip input[type="date"] { flex: 0 1 160px; }
   .new-trip button {
     background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
@@ -36,24 +39,47 @@
   .new-trip button:disabled { opacity: 0.6; cursor: default; }
 
   #trips { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
-  .trip-row { display: flex; align-items: stretch; gap: 8px; }
+  .trip-row { position: relative; display: flex; align-items: stretch; gap: 2px; }
   .trip-card {
-    flex: 1; display: flex; align-items: center; justify-content: space-between;
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px;
     background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
-    padding: 14px 16px; text-decoration: none; color: var(--text-main);
+    padding: 12px 14px; text-decoration: none; color: var(--text-main);
     box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.1s;
   }
   .trip-card:hover { transform: translateY(-1px); }
-  .trip-card .t { font-weight: 700; }
-  .trip-card .m { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
-  .trip-card .go { color: var(--primary-color); font-size: 1.3em; }
-  .del-btn {
-    flex: 0 0 auto; background: #fff; border: 1px solid #ffd0d0; color: #e74c3c;
-    border-radius: 12px; padding: 0 14px; font-size: 1.1em; cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: background 0.1s;
+
+  .thumb {
+    flex: 0 0 auto; width: 60px; height: 60px; border-radius: 10px; overflow: hidden;
+    background: #f1eefc; display: flex; align-items: center; justify-content: center;
   }
-  .del-btn:hover { background: #fff5f5; }
-  .del-btn:disabled { opacity: 0.5; cursor: default; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb-empty { font-size: 1.5rem; opacity: 0.5; }
+
+  .info { flex: 1; min-width: 0; }
+  .info .t {
+    font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .info .m { font-size: 0.82em; color: var(--text-muted); margin-top: 3px; }
+  .info .meta { font-size: 0.78em; color: var(--text-muted); margin-top: 3px; }
+
+  /* 「…」メニュー（削除導線。主張を抑える） */
+  .card-menu { position: relative; display: flex; align-items: center; }
+  .kebab {
+    background: none; border: none; color: #c3c0d2; font-size: 1.3em; line-height: 1;
+    padding: 6px 9px; cursor: pointer; border-radius: 8px;
+  }
+  .kebab:hover { background: #f5f4fa; color: var(--text-muted); }
+  .menu {
+    position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 10;
+    background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px; min-width: 120px;
+  }
+  .menu[hidden] { display: none; }
+  .menu-del {
+    width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    padding: 8px 12px; border-radius: 8px; font-size: 0.88em; color: #e74c3c;
+  }
+  .menu-del:hover { background: #fff5f5; }
 
   .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
   .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
@@ -67,28 +93,47 @@
 <div class="new-trip">
   <h2>＋ 新しい旅を作る</h2>
   <div class="row">
-    <input type="text" name="title" placeholder="旅のタイトル（例: 春の京都）" maxlength="100">
-    <input type="date" name="start_date">
-    <input type="date" name="end_date">
+    <div class="field title-field">
+      <label for="f-title">タイトル</label>
+      <input id="f-title" type="text" name="title" placeholder="例: 春の京都" maxlength="100">
+    </div>
+    <div class="field">
+      <label for="f-start">開始日</label>
+      <input id="f-start" type="date" name="start_date">
+    </div>
+    <div class="field">
+      <label for="f-end">終了日</label>
+      <input id="f-end" type="date" name="end_date">
+    </div>
     <button id="create-btn">作成</button>
   </div>
 </div>
 
 <div id="trips">
   {% for trip in trips %}
-    <div class="trip-row" data-id="{{ trip.id }}">
+    <div class="trip-row" data-id="{{ trip.id }}" data-title="{{ trip.title }}">
       <a class="trip-card" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
-        <div>
-          <div class="t">{{ trip.title }}</div>
-          <div class="m">
-            {% if trip.start_date %}{{ trip.start_date }}{% endif %}
-            {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
-          </div>
+        <div class="thumb">
+          {% if trip.cover_url %}
+            <img src="{{ trip.cover_url }}" alt="" loading="lazy">
+          {% else %}
+            <span class="thumb-empty">🧳</span>
+          {% endif %}
         </div>
-        <span class="go">›</span>
+        <div class="info">
+          <div class="t">{{ trip.title }}</div>
+          {% if trip.start_date %}
+            <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
+          {% endif %}
+          <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
+        </div>
       </a>
-      <button class="del-btn" data-id="{{ trip.id }}" data-title="{{ trip.title }}"
-              title="この旅を削除">🗑</button>
+      <div class="card-menu">
+        <button class="kebab" aria-label="メニュー">⋯</button>
+        <div class="menu" hidden>
+          <button class="menu-del">🗑 削除</button>
+        </div>
+      </div>
     </div>
   {% else %}
     <div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>
@@ -98,10 +143,10 @@
 <script>
   const createBtn = document.getElementById('create-btn');
   createBtn.addEventListener('click', async () => {
-    const title = document.querySelector('input[name="title"]').value.trim();
+    const title = document.getElementById('f-title').value.trim();
     if (!title) { alert('旅のタイトルを入力してください'); return; }
-    const start_date = document.querySelector('input[name="start_date"]').value || null;
-    const end_date = document.querySelector('input[name="end_date"]').value || null;
+    const start_date = document.getElementById('f-start').value || null;
+    const end_date = document.getElementById('f-end').value || null;
     createBtn.disabled = true; createBtn.textContent = '作成中...';
     try {
       const res = await fetch('{{ url_for("reflection.create_trip") }}', {
@@ -121,33 +166,53 @@
     }
   });
 
-  // --- 旅の削除（写真・称号・レポートもまとめて消える） ---
-  document.getElementById('trips').addEventListener('click', async (ev) => {
-    const btn = ev.target.closest('.del-btn');
-    if (!btn) return;
-    const id = btn.dataset.id;
-    const title = btn.dataset.title || 'この旅';
+  // --- 「…」メニュー：開閉と削除 ---
+  const tripsEl = document.getElementById('trips');
+
+  function closeAllMenus() {
+    tripsEl.querySelectorAll('.menu').forEach(m => m.hidden = true);
+  }
+
+  tripsEl.addEventListener('click', async (ev) => {
+    // メニューの開閉
+    const kebab = ev.target.closest('.kebab');
+    if (kebab) {
+      ev.preventDefault();
+      const menu = kebab.parentElement.querySelector('.menu');
+      const willOpen = menu.hidden;
+      closeAllMenus();
+      menu.hidden = !willOpen;
+      return;
+    }
+
+    // 旅の削除（写真・称号・レポートもまとめて消える）
+    const del = ev.target.closest('.menu-del');
+    if (!del) return;
+    const row = del.closest('.trip-row');
+    const id = row.dataset.id;
+    const title = row.dataset.title || 'この旅';
+    closeAllMenus();
     if (!confirm(`「${title}」を削除しますか？\n写真・称号・旅レポートもすべて消え、元に戻せません。`)) return;
-    btn.disabled = true; btn.textContent = '…';
     try {
       const res = await fetch(`/reflection/trips/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok && data.deleted) {
-        const row = btn.closest('.trip-row');
         row.remove();
-        // 全部消えたら空状態を表示
         if (!document.querySelector('.trip-row')) {
-          document.getElementById('trips').innerHTML =
+          tripsEl.innerHTML =
             '<div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>';
         }
       } else {
         alert('削除に失敗しました');
-        btn.disabled = false; btn.textContent = '🗑';
       }
     } catch (e) {
       alert('削除に失敗しました');
-      btn.disabled = false; btn.textContent = '🗑';
     }
+  });
+
+  // メニュー外クリックで閉じる
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('.card-menu')) closeAllMenus();
   });
 </script>
 {% endblock %}

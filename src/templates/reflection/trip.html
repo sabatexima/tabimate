@@ -1,0 +1,188 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ trip.title }} — 旅の振り返り{% endblock %}
+
+{% block head %}
+<style>
+  :root {
+    --primary-color: #6c5ce7;
+    --text-main: #2d3436;
+    --text-muted: #636e72;
+  }
+  .back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }
+  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin: 8px 0 2px; }
+  .trip-dates { color: var(--text-muted); font-size: 0.88em; margin-bottom: 24px; }
+
+  .section {
+    background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
+    padding: 18px; margin-bottom: 20px; max-width: 820px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .section h2 { font-size: 1.1em; margin: 0 0 4px; color: var(--text-main); }
+  .section .hint { font-size: 0.82em; color: var(--text-muted); margin: 0 0 14px; }
+
+  .btn {
+    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 18px; font-weight: 600; cursor: pointer; font-size: 0.9em;
+  }
+  .btn.secondary { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+
+  .photo-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .photo-grid img { width: 92px; height: 92px; object-fit: cover; border-radius: 8px; }
+  .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
+
+  .ach-list { display: flex; flex-direction: column; gap: 10px; }
+  .ach {
+    border: 1px dashed rgba(108,92,231,0.4); border-radius: 10px; padding: 12px 14px;
+    background: linear-gradient(135deg, #f8f7ff 0%, #fff 100%);
+  }
+  .ach .title { font-weight: 700; color: var(--primary-color); }
+  .ach .flavor { font-size: 0.88em; color: var(--text-main); margin-top: 4px; }
+
+  .tone-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .tone-row select, .tone-row input {
+    border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 0.88em;
+  }
+  .report-body {
+    white-space: pre-wrap; line-height: 1.8; font-size: 0.95em; color: var(--text-main);
+    background: #faf9ff; border-radius: 10px; padding: 16px; margin-top: 12px;
+  }
+  .report-meta { font-size: 0.78em; color: var(--text-muted); margin-top: 6px; }
+  .muted { color: var(--text-muted); font-size: 0.9em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="back" href="{{ url_for('reflection.index') }}">‹ 一覧へ戻る</a>
+<div class="trip-title">{{ trip.title }}</div>
+<div class="trip-dates">
+  {% if trip.start_date %}{{ trip.start_date }}{% endif %}
+  {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
+</div>
+
+<!-- 写真 -->
+<div class="section">
+  <h2>📷 写真</h2>
+  <p class="hint">旅の写真をまとめてアップロード。撮影時刻や位置情報（あれば）から、あとで振り返りを生成します。</p>
+  <div class="photo-grid" id="photo-grid">
+    {% for p in photos %}<img src="{{ p.url }}" alt="photo" loading="lazy">{% endfor %}
+  </div>
+  <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
+  <input type="file" id="photo-input" accept="image/*" multiple style="margin-bottom:10px;">
+  <div><button class="btn" id="upload-btn">アップロード</button></div>
+</div>
+
+<!-- 称号（機能A）-->
+<div class="section">
+  <h2>🏅 謎アチーブメント</h2>
+  <p class="hint">あなたの旅のクセを、そっと称号にしました。狙っては取れません。</p>
+  <button class="btn secondary" id="ach-btn">称号を生成</button>
+  <div class="ach-list" id="ach-list" style="margin-top:14px;">
+    {% for a in achievements %}
+      <div class="ach"><div class="title">{{ a.title }}</div><div class="flavor">{{ a.flavor_text }}</div></div>
+    {% else %}
+      <div class="muted" id="ach-empty">まだ称号はありません。</div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 旅レポート（機能B）-->
+<div class="section">
+  <h2>📝 AI旅レポート</h2>
+  <p class="hint">写真から「こんな旅でしたね」を実況・講評します。</p>
+  <div class="tone-row">
+    <select id="tone-select">
+      <option value="playful">陽気（ボケ多め）</option>
+      <option value="roast">辛口（愛のあるイジり）</option>
+      <option value="gentle">やさしい（じんわり）</option>
+    </select>
+    <input type="text" id="area-input" placeholder="エリアを絞る（任意 例: 嵐山）" maxlength="60">
+    <button class="btn" id="report-btn">レポート生成</button>
+  </div>
+  <div id="report-output">
+    {% for r in reports %}
+      <div class="report-body">{{ r.body }}</div>
+      <div class="report-meta">トーン: {{ r.tone }}{% if r.area %} ／ エリア: {{ r.area }}{% endif %} ／ {{ r.created_at }}</div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+  const TRIP_ID = {{ trip.id }};
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // --- 写真アップロード ---
+  const uploadBtn = document.getElementById('upload-btn');
+  uploadBtn.addEventListener('click', async () => {
+    const input = document.getElementById('photo-input');
+    if (!input.files.length) { alert('写真を選択してください'); return; }
+    const fd = new FormData();
+    for (const f of input.files) fd.append('photos', f);
+    uploadBtn.disabled = true; uploadBtn.textContent = 'アップロード中...';
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/photos`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        const grid = document.getElementById('photo-grid');
+        data.saved.forEach(p => {
+          const img = document.createElement('img');
+          img.src = p.url; img.loading = 'lazy'; grid.appendChild(img);
+        });
+        const cnt = document.getElementById('photo-count');
+        cnt.textContent = `現在 ${grid.querySelectorAll('img').length} 枚`;
+        input.value = '';
+      } else {
+        alert(data.error || 'アップロードに失敗しました');
+      }
+    } catch (e) { alert('アップロードに失敗しました'); }
+    uploadBtn.disabled = false; uploadBtn.textContent = 'アップロード';
+  });
+
+  // --- 称号生成 ---
+  const achBtn = document.getElementById('ach-btn');
+  achBtn.addEventListener('click', async () => {
+    achBtn.disabled = true; achBtn.textContent = '生成中...';
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/achievements/generate`, { method: 'POST' });
+      const data = await res.json();
+      const list = document.getElementById('ach-list');
+      if (res.ok) {
+        list.innerHTML = data.achievements.map(a =>
+          `<div class="ach"><div class="title">${esc(a.title)}</div><div class="flavor">${esc(a.flavor_text)}</div></div>`
+        ).join('') || '<div class="muted">称号を作れませんでした。</div>';
+      } else {
+        alert(data.error || '生成に失敗しました');
+      }
+    } catch (e) { alert('生成に失敗しました'); }
+    achBtn.disabled = false; achBtn.textContent = '称号を生成';
+  });
+
+  // --- レポート生成 ---
+  const reportBtn = document.getElementById('report-btn');
+  reportBtn.addEventListener('click', async () => {
+    const tone = document.getElementById('tone-select').value;
+    const area = document.getElementById('area-input').value.trim();
+    reportBtn.disabled = true; reportBtn.textContent = '生成中...';
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/report/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tone, area: area || null }),
+      });
+      const data = await res.json();
+      const out = document.getElementById('report-output');
+      if (res.ok) {
+        const meta = `トーン: ${esc(data.tone)}${data.area ? ' ／ エリア: ' + esc(data.area) : ''}`;
+        out.insertAdjacentHTML('afterbegin',
+          `<div class="report-body">${esc(data.body)}</div><div class="report-meta">${meta} ／ たった今</div>`);
+      } else {
+        alert(data.error || '生成に失敗しました');
+      }
+    } catch (e) { alert('生成に失敗しました'); }
+    reportBtn.disabled = false; reportBtn.textContent = 'レポート生成';
+  });
+</script>
+{% endblock %}

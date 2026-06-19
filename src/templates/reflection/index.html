@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+
+{% block title %}旅の振り返り — たびメイト{% endblock %}
+
+{% block head %}
+<style>
+  :root {
+    --primary-color: #6c5ce7;
+    --text-main: #2d3436;
+    --text-muted: #636e72;
+  }
+  .page-header { margin-bottom: 8px; }
+  .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text-main); margin: 0; }
+  .page-lead { color: var(--text-muted); font-size: 0.92em; margin: 0 0 24px; }
+
+  .new-trip {
+    background: #fff;
+    border: 1px solid rgba(108,92,231,0.15);
+    border-radius: 12px;
+    padding: 16px;
+    max-width: 640px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .new-trip h2 { font-size: 1.05em; margin: 0 0 12px; color: var(--text-main); }
+  .new-trip .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .new-trip input {
+    border: 1px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 0.92em;
+  }
+  .new-trip input[name="title"] { flex: 1 1 220px; }
+  .new-trip input[type="date"] { flex: 0 1 160px; }
+  .new-trip button {
+    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 20px; font-weight: 600; cursor: pointer; font-size: 0.92em;
+  }
+  .new-trip button:disabled { opacity: 0.6; cursor: default; }
+
+  #trips { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+  .trip-card {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
+    padding: 14px 16px; text-decoration: none; color: var(--text-main);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.1s;
+  }
+  .trip-card:hover { transform: translateY(-1px); }
+  .trip-card .t { font-weight: 700; }
+  .trip-card .m { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
+  .trip-card .go { color: var(--primary-color); font-size: 1.3em; }
+
+  .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1>🧭 旅の振り返り</h1></div>
+<p class="page-lead">旅のあとで、写真からそっと「称号」と「旅レポート」をお届けします。旅の最中は、何もしなくて大丈夫。</p>
+
+<div class="new-trip">
+  <h2>＋ 新しい旅を作る</h2>
+  <div class="row">
+    <input type="text" name="title" placeholder="旅のタイトル（例: 春の京都）" maxlength="100">
+    <input type="date" name="start_date">
+    <input type="date" name="end_date">
+    <button id="create-btn">作成</button>
+  </div>
+</div>
+
+<div id="trips">
+  {% for trip in trips %}
+    <a class="trip-card" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
+      <div>
+        <div class="t">{{ trip.title }}</div>
+        <div class="m">
+          {% if trip.start_date %}{{ trip.start_date }}{% endif %}
+          {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
+        </div>
+      </div>
+      <span class="go">›</span>
+    </a>
+  {% else %}
+    <div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>
+  {% endfor %}
+</div>
+
+<script>
+  const createBtn = document.getElementById('create-btn');
+  createBtn.addEventListener('click', async () => {
+    const title = document.querySelector('input[name="title"]').value.trim();
+    if (!title) { alert('旅のタイトルを入力してください'); return; }
+    const start_date = document.querySelector('input[name="start_date"]').value || null;
+    const end_date = document.querySelector('input[name="end_date"]').value || null;
+    createBtn.disabled = true; createBtn.textContent = '作成中...';
+    try {
+      const res = await fetch('{{ url_for("reflection.create_trip") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, start_date, end_date }),
+      });
+      const data = await res.json();
+      if (res.ok && data.id) {
+        location.href = `/reflection/trips/${data.id}`;
+      } else {
+        alert(data.error || '作成に失敗しました');
+        createBtn.disabled = false; createBtn.textContent = '作成';
+      }
+    } catch (e) {
+      alert('作成に失敗しました'); createBtn.disabled = false; createBtn.textContent = '作成';
+    }
+  });
+</script>
+{% endblock %}

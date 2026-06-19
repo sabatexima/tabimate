@@ -18,6 +18,10 @@ _DB_PASS = os.getenv("DB_PASS", "")
 _DB_NAME = os.getenv("DB_NAME", "travel_db")
 _DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 _DB_PORT = int(os.getenv("DB_PORT", "3306"))
+# TiDB Cloud / 外部MySQL は TLS 必須。DB_SSL=true で有効化する。
+_DB_SSL = os.getenv("DB_SSL", "false").lower() == "true"
+# TLS 検証に使う CA バンドル（コンテナの Ubuntu 既定パス）。環境変数で上書き可。
+_DB_SSL_CA = os.getenv("DB_SSL_CA", "/etc/ssl/certs/ca-certificates.crt")
 
 _engine = None
 _connector = None
@@ -63,12 +67,20 @@ def _get_engine():
             pool_recycle=1800,
         )
     else:
+        # TiDB Cloud / 外部MySQL / ローカルDocker 共通の通常接続。
+        # パスワードに記号が含まれても壊れないよう URL エンコードする。
+        from urllib.parse import quote_plus
         url = (
-            f"mysql+pymysql://{_DB_USER}:{_DB_PASS}"
+            f"mysql+pymysql://{quote_plus(_DB_USER)}:{quote_plus(_DB_PASS)}"
             f"@{_DB_HOST}:{_DB_PORT}/{_DB_NAME}?charset=utf8mb4"
         )
+        connect_args = {}
+        if _DB_SSL:
+            # CA を指定して TLS 検証する（TiDB Cloud は TLS 必須）
+            connect_args["ssl"] = {"ca": _DB_SSL_CA}
         _engine = create_engine(
             url,
+            connect_args=connect_args,
             poolclass=QueuePool,
             pool_size=5,
             max_overflow=10,

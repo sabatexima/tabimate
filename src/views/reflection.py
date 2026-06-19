@@ -38,16 +38,17 @@ def _require_trip(trip_id: int) -> dict:
     return trip
 
 
-def _collect_images(photos: list) -> list:
-    """画像送付オプション有効時のみ、代表画像のバイト列を集める（既定は空）。
+def _collect_images_for_stickers(photos: list, sample_n: int = 8) -> list:
+    """付箋生成のため、代表画像のバイト列を集める。
 
+    付箋は写真の中身に根ざすので画像送付は必須（オプション判定はしない）。
     コスト保護のため全枚数は送らず、均等サンプリングで数枚に絞る。
     実際の枚数上限・縮小は解釈エンジン側でも担保する。
     """
-    if not trip_interpreter.send_images_enabled() or not photos:
+    if not photos:
         return []
-    # 均等に最大8枚サンプリング（エンジン側で更に_MAX_IMAGESへ絞る）
-    sample_n = min(8, len(photos))
+    # 旅全体を均等にカバーするようサンプリング（エンジン側で更に上限へ絞る）
+    sample_n = min(sample_n, len(photos))
     step = max(1, len(photos) // sample_n)
     sampled = photos[::step][:sample_n]
     images = []
@@ -55,7 +56,7 @@ def _collect_images(photos: list) -> list:
         data = storage.read_bytes(p["storage_path"])
         if data:
             images.append(data)
-    logger.info("代表画像を収集: %d枚（送付オプション有効）", len(images))
+    logger.info("付箋用の代表画像を収集: %d枚", len(images))
     return images
 
 
@@ -80,12 +81,10 @@ def trip_detail(trip_id: int):
     # 配信URLを付与（GCS署名付き or ローカル配信ルート）
     for p in photos:
         p["url"] = storage.get_url(p["storage_path"])
-    achievements = repo.get_achievements(trip_id)
-    reports = repo.get_reports(trip_id)
+    stickers = repo.get_stickers(trip_id)
     return render_template(
         "reflection/trip.html",
-        trip=trip, photos=photos,
-        achievements=achievements, reports=reports,
+        trip=trip, photos=photos, stickers=stickers,
     )
 
 
@@ -187,54 +186,35 @@ def serve_local_photo(storage_path: str):
 
 
 # ----------------------------------------------------------------------
-# 機能A: 謎アチーブメント
+# 付箋（sticker）― アプリの主役
 # ----------------------------------------------------------------------
-@reflection.route("/trips/<int:trip_id>/achievements/generate", methods=["POST"])
+@reflection.route("/trips/<int:trip_id>/stickers/generate", methods=["POST"])
 @login_required
-def generate_achievements(trip_id: int):
+def generate_stickers(trip_id: int):
     _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
+    if not photos:
+        return jsonify({"error": "写真を入れると付箋を作れます"}), 400
     feat = features.aggregate(photos)
-    images = _collect_images(photos)
-    items, usage = trip_interpreter.interpret_achievements(feat, images=images)
-    repo.replace_achievements(trip_id, items)
-    logger.info("称号生成: trip_id=%s count=%d tokens(in/out)=%d/%d",
+    images = _collect_images_for_stickers(photos)
+    items, usage = trip_interpreter.interpret_stickers(feat, images=images)
+    repo.replace_stickers(trip_id, items)
+    logger.info("付箋生成: trip_id=%s count=%d tokens(in/out)=%d/%d",
                 trip_id, len(items), usage["input_tokens"], usage["output_tokens"])
-    # 称号本体のみ返す。獲得条件・トークン等の内部情報は返さない。
-    return jsonify({"achievements": items})
+    # 付箋の言葉のみ返す。basis（生成根拠）・トークン等の内部情報は返さない。
+    return jsonify({"stickers": [{"text": it["text"]} for it in items]})
 
 
-@reflection.route("/trips/<int:trip_id>/achievements", methods=["GET"])
+@reflection.route("/trips/<int:trip_id>/stickers", methods=["GET"])
 @login_required
-def list_achievements(trip_id: int):
+def list_stickers(trip_id: int):
     _require_trip(trip_id)
-    return jsonify({"achievements": repo.get_achievements(trip_id)})
+    return jsonify({"stickers": repo.get_stickers(trip_id)})
 
 
-# ----------------------------------------------------------------------
-# 機能B: AI旅レポート
-# ----------------------------------------------------------------------
-@reflection.route("/trips/<int:trip_id>/report/generate", methods=["POST"])
+@reflection.route("/trips/<int:trip_id>/stickers/<int:sticker_id>", methods=["DELETE"])
 @login_required
-def generate_report(trip_id: int):
+def delete_sticker(trip_id: int, sticker_id: int):
     _require_trip(trip_id)
-    tone = request.args.get("tone") or (request.get_json(silent=True) or {}).get("tone") or "playful"
-    area = request.args.get("area") or (request.get_json(silent=True) or {}).get("area") or None
-    photos = repo.get_photos(trip_id)
-    feat = features.aggregate(photos)
-    images = _collect_images(photos)
-    body, usage = trip_interpreter.interpret_report(feat, tone=tone, area=area, images=images)
-    repo.save_report(
-        trip_id, body=body, tone=tone, area=area,
-        token_in=usage["input_tokens"], token_out=usage["output_tokens"],
-    )
-    logger.info("レポート生成: trip_id=%s tone=%s area=%s tokens(in/out)=%d/%d",
-                trip_id, tone, area, usage["input_tokens"], usage["output_tokens"])
-    return jsonify({"body": body, "tone": tone, "area": area})
-
-
-@reflection.route("/trips/<int:trip_id>/report", methods=["GET"])
-@login_required
-def list_reports(trip_id: int):
-    _require_trip(trip_id)
-    return jsonify({"reports": repo.get_reports(trip_id)})
+    ok = repo.delete_sticker(sticker_id, trip_id)
+    return jsonify({"deleted": ok})

@@ -9,3 +9,4 @@ src/logs/
 docker-mysql/DB/app_db/
 # ローカル写真保存（FSフォールバック）
 src/uploads/
+src/.claude/

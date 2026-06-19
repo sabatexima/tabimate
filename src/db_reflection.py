@@ -122,8 +122,9 @@ def get_trips(user_id: str) -> list:
     """ユーザーの旅一覧を返す。
 
     一覧カードをリッチに描画するため、各旅に
-      - photo_count : 写真枚数
-      - cover_path  : サムネイルに使う代表写真の storage_path（最古の1枚／無ければ None）
+      - photo_count    : 写真枚数
+      - cover_path     : サムネイルに使う代表写真の storage_path（最古の1枚／無ければ None）
+      - sticker_teaser : 代表付箋の言葉（最新の1枚／無ければ None）
     を相関サブクエリで付与する（N+1を避けるため1クエリで取得）。
     """
     with get_engine().connect() as conn:
@@ -133,7 +134,9 @@ def get_trips(user_id: str) -> list:
                 "SELECT t.*, "
                 "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
                 "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
-                "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path "
+                "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path, "
+                "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
+                "     ORDER BY s.id DESC LIMIT 1) AS sticker_teaser "
                 "FROM trips t WHERE t.user_id = :uid ORDER BY t.created_at DESC"
             ),
             {"uid": user_id},

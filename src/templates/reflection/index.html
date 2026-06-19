@@ -61,6 +61,13 @@
   }
   .info .m { font-size: 0.82em; color: var(--text-muted); margin-top: 3px; }
   .info .meta { font-size: 0.78em; color: var(--text-muted); margin-top: 3px; }
+  /* 代表付箋のティーザー（控えめに） */
+  .info .sticker-teaser {
+    display: inline-block; margin-top: 5px; font-size: 0.78em; font-weight: 600;
+    color: var(--primary-color); background: #f4f2fd; border-radius: 6px;
+    padding: 2px 8px; max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   /* 「…」メニュー（削除導線。主張を抑える） */
   .card-menu { position: relative; display: flex; align-items: center; }
@@ -126,6 +133,7 @@
             <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
           {% endif %}
           <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
+          {% if trip.sticker_teaser %}<span class="sticker-teaser">🪧 {{ trip.sticker_teaser }}</span>{% endif %}
         </div>
       </a>
       <div class="card-menu">

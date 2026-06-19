@@ -1,12 +1,12 @@
-"""旅の「解釈」エンジン（共通モジュール）。
+"""旅の「解釈」エンジン。
 
-同じエンジンの出力長さ違いとして2機能を提供する:
-- 短い解釈 → 機能A: 謎アチーブメント（称号 2〜4個）
-- 長い解釈 → 機能B: 旅レポート（数百字の読み物）
+アプリの主役は「付箋（sticker）」。旅の写真から、旅全体の空気感を
+少しズラして切り取った短い言葉（例:「曇り空が同行者」「気づけば出雲」）を生成する。
 
-入力は services/features.py が集計した特徴量（メタデータ要約）。
-高度な推論は不要なため安価な Gemini モデル（環境変数で差替可能）を使う。
-全呼び出しで input/output トークン数をログ出力し、推定コストを算出する。
+入力は services/features.py が集計した特徴量（メタデータ要約）＋代表写真。
+付箋は写真の中身に根ざす必要があるため画像送付が前提（呼び出し側で収集）。
+安価な Gemini モデル（環境変数で差替可能）を使い、全呼び出しで
+input/output トークン数をログ出力して推定コストを算出する。
 """
 import base64
 import io
@@ -30,6 +30,8 @@ _SEND_IMAGES_DEFAULT = os.getenv("INTERPRETER_SEND_IMAGES", "false").lower() == 
 # 画像送付（任意機能）のコスト保護: 送る最大枚数と縮小後の最大辺(px)。
 _MAX_IMAGES = int(os.getenv("INTERPRETER_MAX_IMAGES", "4"))
 _IMAGE_MAX_EDGE = int(os.getenv("INTERPRETER_IMAGE_MAX_EDGE", "512"))
+# 付箋生成は画像が主役。称号・レポートより多めに送る（コストは枚数で調整）。
+_STICKER_MAX_IMAGES = int(os.getenv("STICKER_MAX_IMAGES", "6"))
 
 
 def send_images_enabled() -> bool:
@@ -37,16 +39,18 @@ def send_images_enabled() -> bool:
     return _SEND_IMAGES_DEFAULT
 
 
-def _prepare_image_blocks(images: Optional[list]) -> list:
+def _prepare_image_blocks(images: Optional[list], max_images: Optional[int] = None) -> list:
     """生画像バイト列を縮小・JPEG化し、Gemini用の image_url ブロックに変換する。
 
-    images: bytes のリスト。コスト保護のため _MAX_IMAGES 枚に制限し、
-    各画像は長辺 _IMAGE_MAX_EDGE px 以内へ縮小する。失敗画像はスキップ。
+    images: bytes のリスト。コスト保護のため最大 max_images 枚に制限し
+    （未指定なら _MAX_IMAGES）、各画像は長辺 _IMAGE_MAX_EDGE px 以内へ縮小する。
+    失敗画像はスキップ。
     """
     if not images:
         return []
+    cap = max_images if max_images is not None else _MAX_IMAGES
     blocks = []
-    for data in images[:_MAX_IMAGES]:
+    for data in images[:cap]:
         if not data:
             continue
         try:
@@ -77,20 +81,18 @@ _llm = ChatGoogleGenerativeAI(
 # ----------------------------------------------------------------------
 # 出力スキーマ
 # ----------------------------------------------------------------------
-class AchievementItem(BaseModel):
-    title: str = Field(description="ふわっとした称号名。攻略条件は書かない。例:『水辺に呼ばれし者』")
-    flavor_text: str = Field(description="一言フレーバー。観察・解釈のトーン。条件や根拠は書かない。")
-
-
-class AchievementsOutput(BaseModel):
-    achievements: List[AchievementItem] = Field(
-        description="2個以上4個以下の称号。狙って取れないようあいまいに。"
+class StickerItem(BaseModel):
+    text: str = Field(
+        description="短い付箋の言葉（目安6〜14字）。説明文・旅レポートの見出しにしないこと。"
+    )
+    basis: str = Field(
+        description="根拠：写真の何から来たか（内部用・ユーザー非表示）。"
     )
 
 
-class ReportOutput(BaseModel):
-    body: str = Field(
-        description="数百字の読み物。やや盛って・ボケて・実況講評するトーン。改行可。"
+class StickersOutput(BaseModel):
+    stickers: List[StickerItem] = Field(
+        description="3〜6枚。旅全体の空気感を少しズラして切り取る付箋。"
     )
 
 
@@ -129,78 +131,56 @@ def _features_block(features: dict) -> str:
     return json.dumps(features, ensure_ascii=False, indent=2)
 
 
-def _build_input(prompt_text: str, images: Optional[list], tag: str):
+def _build_input(prompt_text: str, images: Optional[list], tag: str,
+                 max_images: Optional[int] = None):
     """画像があればマルチモーダルのメッセージ列を、なければ文字列をそのまま返す。"""
-    blocks = _prepare_image_blocks(images)
+    cap = max_images if max_images is not None else _MAX_IMAGES
+    blocks = _prepare_image_blocks(images, max_images=cap)
     if not blocks:
         return prompt_text
     logger.info("[画像送付] task=%s images=%d（最大%d, 長辺%dpxに縮小）",
-                tag, len(blocks), _MAX_IMAGES, _IMAGE_MAX_EDGE)
+                tag, len(blocks), cap, _IMAGE_MAX_EDGE)
     content = [{"type": "text", "text": prompt_text}] + blocks
     return [HumanMessage(content=content)]
 
 
 # ----------------------------------------------------------------------
-# 機能A: 謎アチーブメント（短い解釈）
+# 付箋（sticker）生成 ― アプリの主役
 # ----------------------------------------------------------------------
-def interpret_achievements(features: dict, images: Optional[list] = None):
-    """特徴量から称号 2〜4個を生成。戻り値: (items: list[dict], usage: dict)"""
-    prompt = f"""あなたは旅の行動を面白く解釈する観察者です。
-以下は、ある人の旅行中の写真から機械的に集計した特徴量です。
+def interpret_stickers(features: dict, images: Optional[list] = None):
+    """写真＋特徴量から付箋を3〜6枚生成。戻り値: (items: list[dict], usage: dict)。
 
+    items は [{"text": ..., "basis": ...}]。basis は内部用（生成根拠）。
+    付箋は写真の中身に根ざすため、images（代表写真のbytes列）が前提。
+    """
+    prompt = f"""あなたは旅の写真から「付箋」を作る人です。
+付箋とは、旅の空気感を“少しだけズラして”切り取った短い言葉です。
+
+参考（補助情報・あくまで補足。主役は写真そのもの）:
 {_features_block(features)}
 
-この特徴量から、その人の旅のクセや傾向を読み取り、ふわっとした「称号」を2〜4個付けてください。
+# お手本（このトーン・長さ・ズラし方を真似る）
+・「曇り空が同行者」
+・「雨との交渉継続中」
+・「気づけば出雲」
+・「駅ホームが渋い」
 
-【厳守】
-・これは「達成バッジ」ではなく「観察・解釈」です。攻略可能な具体的条件は絶対に書かないこと。
-・狙って取れないよう、あいまい・ちょっと面白い表現にすること。
-・称号名の例:「迷子の達人」「水辺に呼ばれし者」「黄昏コレクター」「胃袋無限大」「結局そこ?」
-・flavor_text は一言。データの数値をそのまま書かず、行動を面白く解釈すること。
-・特徴量が乏しい場合でも、無難に2個はひねり出すこと。
-"""
-    model_input = _build_input(prompt, images, tag="achievements")
-    parsed, usage = _invoke(AchievementsOutput, model_input, tag="achievements")
+# 付箋の作り方（厳守）
+・写真の事実から大きく逸脱しない（完全な創作は禁止）。
+・旅行全体の特徴を反映する。
+・少し詩的でよい／擬人化してよい／少し大喜利的でよい。
+・写真を見返した時に「確かに」と思えること。
+・「説明文」にしないこと。「旅行レポートの見出し」にしないこと。
+・目安6〜14字。短く。句点（。）で終わる説明にしない。
+
+各付箋について basis（根拠：写真の何から来たか）も必ず書くこと。
+basis はユーザーには見せない内部メモなので、率直に書いてよい。
+
+付箋を3〜6枚作ってください。"""
+    model_input = _build_input(prompt, images, tag="stickers",
+                               max_images=_STICKER_MAX_IMAGES)
+    parsed, usage = _invoke(StickersOutput, model_input, tag="stickers")
     items = []
-    if parsed and getattr(parsed, "achievements", None):
-        items = [{"title": a.title, "flavor_text": a.flavor_text} for a in parsed.achievements]
+    if parsed and getattr(parsed, "stickers", None):
+        items = [{"text": s.text, "basis": s.basis} for s in parsed.stickers]
     return items, usage
-
-
-# ----------------------------------------------------------------------
-# 機能B: AI旅レポート（長い解釈）
-# ----------------------------------------------------------------------
-_TONE_GUIDE = {
-    "playful": "陽気でちょっとボケる。ツッコミどころを楽しく拾う。",
-    "roast": "ちょい辛口。愛のあるイジり。けなしすぎない。",
-    "gentle": "やさしく寄り添う。じんわり良かったね、と振り返る。",
-}
-
-
-def interpret_report(features: dict, tone: str = "playful",
-                     area: Optional[str] = None, images: Optional[list] = None):
-    """特徴量から旅レポート本文を生成。戻り値: (body: str, usage: dict)"""
-    tone = tone if tone in _TONE_GUIDE else "playful"
-    tone_desc = _TONE_GUIDE[tone]
-    area_line = f"\n対象エリア: {area}（このエリアに絞って講評すること）" if area else ""
-
-    prompt = f"""あなたは旅の実況・講評をする相棒です。一人旅でも横で講評してくれる存在として書きます。
-
-以下は、ある人の旅行中の写真から機械的に集計した特徴量です。{area_line}
-
-{_features_block(features)}
-
-この特徴量をもとに「こんな旅でしたね」という読み物を書いてください。
-
-【トーン】{tone}: {tone_desc}
-【厳守】
-・真面目な要約にしないこと。やや盛って、ボケて、実況・講評すること。
-・例:「この旅、8割が"とりあえず腹ごしらえ"でしたね」「写真の影の長さから察するに、完全に出遅れてます朝」
-・数百字程度（200〜400字目安）。
-・特徴量の数値を箇条書きで並べるのではなく、読み物として自然な文章にすること。
-・データが乏しくても、その乏しさ自体をネタにして書くこと。
-"""
-    model_input = _build_input(prompt, images, tag="report")
-    parsed, usage = _invoke(ReportOutput, model_input, tag="report")
-    body = parsed.body if parsed and getattr(parsed, "body", None) else ""
-    return body, usage

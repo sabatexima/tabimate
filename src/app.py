@@ -8,6 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 from views.planner import planner
 from views.auth import auth, init_oauth
+from views.reflection import reflection
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -15,6 +16,7 @@ app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-change-in-production')
 
 app.register_blueprint(planner, url_prefix='/')
 app.register_blueprint(auth)
+app.register_blueprint(reflection)
 init_oauth(app)
 
 if __name__ == "__main__":

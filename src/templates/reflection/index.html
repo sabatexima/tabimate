@@ -39,6 +39,15 @@
   }
   .new-trip button:disabled { opacity: 0.6; cursor: default; }
 
+  /* スマホ: タイトルは全幅、開始日/終了日は半分ずつ、ボタンは全幅。
+     iOSの日付入力が固有幅でカードからはみ出さないよう min-width:0 で縮ませる。 */
+  @media (max-width: 600px) {
+    .new-trip .row { gap: 8px; }
+    .field.title-field { flex: 1 1 100%; }
+    .field.date-field { flex: 1 1 0; min-width: 0; }
+    .new-trip button { flex: 1 1 100%; margin-top: 2px; }
+  }
+
   #trips { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
   .trip-row { position: relative; display: flex; align-items: stretch; gap: 2px; }
   .trip-card {

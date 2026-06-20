@@ -9,7 +9,7 @@ const chatBox = document.getElementById('chat-box');
   let currentRequestId = null;
 
   // 会話の最初にメイトから話しかける挨拶（クライアント側で常に先頭に表示）
-  const GREETING = 'こんにちは！旅のプランを一緒に考える「みつば」です🍀\n\n'
+  const GREETING = 'こんにちは！旅のプランを一緒に考える「ちゃむ」です🍀\n\n'
     + '行き先・日程・人数・ご予算・やってみたいことなど、わかる範囲で教えてくださいね。ぴったりの旅行プランをご提案します。\n\n'
     + 'まずは、**どちらへ行ってみたいですか？**';
 
@@ -46,7 +46,7 @@ const chatBox = document.getElementById('chat-box');
       icon.alt = '';
       icon.classList.add('mate-avatar');
       label.appendChild(icon);
-      label.appendChild(document.createTextNode('みつば'));
+      label.appendChild(document.createTextNode('ちゃむ'));
     }
     wrapper.appendChild(label);
 

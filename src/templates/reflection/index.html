@@ -59,6 +59,25 @@
   }
   .new-trip button.create:disabled { opacity: 0.6; cursor: default; }
 
+  /* 検索・並び替えバー */
+  .album-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .search-wrap { position: relative; flex: 1 1 200px; }
+  .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: 0.9em; opacity: 0.55; pointer-events: none;
+  }
+  #album-search {
+    width: 100%; box-sizing: border-box; padding: 10px 12px 10px 34px;
+    border: 1px solid #ddd; border-radius: 10px; font-size: 0.92em; background: #fff;
+  }
+  #album-search:focus { outline: none; border-color: var(--primary-color); }
+  .sort-select {
+    flex: 0 0 auto; border: 1px solid #ddd; border-radius: 10px;
+    padding: 10px 12px; font-size: 0.9em; background: #fff; color: var(--text-main); cursor: pointer;
+  }
+  .sort-select:focus { outline: none; border-color: var(--primary-color); }
+  .no-results { text-align: center; color: var(--text-muted); padding: 30px 0; }
+
   /* 旅カード（SNSフィード風: 大きな写真主体）*/
   #trips { display: flex; flex-direction: column; gap: 18px; }
   .trip-card {
@@ -158,9 +177,31 @@
     </div>
   </div>
 
+  {% if trips %}
+  <div class="album-controls">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input id="album-search" type="search" placeholder="旅・付箋で検索" autocomplete="off">
+    </div>
+    <select id="album-sort" class="sort-select" aria-label="並び替え">
+      <option value="created_desc">新しい順</option>
+      <option value="created_asc">古い順</option>
+      <option value="start_desc">出発日が新しい順</option>
+      <option value="start_asc">出発日が古い順</option>
+      <option value="title_asc">タイトル順</option>
+      <option value="photos_desc">写真が多い順</option>
+    </select>
+  </div>
+  <div class="no-results" id="no-results" hidden>🔍 該当する旅が見つかりませんでした。</div>
+  {% endif %}
+
   <div id="trips">
     {% for trip in trips %}
-      <div class="trip-card" data-id="{{ trip.id }}" data-title="{{ trip.title }}">
+      <div class="trip-card" data-id="{{ trip.id }}" data-title="{{ trip.title }}"
+           data-created="{{ trip.created_at or '' }}"
+           data-start="{{ trip.start_date or '' }}"
+           data-photos="{{ trip.photo_count or 0 }}"
+           data-stickers="{{ trip.stickers_preview|join(' ') if trip.stickers_preview else '' }}">
         <a class="card-link" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
           <div class="cover">
             {% if trip.cover_url %}
@@ -283,5 +324,49 @@
   document.addEventListener('click', (ev) => {
     if (!ev.target.closest('.card-menu')) closeAllMenus();
   });
+
+  // --- 検索・並び替え（クライアントサイド）---
+  const searchEl = document.getElementById('album-search');
+  const sortEl = document.getElementById('album-sort');
+  const noResults = document.getElementById('no-results');
+
+  const norm = (s) => (s || '').toString().toLowerCase();
+
+  function compareCards(a, b, mode) {
+    const txt = (c) => norm(c.dataset.title);
+    const num = (c, k) => parseInt(c.dataset[k] || '0', 10) || 0;
+    const str = (c, k) => c.dataset[k] || '';
+    switch (mode) {
+      case 'created_asc':  return str(a, 'created').localeCompare(str(b, 'created'));
+      case 'start_desc':   return str(b, 'start').localeCompare(str(a, 'start'));
+      // 出発日なしは末尾へ（昇順）
+      case 'start_asc':    return (str(a, 'start') || '9999').localeCompare(str(b, 'start') || '9999');
+      case 'title_asc':    return txt(a).localeCompare(txt(b), 'ja');
+      case 'photos_desc':  return num(b, 'photos') - num(a, 'photos');
+      case 'created_desc':
+      default:             return str(b, 'created').localeCompare(str(a, 'created'));
+    }
+  }
+
+  function applyFilterSort() {
+    if (!searchEl) return;
+    const q = norm(searchEl.value).trim();
+    const cards = Array.from(tripsEl.querySelectorAll('.trip-card'));
+    let visible = 0;
+    cards.forEach((c) => {
+      const hay = norm(c.dataset.title) + ' ' + norm(c.dataset.stickers);
+      const show = !q || hay.indexOf(q) !== -1;
+      c.hidden = !show;
+      if (show) visible++;
+    });
+    cards.slice().sort((a, b) => compareCards(a, b, sortEl.value))
+         .forEach((c) => tripsEl.appendChild(c));
+    if (noResults) noResults.hidden = visible !== 0;
+  }
+
+  if (searchEl && sortEl) {
+    searchEl.addEventListener('input', applyFilterSort);
+    sortEl.addEventListener('change', applyFilterSort);
+  }
 </script>
 {% endblock %}

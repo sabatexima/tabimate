@@ -100,13 +100,25 @@
       opacity: 0.85;
     }
 
-    /* ページ見出しに四つ葉を添える（手描き絵本トーン） */
+    /* OpenMoji（手書き風）画像に差し替えた絵文字の見た目 */
+    img.emoji {
+      height: 1.15em;
+      width: 1.15em;
+      vertical-align: -0.2em;
+      margin: 0 0.05em;
+      display: inline-block;
+    }
+
+    /* ページ見出しに四つ葉を添える（OpenMojiの手書き四つ葉） */
     .page-header h1::before,
     .trip-title::before {
-      content: "🍀";
+      content: "";
+      display: inline-block;
+      width: 1em;
+      height: 1em;
       margin-right: 8px;
-      font-size: 0.85em;
-      vertical-align: 1px;
+      vertical-align: -0.12em;
+      background: url("https://cdn.jsdelivr.net/npm/openmoji@15.0.0/color/svg/1F340.svg") center/contain no-repeat;
     }
 
     .sidebar a {

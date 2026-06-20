@@ -51,6 +51,11 @@
       justify-content: center;
     }
 
+    /* サイドバーを開いている間は三本線アイコンを隠す */
+    body.sidebar-open .hamburger {
+      display: none;
+    }
+
     /* オーバーレイ（モバイルでサイドバー展開時の背景）*/
     .sidebar-overlay {
       display: none;

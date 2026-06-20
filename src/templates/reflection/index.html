@@ -143,6 +143,18 @@
 
   .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
   .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+
+  /* PC版: 幅を広げてカードを2〜3列のグリッドに（モバイルは1列のまま）*/
+  @media (min-width: 768px) {
+    .feed { max-width: 1040px; }
+    #trips {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      align-items: start;
+      gap: 18px;
+    }
+    #trips .empty-state { grid-column: 1 / -1; }
+  }
 </style>
 {% endblock %}
 

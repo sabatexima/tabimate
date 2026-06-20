@@ -8,6 +8,17 @@ const chatBox = document.getElementById('chat-box');
   let abortController = null;
   let currentRequestId = null;
 
+  // 会話の最初にメイトから話しかける挨拶（クライアント側で常に先頭に表示）
+  const GREETING = 'こんにちは！旅のプランを一緒に考えるメイトだちょ🐷\n\n'
+    + '行き先・日程・人数・予算・やりたいことなどを教えてくれたら、ぴったりの旅行プランを作るちょ！\n\n'
+    + 'まずは、**どこに行きたい？**';
+
+  function renderGreeting() {
+    const el = createMessageElement('ai', GREETING);
+    el.classList.add('greeting');
+    chatBox.appendChild(el);
+  }
+
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
@@ -47,10 +58,11 @@ const chatBox = document.getElementById('chat-box');
     try {
       const response = await fetch('/get_messages');
       const messages = await response.json();
-      const currentMsgCount = chatBox.querySelectorAll('.message-wrapper').length;
+      const currentMsgCount = chatBox.querySelectorAll('.message-wrapper:not(.greeting)').length;
       if (!forceScroll && messages.length === currentMsgCount) return;
 
       chatBox.innerHTML = '';
+      renderGreeting();
       messages.forEach(msg => {
         chatBox.appendChild(createMessageElement(msg.role, msg.content));
       });
@@ -166,6 +178,8 @@ const chatBox = document.getElementById('chat-box');
     if (!confirm('チャット履歴をリセットして新しい会話を始めますか？')) return;
     await fetch('/reset_chat', { method: 'POST' });
     chatBox.innerHTML = '';
+    renderGreeting();
   });
 
+  renderGreeting();
   loadMessages();

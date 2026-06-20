@@ -43,8 +43,6 @@ function esc(str) {
           <span>⏱️ 期間: ${esc(plan.duration || '—')}</span>
           <span>👥 人数: ${plan.num_people != null ? esc(plan.num_people) + '人' : '—'}</span>
           <span>💴 予算上限: ${fmt(plan.budget_limit)}円/人</span>
-          <span>🚄 交通費: ${fmt(plan.transport_cost)}円/人</span>
-          <span>💰 残り予算: ${fmt(plan.remaining_budget)}円/人</span>
         </div>
       </div>
       <div class="plan-accordion">

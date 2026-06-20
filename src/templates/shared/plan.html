@@ -31,8 +31,6 @@
       <span>⏱️ 期間: {{ plan.duration or '—' }}</span>
       <span>👥 人数: {% if plan.num_people is not none %}{{ plan.num_people }}人{% else %}—{% endif %}</span>
       <span>💴 予算上限: {% if plan.budget_limit is not none %}{{ "{:,}".format(plan.budget_limit) }}円/人{% else %}—{% endif %}</span>
-      <span>🚄 交通費: {% if plan.transport_cost is not none %}{{ "{:,}".format(plan.transport_cost) }}円/人{% else %}—{% endif %}</span>
-      <span>💰 残り予算: {% if plan.remaining_budget is not none %}{{ "{:,}".format(plan.remaining_budget) }}円/人{% else %}—{% endif %}</span>
     </div>
   </div>
   <div class="plan-accordion">

@@ -174,15 +174,12 @@
   /* PC版: 幅を広げてカードを2〜3列のグリッドに（モバイルは1列のまま）*/
   @media (min-width: 768px) {
     .feed { max-width: 1040px; }
-    /* コントロール類はグリッド左端に揃え、横に間延びさせない */
-    .page-header, .page-lead, .new-trip-bar, .album-controls, .no-results {
-      max-width: 640px; margin-right: auto;
-    }
+    /* コントロール類はグリッドと同じ幅に揃える（右端をカードと合わせる） */
     #trips {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: 18px;
-      /* 各行のカード高さを揃える（日付有無のガタつき解消） */
+      /* 既定の align-items: stretch により各行のカード高さが揃う（日付有無のガタつき解消）*/
     }
     #trips .empty-state { grid-column: 1 / -1; }
   }

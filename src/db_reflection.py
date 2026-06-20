@@ -118,6 +118,26 @@ def get_trip(trip_id: int, user_id: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
+def get_trip_by_id(trip_id: int) -> dict | None:
+    """所有者を問わず1件の旅を取得する（共有閲覧で使用）。
+
+    アクセス制御は呼び出し側（共有トークン / メール権限の確認）で行う前提。
+    """
+    with get_engine().connect() as conn:
+        _ensure_all(conn)
+        row = conn.execute(
+            text("SELECT * FROM trips WHERE id = :id"),
+            {"id": trip_id},
+        ).fetchone()
+    if not row:
+        return None
+    d = _row_to_dict(row)
+    for k in ("start_date", "end_date", "created_at"):
+        if d.get(k) is not None:
+            d[k] = str(d[k])
+    return d
+
+
 def get_trips(user_id: str) -> list:
     """ユーザーの旅一覧を返す。
 

@@ -107,7 +107,20 @@
     border-top: 1px solid rgba(108,92,231,0.1);
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
   }
+  .share-btn {
+    background: none;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .share-btn:hover { background: var(--primary-color); color: white; }
   .delete-btn {
     background: none;
     border: 1px solid #f43f5e;
@@ -143,6 +156,8 @@
 
 <div id="loading">読み込み中...</div>
 <div id="plans-container" style="display:none;"></div>
+
+{% include "_share_modal.html" %}
 
 <script>
   function esc(str) {
@@ -191,9 +206,14 @@
         ${accordion('💰', '費用見積もり', plan.budget_estimate)}
       </div>
       <div class="plan-footer">
+        <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
         <button class="delete-btn" data-id="${esc(plan.id)}">削除</button>
       </div>
     `;
+
+    card.querySelector('.share-btn').addEventListener('click', () => {
+      window.openShareModal('plan', plan.id);
+    });
 
     card.querySelector('.delete-btn').addEventListener('click', async (e) => {
       if (!confirm('このプランを削除しますか？')) return;

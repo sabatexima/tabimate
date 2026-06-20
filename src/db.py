@@ -178,6 +178,43 @@ def get_travel_plans(google_user_id: str) -> list:
     return result
 
 
+def get_travel_plan_by_id(plan_id: int) -> dict | None:
+    """所有者を問わず1件のプランを取得する（共有閲覧で使用）。
+
+    アクセス制御は呼び出し側（共有トークン / メール権限の確認）で行う前提。
+    返り値は get_travel_plans の各要素と同じ形（JSON列はパース済み、
+    schedule_items は schedule にリネーム）。
+    """
+    with _get_engine().connect() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        row = conn.execute(
+            text(
+                "SELECT id, google_user_id, destination, travel_date, duration, num_people, "
+                "budget_limit, departure_location, transport_cost, remaining_budget, "
+                "status, feedback, themes, special_requirements, "
+                "spots, restaurants, schedule_items, accommodation, budget_estimate, created_at "
+                "FROM travel_plans WHERE id = :id"
+            ),
+            {"id": plan_id},
+        ).fetchone()
+    if not row:
+        return None
+    d = _row_to_dict(row)
+    for col in ("themes", "special_requirements", "spots", "restaurants",
+                "schedule_items", "accommodation", "budget_estimate"):
+        if isinstance(d.get(col), str):
+            try:
+                d[col] = json.loads(d[col])
+            except Exception:
+                d[col] = []
+        elif d.get(col) is None:
+            d[col] = []
+    d["schedule"] = d.pop("schedule_items", [])
+    if d.get("created_at"):
+        d["created_at"] = str(d["created_at"])
+    return d
+
+
 def delete_travel_plan(plan_id: int, google_user_id: str) -> bool:
     with _get_engine().begin() as conn:
         result = conn.execute(

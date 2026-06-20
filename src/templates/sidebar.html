@@ -3,6 +3,9 @@
   <a href="{{ url_for('planner.home') }}">ホーム</a>
   <a href="{{ url_for('planner.saved_plans') }}">保存プラン</a>
   <a href="{{ url_for('reflection.index') }}">旅の振り返り</a>
+  {% if session.get('user_id') %}
+  <a href="{{ url_for('sharing.shared_with_me') }}">共有されたもの</a>
+  {% endif %}
 
 
   <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); margin-top: 30px;">

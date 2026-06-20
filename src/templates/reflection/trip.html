@@ -89,6 +89,7 @@
 <div class="title-row">
   <div class="trip-title" id="trip-title">{{ trip.title }}</div>
   <button class="title-edit" id="title-edit" aria-label="タイトルを編集">✎</button>
+  <button class="btn secondary" id="share-btn" style="margin-left:auto;">🔗 共有</button>
 </div>
 <div class="title-editor" id="title-editor" hidden>
   <input id="title-input" type="text" maxlength="100" value="{{ trip.title }}">
@@ -129,6 +130,8 @@
   <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
 
+{% include "_share_modal.html" %}
+
 <!-- 危険ゾーン（旅の削除）-->
 <div class="section danger-zone">
   <h2>🗑 この旅を削除</h2>
@@ -142,6 +145,11 @@
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // --- 共有モーダル ---
+  document.getElementById('share-btn').addEventListener('click', () => {
+    window.openShareModal('trip', TRIP_ID);
+  });
 
   // --- タイトル編集 ---
   const titleEl = document.getElementById('trip-title');

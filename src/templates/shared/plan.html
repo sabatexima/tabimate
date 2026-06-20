@@ -48,10 +48,6 @@
   .plan-accordion-body { padding: 4px 16px 14px 16px; font-size: 0.9em; color: var(--text-main); line-height: 1.6; }
   .plan-accordion-body ul { margin: 0; padding-left: 1.2em; }
   .plan-accordion-body li { margin: 5px 0; }
-  .plan-review {
-    padding: 12px 16px; border-top: 1px solid rgba(108,92,231,0.1);
-    font-size: 0.9em; color: var(--text-main); line-height: 1.6;
-  }
 </style>
 {% endblock %}
 
@@ -91,8 +87,5 @@
     {{ accordion('📅', 'スケジュール', plan.schedule) }}
     {{ accordion('💰', '費用見積もり', plan.budget_estimate) }}
   </div>
-  {% if plan.feedback %}
-  <div class="plan-review"><strong>💬 総評</strong><br>{{ plan.feedback }}</div>
-  {% endif %}
 </div>
 {% endblock %}

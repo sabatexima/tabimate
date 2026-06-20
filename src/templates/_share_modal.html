@@ -41,6 +41,7 @@
     background: #b2bec3; color: #fff;
   }
   .sm-badge.edit { background: var(--primary-color); }
+  .sm-perm { border: 1px solid #ddd; border-radius: 8px; padding: 4px 6px; font-size: 0.82em; background: #fff; cursor: pointer; }
   .sm-mini { background: none; border: none; cursor: pointer; font-size: 0.85em; padding: 2px 6px; border-radius: 6px; }
   .sm-mini.copy { color: var(--primary-color); }
   .sm-mini.del { color: #e74c3c; }
@@ -147,10 +148,33 @@
     grants.forEach(g => {
       const li = document.createElement('li');
       li.className = 'sm-li';
+      // 編集共有が可能なリソース（旅）では、その場で権限を変更できるよう
+      // セレクトを表示する。プランは閲覧専用なのでバッジ表示のみ。
+      const permHtml = editableSupported
+        ? `<select class="sm-perm">
+             <option value="view"${g.permission !== 'edit' ? ' selected' : ''}>閲覧のみ</option>
+             <option value="edit"${g.permission === 'edit' ? ' selected' : ''}>編集も可</option>
+           </select>`
+        : permBadge(g.permission);
       li.innerHTML = `
         <span class="sm-grow">${esc(g.grantee_email)}</span>
-        ${permBadge(g.permission)}
+        ${permHtml}
         <button class="sm-mini del">取消</button>`;
+      const sel = li.querySelector('.sm-perm');
+      if (sel) sel.addEventListener('change', async () => {
+        const prev = g.permission;
+        sel.disabled = true;
+        try {
+          // add_grant は upsert（同一メールなら権限を更新）なので再POSTで変更できる
+          const res = await fetch(`/share/${rtype}/${rid}/grant`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: g.grantee_email, permission: sel.value }),
+          });
+          if (res.ok) { g.permission = sel.value; }
+          else { alert('権限の変更に失敗しました'); sel.value = prev; }
+        } catch (e) { alert('権限の変更に失敗しました'); sel.value = prev; }
+        sel.disabled = false;
+      });
       li.querySelector('.del').addEventListener('click', async () => {
         if (!confirm(`${g.grantee_email} への共有を取り消しますか？`)) return;
         const res = await fetch(`/share/grant/${g.id}`, { method: 'DELETE' });

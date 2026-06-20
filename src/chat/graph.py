@@ -69,6 +69,7 @@ def generate_travel_plan(inputs: dict):
     制御用フィールド（retry_count・各候補リスト等）を既定値で補ってから
     グラフを実行する。recursion_limit は差し戻しループの暴走を防ぐ上限。
     """
+    inputs.setdefault("transport_mode", "おまかせ")
     inputs.setdefault("retry_count", 0)
     inputs.setdefault("prev_status", "")
     inputs.setdefault("user_feedback", "")
@@ -88,6 +89,7 @@ if __name__ == "__main__":
         "num_people": 4,
         "budget_limit": 70000,
         "departure_location": "東京（東京駅）",
+        "transport_mode": "おまかせ",
         "special_requirements": ["同行者に車椅子利用者が1名いるためバリアフリー対応必須", "魚介類アレルギーの同行者が1名いるため食事の際は要確認"],
         "retry_count": 0,
         "prev_status": "",
@@ -104,6 +106,7 @@ if __name__ == "__main__":
         print(f"⏱️ 期間: {state['duration']}")
         print(f"👥 参加人数: {state['num_people']}人")
         print(f"💴 予算上限: 1人あたり {state['budget_limit']:,}円")
+        print(f"🚍 交通手段: {state.get('transport_mode', 'おまかせ')}")
         print(f"🚄 交通費: {state.get('transport_cost', 0):,}円/人")
         print(f"💰 残り予算: {state.get('remaining_budget', 0):,}円/人")
         print(f"⚠️ 特別条件: {', '.join(state['special_requirements'])}")

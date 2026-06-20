@@ -23,6 +23,7 @@ class TravelPlanState(TypedDict):
     num_people: int
     budget_limit: int
     departure_location: str
+    transport_mode: str
     special_requirements: List[str]
     transport_cost: int
     remaining_budget: int

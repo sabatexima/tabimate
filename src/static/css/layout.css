@@ -1,14 +1,17 @@
 :root {
       --primary-color: #4fa83a;
-      --text-main: #2d3436;
-      --text-muted: #636e72;
+      --accent-pink: #f08ba0;     /* みつばの耳のやわらかいピンク */
+      --glow-cream: #f6f6a5;      /* 四つ葉まわりの淡い光 */
+      --text-main: #4a4540;
+      --text-muted: #8a817a;
     }
     html, body {
       margin: 0;
       height: 100%;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+      font-family: "Zen Maru Gothic", system-ui, -apple-system, "Segoe UI", Roboto,
         "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP",
         Meiryo, sans-serif;
+      color: var(--text-main);
     }
     /* ページ共通の中央寄せコンテナ（各画面で利用） */
     .container { max-width: 1040px; margin: 0 auto; }
@@ -63,12 +66,23 @@
       flex-shrink: 0;
     }
 
+    .sidebar h2 {
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
     .sidebar a {
       display: block;
       color: white;
       text-decoration: none;
-      margin: 10px 0;
-      padding: 6px 0;
+      margin: 6px 0;
+      padding: 8px 12px;
+      border-radius: 12px;
+      transition: background 0.15s ease;
+    }
+
+    .sidebar a:hover {
+      background: rgba(255, 255, 255, 0.12);
     }
 
     .main {

@@ -11,7 +11,7 @@
 {% block content %}
 {% if not session.get('user_id') %}
 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:80vh;gap:16px;text-align:center;">
-  <div style="font-size:3rem;">🦎</div>
+  <img src="{{ url_for('static', filename='img/mate.svg') }}" alt="みつば" style="width:120px;height:120px;">
   <h2 style="margin:0;font-size:1.4rem;color:#2d3436;">たびメイト</h2>
   <p style="color:#636e72;margin:0;">無料で使えるAI旅行プランナー</p>
   {% if session.get('login_error') %}
@@ -32,7 +32,7 @@
     <div id="chat-box">
       <!-- チャットのメッセージはここに動的に追加される -->
     </div>
-    <div id="typing" class="typing-indicator">メイトが考え中だうぱ... 🦎</div>
+    <div id="typing" class="typing-indicator">みつばが考えています…🍀</div>
     <form id="message-form">
       <input type="text" id="message-input" autocomplete="off" placeholder="メッセージを入力...">
       <button type="submit" id="send-button">

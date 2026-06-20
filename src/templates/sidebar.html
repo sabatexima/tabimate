@@ -1,4 +1,8 @@
 <div class="sidebar">
+  <div class="sidebar-brand">
+    <img src="{{ url_for('static', filename='img/mate-head.png') }}" alt="" class="sidebar-mate">
+    <span>たびメイト</span>
+  </div>
   <h2>メニュー</h2>
   <a href="{{ url_for('planner.home') }}">旅行プラン作成</a>
   <a href="{{ url_for('planner.saved_plans') }}">保存プラン</a>

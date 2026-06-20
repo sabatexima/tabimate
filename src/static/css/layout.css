@@ -39,7 +39,7 @@
       top: 12px;
       left: 12px;
       z-index: 200;
-      background: #6e6258;
+      background: #7d6a52;
       color: white;
       border: none;
       border-radius: 8px;
@@ -62,16 +62,46 @@
 
     .sidebar {
       width: 220px;
-      background-color: #6e6258;
+      background-color: #7d6a52;
       color: white;
       padding: 20px;
       box-sizing: border-box;
       flex-shrink: 0;
     }
 
+    /* サイドバー上部のブランド（マスコット＋名前）。全画面で世界観を統一 */
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #fff;
+    }
+    .sidebar-mate {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      flex-shrink: 0;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+    }
+
     .sidebar h2 {
       font-weight: 700;
       letter-spacing: 0.04em;
+      font-size: 0.95rem;
+      opacity: 0.85;
+    }
+
+    /* ページ見出しに四つ葉を添える（手描き絵本トーン） */
+    .page-header h1::before,
+    .trip-title::before {
+      content: "🍀";
+      margin-right: 8px;
+      font-size: 0.85em;
+      vertical-align: 1px;
     }
 
     .sidebar a {

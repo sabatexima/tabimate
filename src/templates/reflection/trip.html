@@ -27,7 +27,26 @@
     flex: 1 1 200px; min-width: 0; border: 1px solid #ddd; border-radius: 8px;
     padding: 9px 12px; font-size: 1.1rem; font-weight: 700;
   }
-  .trip-dates { color: var(--text-muted); font-size: 0.88em; margin-bottom: 24px; }
+  .trip-dates {
+    color: var(--text-muted); font-size: 0.88em; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dates-edit {
+    background: none; border: none; cursor: pointer; color: var(--text-muted);
+    font-size: 0.95rem; padding: 2px 6px; border-radius: 8px; line-height: 1;
+  }
+  .dates-edit:hover { background: #f0eefb; color: var(--primary-color); }
+  .dates-editor {
+    display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .dates-editor[hidden] { display: none; }
+  .dates-editor label {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 0.8em; color: var(--text-muted);
+  }
+  .dates-editor input[type="date"] {
+    border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 0.95em;
+  }
 
   .section {
     background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
@@ -114,9 +133,15 @@
   <button class="btn" id="title-save">保存</button>
   <button class="btn secondary" id="title-cancel">キャンセル</button>
 </div>
-<div class="trip-dates">
-  {% if trip.start_date %}{{ trip.start_date }}{% endif %}
-  {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
+<div class="trip-dates" id="trip-dates">
+  <span id="dates-text">{% if trip.start_date %}{{ trip.start_date }}{% endif %}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}{% if not trip.start_date and not trip.end_date %}日程未設定{% endif %}</span>
+  <button class="dates-edit" id="dates-edit" aria-label="日程を編集">✎</button>
+</div>
+<div class="dates-editor" id="dates-editor" hidden>
+  <label>出発日<input id="date-start" type="date" value="{{ trip.start_date or '' }}"></label>
+  <label>帰宅日<input id="date-end" type="date" value="{{ trip.end_date or '' }}"></label>
+  <button class="btn" id="dates-save">保存</button>
+  <button class="btn secondary" id="dates-cancel">キャンセル</button>
 </div>
 
 <!-- 付箋ボード（主役）-->
@@ -236,6 +261,43 @@
       }
     } catch (e) { alert('更新に失敗しました'); }
     titleSave.disabled = false; titleSave.textContent = '保存';
+  });
+
+  // --- 日程（出発日・帰宅日）編集 ---
+  const datesRow = document.getElementById('trip-dates');
+  const datesText = document.getElementById('dates-text');
+  const datesEditor = document.getElementById('dates-editor');
+  const dateStart = document.getElementById('date-start');
+  const dateEnd = document.getElementById('date-end');
+  const datesSave = document.getElementById('dates-save');
+
+  document.getElementById('dates-edit').addEventListener('click', () => {
+    datesRow.hidden = true; datesEditor.hidden = false; dateStart.focus();
+  });
+  document.getElementById('dates-cancel').addEventListener('click', () => {
+    datesEditor.hidden = true; datesRow.hidden = false;
+  });
+  datesSave.addEventListener('click', async () => {
+    const start = dateStart.value || null;
+    const end = dateEnd.value || null;
+    if (start && end && end < start) { alert('帰宅日は出発日以降にしてください'); return; }
+    datesSave.disabled = true; datesSave.textContent = '保存中...';
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_date: start, end_date: end }),
+      });
+      const data = await res.json();
+      if (res.ok && data.updated) {
+        const s = data.start_date, e = data.end_date;
+        datesText.textContent = s && e ? `${s} 〜 ${e}` : (s || e || '日程未設定');
+        datesEditor.hidden = true; datesRow.hidden = false;
+      } else {
+        alert(data.error || '更新に失敗しました');
+      }
+    } catch (e) { alert('更新に失敗しました'); }
+    datesSave.disabled = false; datesSave.textContent = '保存';
   });
 
   // --- 写真アップロード ---

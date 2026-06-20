@@ -350,6 +350,30 @@ def rename_trip(trip_id: int, user_id: str, title: str) -> bool:
         return result.rowcount > 0
 
 
+def update_trip_dates(trip_id: int, user_id: str, start_date, end_date) -> bool:
+    """旅の出発日・帰宅日を更新する（本人の旅のみ）。
+
+    None を渡すとその日付はクリアされる。対象の旅が存在し本人のものなら True。
+    （同じ値で更新すると MySQL の rowcount が 0 になるため、行の存在で判定する）
+    """
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        exists = conn.execute(
+            text("SELECT 1 FROM trips WHERE id = :id AND user_id = :uid"),
+            {"id": trip_id, "uid": user_id},
+        ).fetchone()
+        if not exists:
+            return False
+        conn.execute(
+            text(
+                "UPDATE trips SET start_date = :start, end_date = :end "
+                "WHERE id = :id AND user_id = :uid"
+            ),
+            {"start": start_date, "end": end_date, "id": trip_id, "uid": user_id},
+        )
+    return True
+
+
 def delete_trip(trip_id: int, user_id: str) -> bool:
     with get_engine().begin() as conn:
         _ensure_all(conn)

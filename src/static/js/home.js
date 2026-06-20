@@ -9,8 +9,8 @@ const chatBox = document.getElementById('chat-box');
   let currentRequestId = null;
 
   // 会話の最初にメイトから話しかける挨拶（クライアント側で常に先頭に表示）
-  const GREETING = 'こんにちは！旅のプランを一緒に考えるメイトだちょ🐷\n\n'
-    + '行き先・日程・人数・予算・やりたいことなどを教えてくれたら、ぴったりの旅行プランを作るちょ！\n\n'
+  const GREETING = 'こんにちは！旅のプランを一緒に考えるメイトだうぱ🦎\n\n'
+    + '行き先・日程・人数・予算・やりたいことなどを教えてくれたら、ぴったりの旅行プランを作るうぱ！\n\n'
     + 'まずは、**どこに行きたい？**';
 
   function renderGreeting() {
@@ -38,7 +38,7 @@ const chatBox = document.getElementById('chat-box');
 
     const label = document.createElement('div');
     label.classList.add('avatar-label');
-    label.textContent = role === 'user' ? 'あなた' : 'メイト 🐷';
+    label.textContent = role === 'user' ? 'あなた' : 'メイト 🦎';
     wrapper.appendChild(label);
 
     const messageElement = document.createElement('div');

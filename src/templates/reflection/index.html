@@ -4,14 +4,10 @@
 
 {% block head %}
 <style>
-  :root {
-    --primary-color: #6c5ce7;
-    --text-main: #2d3436;
-    --text-muted: #636e72;
-  }
+  /* 共通カラー変数は layout.html の :root で定義 */
   .page-header { margin-bottom: 8px; }
   .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text-main); margin: 0; }
-  .page-lead { color: var(--text-muted); font-size: 0.92em; margin: 0 0 20px; }
+  .page-lead { color: var(--text-muted); font-size: 0.92em; margin: 0 0 20px; max-width: 60ch; }
 
   .feed { max-width: 520px; margin: 0 auto; }
 
@@ -147,11 +143,15 @@
   /* PC版: 幅を広げてカードを2〜3列のグリッドに（モバイルは1列のまま）*/
   @media (min-width: 768px) {
     .feed { max-width: 1040px; }
+    /* コントロール類はグリッド左端に揃え、横に間延びさせない */
+    .page-header, .page-lead, .new-trip-bar, .album-controls, .no-results {
+      max-width: 640px; margin-right: auto;
+    }
     #trips {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      align-items: start;
       gap: 18px;
+      /* 各行のカード高さを揃える（日付有無のガタつき解消） */
     }
     #trips .empty-state { grid-column: 1 / -1; }
   }
@@ -217,7 +217,7 @@
         <a class="card-link" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
           <div class="cover">
             {% if trip.cover_url %}
-              <img src="{{ trip.cover_url }}" alt="" loading="lazy">
+              <img src="{{ trip.cover_url }}" alt="" loading="lazy" decoding="async">
             {% else %}
               <span class="cover-empty">🧳</span>
             {% endif %}

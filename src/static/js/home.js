@@ -9,9 +9,9 @@ const chatBox = document.getElementById('chat-box');
   let currentRequestId = null;
 
   // 会話の最初にメイトから話しかける挨拶（クライアント側で常に先頭に表示）
-  const GREETING = 'こんにちは！旅のプランを一緒に考えるメイトだうぱ🦎\n\n'
-    + '行き先・日程・人数・予算・やりたいことなどを教えてくれたら、ぴったりの旅行プランを作るうぱ！\n\n'
-    + 'まずは、**どこに行きたい？**';
+  const GREETING = 'こんにちは！旅のプランを一緒に考える「みつば」です🍀\n\n'
+    + '行き先・日程・人数・ご予算・やってみたいことなど、わかる範囲で教えてくださいね。ぴったりの旅行プランをご提案します。\n\n'
+    + 'まずは、**どちらへ行ってみたいですか？**';
 
   function renderGreeting() {
     const el = createMessageElement('ai', GREETING);
@@ -38,7 +38,16 @@ const chatBox = document.getElementById('chat-box');
 
     const label = document.createElement('div');
     label.classList.add('avatar-label');
-    label.textContent = role === 'user' ? 'あなた' : 'メイト 🦎';
+    if (role === 'user') {
+      label.textContent = 'あなた';
+    } else {
+      const icon = document.createElement('img');
+      icon.src = '/static/img/mate.svg';
+      icon.alt = '';
+      icon.classList.add('mate-avatar');
+      label.appendChild(icon);
+      label.appendChild(document.createTextNode('みつば'));
+    }
     wrapper.appendChild(label);
 
     const messageElement = document.createElement('div');

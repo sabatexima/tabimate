@@ -1,0 +1,179 @@
+/* 共通カラー変数は layout.html の :root で定義 */
+  .page-header { margin-bottom: 8px; }
+  .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text-main); margin: 0; }
+  .page-lead { color: var(--text-muted); font-size: 0.92em; margin: 0 0 20px; max-width: 60ch; }
+
+  .feed { max-width: 520px; margin: 0 auto; }
+
+  /* 新しい旅: 既定は1ボタンに畳む。タップで展開。 */
+  .new-trip-bar { margin-bottom: 22px; }
+  .new-trip-toggle {
+    width: 100%; background: #fff; color: var(--primary-color);
+    border: 1px dashed rgba(108,92,231,0.5); border-radius: 12px;
+    padding: 14px; font-weight: 700; font-size: 0.98em; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .new-trip-toggle:hover { background: #faf9ff; }
+
+  .new-trip {
+    background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
+    padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .new-trip[hidden] { display: none; }
+  .new-trip .nt-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .new-trip h2 { font-size: 1.05em; margin: 0; color: var(--text-main); }
+  .new-trip .nt-close {
+    background: none; border: none; color: var(--text-muted); font-size: 1.2em;
+    cursor: pointer; padding: 4px 8px; border-radius: 8px; line-height: 1;
+  }
+  .new-trip .nt-close:hover { background: #f5f4fa; }
+  .new-trip .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.title-field { flex: 1 1 100%; }
+  .field label { font-size: 0.78em; color: var(--text-muted); font-weight: 600; }
+  .new-trip input {
+    border: 1px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 0.92em;
+  }
+  .field.title-field input { width: 100%; box-sizing: border-box; }
+  .field.date-field { flex: 1 1 0; min-width: 0; }
+  .new-trip input[type="date"] {
+    width: 100%; min-width: 0; box-sizing: border-box;
+    -webkit-appearance: none; appearance: none; min-height: 38px; background: #fff;
+  }
+  .new-trip button.create {
+    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    padding: 11px 20px; font-weight: 600; cursor: pointer; font-size: 0.92em;
+    flex: 1 1 100%; margin-top: 4px;
+  }
+  .new-trip button.create:disabled { opacity: 0.6; cursor: default; }
+
+  /* 検索・並び替えバー */
+  .album-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .search-wrap { position: relative; flex: 1 1 200px; }
+  .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: 0.9em; opacity: 0.55; pointer-events: none;
+  }
+  #album-search {
+    width: 100%; box-sizing: border-box; padding: 10px 12px 10px 34px;
+    border: 1px solid #ddd; border-radius: 10px; font-size: 0.92em; background: #fff;
+  }
+  #album-search:focus { outline: none; border-color: var(--primary-color); }
+  .sort-select {
+    flex: 0 0 auto; border: 1px solid #ddd; border-radius: 10px;
+    padding: 10px 12px; font-size: 0.9em; background: #fff; color: var(--text-main); cursor: pointer;
+  }
+  .sort-select:focus { outline: none; border-color: var(--primary-color); }
+  .no-results { text-align: center; color: var(--text-muted); padding: 30px 0; }
+
+  /* お気に入りのみフィルター（トグルチップ）*/
+  .fav-filter {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid #ddd; border-radius: 10px; padding: 10px 14px;
+    font-size: 0.9em; background: #fff; color: var(--text-muted); cursor: pointer;
+    user-select: none;
+  }
+  .fav-filter:hover { border-color: var(--primary-color); }
+  .fav-filter.active {
+    background: #fff7e6; border-color: #f5b301; color: #b9820a; font-weight: 700;
+  }
+  .fav-filter .star { font-size: 1.05em; line-height: 1; }
+
+  /* カード上のお気に入り★ボタン（写真左上に控えめに重ねる）*/
+  .fav-btn {
+    position: absolute; top: 8px; left: 8px; z-index: 5;
+    background: rgba(0,0,0,0.45); border: none; cursor: pointer;
+    width: 34px; height: 34px; border-radius: 50%; font-size: 1.05em; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.85); transition: transform 0.1s;
+  }
+  .fav-btn:hover { background: rgba(0,0,0,0.65); transform: scale(1.08); }
+  .fav-btn.on { color: #ffd23f; }
+
+  /* 共有された旅であることを示すフラグ（カバー右上）*/
+  .share-flag {
+    position: absolute; top: 8px; right: 8px; z-index: 4;
+    background: var(--primary-color); color: #fff; border-radius: 20px;
+    padding: 3px 10px; font-size: 0.72em; font-weight: 700;
+  }
+
+  /* 旅カード（SNSフィード風: 大きな写真主体）*/
+  #trips { display: flex; flex-direction: column; gap: 18px; }
+  .trip-card {
+    position: relative; background: #fff; border-radius: 16px; overflow: hidden;
+    border: 1px solid rgba(108,92,231,0.12); box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    transition: transform 0.1s;
+  }
+  .trip-card:hover { transform: translateY(-2px); }
+  .card-link { display: block; text-decoration: none; color: var(--text-main); }
+
+  .cover {
+    position: relative;
+    width: 100%; aspect-ratio: 4 / 3; background: #f1eefc;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-empty { font-size: 3.4rem; opacity: 0.45; }
+
+  .card-body { padding: 14px 16px 16px; }
+  .card-body .t {
+    font-weight: 700; font-size: 1.1em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-body .m { font-size: 0.84em; color: var(--text-muted); margin-top: 4px; }
+  .card-body .meta { font-size: 0.8em; color: var(--text-muted); margin-top: 2px; }
+
+  /* 付箋バッジ（1〜2個）: 写真の左下にふせんを貼ったようにオーバーレイ */
+  .badges {
+    position: absolute; bottom: 12px; left: 12px; z-index: 2;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    max-width: calc(100% - 24px);
+  }
+  .badge {
+    font-size: 0.82em; font-weight: 700; color: var(--primary-color);
+    background: rgba(255,255,255,0.92); border: 1px solid rgba(108,92,231,0.25);
+    border-radius: 8px; padding: 5px 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* ふせんらしく軽く傾ける（既存の紫トーンは維持）*/
+  .badge:nth-child(1) { transform: rotate(-2deg); }
+  .badge:nth-child(2) { transform: rotate(1.5deg); }
+
+  /* 「…」メニュー（削除導線。写真の上に控えめに重ねる）*/
+  .card-menu { position: absolute; top: 8px; right: 8px; z-index: 5; }
+  .kebab {
+    background: rgba(0,0,0,0.45); border: none; color: #fff; font-size: 1.2em; line-height: 1;
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .kebab:hover { background: rgba(0,0,0,0.65); }
+  .menu {
+    position: absolute; top: 40px; right: 0;
+    background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px; min-width: 120px;
+  }
+  .menu[hidden] { display: none; }
+  .menu-del {
+    width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    padding: 8px 12px; border-radius: 8px; font-size: 0.88em; color: #e74c3c;
+  }
+  .menu-del:hover { background: #fff5f5; }
+
+  .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+
+  /* PC版: 幅を広げてカードを2〜3列のグリッドに（モバイルは1列のまま）*/
+  @media (min-width: 768px) {
+    .feed { max-width: 1040px; }
+    /* コントロール類はグリッドと同じ幅に揃える（右端をカードと合わせる） */
+    #trips {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 18px;
+      /* 既定の align-items: stretch により各行のカード高さが揃う（日付有無のガタつき解消）*/
+    }
+    #trips .empty-state { grid-column: 1 / -1; }
+  }

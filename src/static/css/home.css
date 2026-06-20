@@ -246,19 +246,22 @@
   h1::before {
     content: '';
     display: inline-block;
-    width: 1.7rem;
-    height: 1.7rem;
-    background: url("../img/mate.png") center/contain no-repeat;
-    vertical-align: -0.35rem;
-    margin-right: 4px;
+    width: 2.6rem;
+    height: 2.6rem;
+    background: url("../img/mate-head.png") center/contain no-repeat;
+    vertical-align: -0.7rem;
+    margin-right: 6px;
   }
 
   .mate-avatar {
-    width: auto;
-    height: 18px;
+    width: 36px;
+    height: 36px;
     object-fit: contain;
-    vertical-align: middle;
-    margin-right: 4px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
   }
 
   .chat-container {
@@ -315,6 +318,9 @@
   }
 
   .avatar-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-bottom: 4px;

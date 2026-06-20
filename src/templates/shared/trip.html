@@ -51,15 +51,38 @@
   .sticker:nth-child(3n+1) { transform: rotate(-1.5deg); }
   .sticker:nth-child(3n+2) { transform: rotate(1deg); }
   .sticker:nth-child(3n)   { transform: rotate(-0.5deg); }
+  .sticker .del {
+    position: absolute; top: 2px; right: 4px;
+    background: none; border: none; cursor: pointer;
+    color: #c3c0b0; font-size: 0.9em; line-height: 1; padding: 2px 4px;
+    opacity: 0; transition: opacity 0.1s;
+  }
+  .sticker:hover .del { opacity: 1; }
+  .sticker .del:hover { color: #e74c3c; }
   .sticker-empty { color: var(--text-muted); font-size: 0.9em; margin-top: 14px; }
 
   .photo-grid {
     display: grid; gap: 8px; margin-bottom: 14px;
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   }
-  .photo-grid img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; }
+  .photo { position: relative; margin: 0; }
+  .photo img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; }
+  .photo-del {
+    position: absolute; top: 4px; right: 4px;
+    background: rgba(0,0,0,0.55); border: none; cursor: pointer; color: #fff;
+    width: 24px; height: 24px; border-radius: 50%; font-size: 0.95em; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.1s;
+  }
+  .photo:hover .photo-del { opacity: 1; }
+  .photo-del:hover { background: #e74c3c; }
   .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
+
+  .danger-zone { border-color: rgba(231,76,60,0.3); }
+  .danger-zone h2 { color: #e74c3c; }
+  .btn.danger { background: #e74c3c; }
+  .btn.danger:hover { background: #d63a2a; }
 </style>
 {% endblock %}
 
@@ -90,7 +113,7 @@
     {% if can_edit %}<button class="btn" id="sticker-btn">付箋を作り直す</button>{% endif %}
     <div class="sticker-board" id="sticker-board">
       {% for s in stickers %}
-        <div class="sticker">{{ s.text }}</div>
+        <div class="sticker" data-id="{{ s.id }}">{{ s.text }}{% if can_edit %}<button class="del" aria-label="削除">×</button>{% endif %}</div>
       {% endfor %}
     </div>
     {% if not stickers %}
@@ -102,7 +125,16 @@
   <div class="section">
     <h2>📷 写真</h2>
     <div class="photo-grid" id="photo-grid">
-      {% for p in photos %}<img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">{% endfor %}
+      {% for p in photos %}
+        {% if can_edit %}
+          <figure class="photo" data-id="{{ p.id }}">
+            <img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">
+            <button class="photo-del" aria-label="写真を削除">×</button>
+          </figure>
+        {% else %}
+          <img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">
+        {% endif %}
+      {% endfor %}
     </div>
     <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
     {% if can_edit %}
@@ -110,6 +142,15 @@
       <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
     {% endif %}
   </div>
+
+  {% if can_edit %}
+  <!-- 危険ゾーン（旅の削除）: 編集権限のある共有相手のみ -->
+  <div class="section danger-zone">
+    <h2>🗑 この旅を削除</h2>
+    <p class="hint">写真・付箋をすべて削除します。元には戻せません。共有元の所有者の記録も消えます。</p>
+    <button class="btn danger" id="delete-trip-btn">この旅を削除する</button>
+  </div>
+  {% endif %}
 </div>
 
 {% if can_edit %}
@@ -136,11 +177,8 @@
       const data = await res.json();
       if (res.ok) {
         const grid = document.getElementById('photo-grid');
-        data.saved.forEach(p => {
-          const img = document.createElement('img');
-          img.src = p.url; img.loading = 'lazy'; img.decoding = 'async'; grid.appendChild(img);
-        });
-        document.getElementById('photo-count').textContent = `現在 ${grid.querySelectorAll('img').length} 枚`;
+        data.saved.forEach(p => grid.appendChild(makePhotoFigure(p)));
+        document.getElementById('photo-count').textContent = `現在 ${grid.querySelectorAll('.photo').length} 枚`;
         input.value = '';
       } else { alert(data.error || 'アップロードに失敗しました'); }
     } catch (e) { alert('アップロードに失敗しました'); }
@@ -156,12 +194,83 @@
       const res = await fetch(withToken(`/shared/trip/${TRIP_ID}/stickers/generate`), { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        board.innerHTML = (data.stickers || []).map(s => `<div class="sticker">${esc(s.text)}</div>`).join('');
+        board.innerHTML = (data.stickers || []).map(s =>
+          `<div class="sticker">${esc(s.text)}<button class="del" aria-label="削除">×</button></div>`
+        ).join('');
         const empty = document.getElementById('sticker-empty');
         if (empty) empty.style.display = (data.stickers || []).length ? 'none' : '';
       } else { alert(data.error || '付箋を作れませんでした'); }
     } catch (e) { alert('付箋を作れませんでした'); }
     stickerBtn.disabled = false; stickerBtn.textContent = '付箋を作り直す';
+  });
+
+  // アップロード直後の写真も削除できるよう figure を組み立てる
+  function makePhotoFigure(p) {
+    const fig = document.createElement('figure');
+    fig.className = 'photo';
+    if (p.id != null) fig.dataset.id = p.id;
+    const img = document.createElement('img');
+    img.src = p.url; img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
+    const del = document.createElement('button');
+    del.className = 'photo-del'; del.setAttribute('aria-label', '写真を削除'); del.textContent = '×';
+    fig.appendChild(img); fig.appendChild(del);
+    return fig;
+  }
+
+  // 写真を1枚削除（編集権限）
+  const photoGrid = document.getElementById('photo-grid');
+  if (photoGrid) photoGrid.addEventListener('click', async (ev) => {
+    const del = ev.target.closest('.photo-del');
+    if (!del) return;
+    const fig = del.closest('.photo');
+    const id = fig.dataset.id;
+    if (!id) { fig.remove(); return; }
+    if (!confirm('この写真を削除しますか？元に戻せません。')) return;
+    del.disabled = true;
+    try {
+      const res = await fetch(withToken(`/shared/trip/${TRIP_ID}/photos/${id}`), { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.deleted) {
+        fig.remove();
+        document.getElementById('photo-count').textContent =
+          `現在 ${photoGrid.querySelectorAll('.photo').length} 枚`;
+      } else { alert('削除に失敗しました'); del.disabled = false; }
+    } catch (e) { alert('削除に失敗しました'); del.disabled = false; }
+  });
+
+  // 付箋を1枚削除（編集権限）
+  if (board) board.addEventListener('click', async (ev) => {
+    const del = ev.target.closest('.del');
+    if (!del) return;
+    const card = del.closest('.sticker');
+    const id = card.dataset.id;
+    if (!id) { card.remove(); return; }
+    try {
+      const res = await fetch(withToken(`/shared/trip/${TRIP_ID}/stickers/${id}`), { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.deleted) card.remove();
+    } catch (e) { /* 失敗時は次の生成で整合する */ }
+  });
+
+  // 旅ごと削除（編集権限）
+  const deleteTripBtn = document.getElementById('delete-trip-btn');
+  if (deleteTripBtn) deleteTripBtn.addEventListener('click', async () => {
+    if (!confirm('この旅を削除しますか？\n写真・付箋もすべて消え、共有元の所有者の記録も消えます。元に戻せません。')) return;
+    deleteTripBtn.disabled = true; deleteTripBtn.textContent = '削除中...';
+    try {
+      const res = await fetch(withToken(`/shared/trip/${TRIP_ID}`), { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.deleted) {
+        alert('旅を削除しました');
+        location.href = '/reflection/';
+      } else {
+        alert('削除に失敗しました');
+        deleteTripBtn.disabled = false; deleteTripBtn.textContent = 'この旅を削除する';
+      }
+    } catch (e) {
+      alert('削除に失敗しました');
+      deleteTripBtn.disabled = false; deleteTripBtn.textContent = 'この旅を削除する';
+    }
   });
 </script>
 {% endif %}

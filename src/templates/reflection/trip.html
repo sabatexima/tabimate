@@ -78,7 +78,17 @@
     display: grid; gap: 8px; margin-bottom: 14px;
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   }
-  .photo-grid img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; }
+  .photo { position: relative; margin: 0; }
+  .photo img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; }
+  .photo-del {
+    position: absolute; top: 4px; right: 4px;
+    background: rgba(0,0,0,0.55); border: none; cursor: pointer; color: #fff;
+    width: 24px; height: 24px; border-radius: 50%; font-size: 0.95em; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.1s;
+  }
+  .photo:hover .photo-del { opacity: 1; }
+  .photo-del:hover { background: #e74c3c; }
   .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
 
@@ -131,7 +141,12 @@
   <h2>📷 写真</h2>
   <p class="hint">旅の写真をまとめてアップロード。ここから付箋を生成します。</p>
   <div class="photo-grid" id="photo-grid">
-    {% for p in photos %}<img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">{% endfor %}
+    {% for p in photos %}
+    <figure class="photo" data-id="{{ p.id }}">
+      <img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">
+      <button class="photo-del" aria-label="写真を削除">×</button>
+    </figure>
+    {% endfor %}
   </div>
   <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
   <input type="file" id="photo-input" accept="image/*" multiple style="margin-bottom:10px;">
@@ -236,18 +251,49 @@
       const data = await res.json();
       if (res.ok) {
         const grid = document.getElementById('photo-grid');
-        data.saved.forEach(p => {
-          const img = document.createElement('img');
-          img.src = p.url; img.loading = 'lazy'; img.decoding = 'async'; grid.appendChild(img);
-        });
+        data.saved.forEach(p => grid.appendChild(makePhotoFigure(p)));
         const cnt = document.getElementById('photo-count');
-        cnt.textContent = `現在 ${grid.querySelectorAll('img').length} 枚`;
+        cnt.textContent = `現在 ${grid.querySelectorAll('.photo').length} 枚`;
         input.value = '';
       } else {
         alert(data.error || 'アップロードに失敗しました');
       }
     } catch (e) { alert('アップロードに失敗しました'); }
     uploadBtn.disabled = false; uploadBtn.textContent = 'アップロード';
+  });
+
+  // アップロード直後の写真も削除できるよう figure を組み立てる
+  function makePhotoFigure(p) {
+    const fig = document.createElement('figure');
+    fig.className = 'photo';
+    if (p.id != null) fig.dataset.id = p.id;
+    const img = document.createElement('img');
+    img.src = p.url; img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
+    const del = document.createElement('button');
+    del.className = 'photo-del'; del.setAttribute('aria-label', '写真を削除'); del.textContent = '×';
+    fig.appendChild(img); fig.appendChild(del);
+    return fig;
+  }
+
+  // --- 写真を1枚削除 ---
+  const photoGrid = document.getElementById('photo-grid');
+  photoGrid.addEventListener('click', async (ev) => {
+    const del = ev.target.closest('.photo-del');
+    if (!del) return;
+    const fig = del.closest('.photo');
+    const id = fig.dataset.id;
+    if (!id) { fig.remove(); return; }
+    if (!confirm('この写真を削除しますか？元に戻せません。')) return;
+    del.disabled = true;
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/photos/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.deleted) {
+        fig.remove();
+        const cnt = document.getElementById('photo-count');
+        cnt.textContent = `現在 ${photoGrid.querySelectorAll('.photo').length} 枚`;
+      } else { alert('削除に失敗しました'); del.disabled = false; }
+    } catch (e) { alert('削除に失敗しました'); del.disabled = false; }
   });
 
   // --- 付箋生成 ---

@@ -386,6 +386,28 @@ def add_photo(trip_id: int, user_id: str, storage_path: str,
         return result.lastrowid
 
 
+def delete_photo(photo_id: int, trip_id: int) -> str | None:
+    """写真を1枚削除し、その storage_path を返す（無ければ None）。
+
+    ストレージ実体の削除は呼び出し側が返り値の storage_path を使って行う。
+    trip_id でも絞ることで、他の旅の写真を消せないようにする。
+    """
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        row = conn.execute(
+            text("SELECT storage_path FROM photos WHERE id = :pid AND trip_id = :tid"),
+            {"pid": photo_id, "tid": trip_id},
+        ).fetchone()
+        if not row:
+            return None
+        storage_path = row._mapping["storage_path"]
+        conn.execute(
+            text("DELETE FROM photos WHERE id = :pid AND trip_id = :tid"),
+            {"pid": photo_id, "tid": trip_id},
+        )
+    return storage_path
+
+
 def get_photos(trip_id: int) -> list:
     with get_engine().connect() as conn:
         _ensure_all(conn)

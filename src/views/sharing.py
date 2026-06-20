@@ -281,12 +281,13 @@ def shared_upload_photos(trip_id: int):
             owner_id, trip_id, f.filename, data,
             content_type=f.mimetype or "application/octet-stream",
         )
-        repo.add_photo(
+        photo_id = repo.add_photo(
             trip_id, owner_id, storage_path,
             taken_at=meta.get("taken_at"),
             lat=meta.get("lat"), lng=meta.get("lng"),
         )
         saved.append({
+            "id": photo_id,
             "url": storage.get_url(storage_path),
             "taken_at": str(meta["taken_at"]) if meta.get("taken_at") else None,
         })
@@ -306,3 +307,41 @@ def shared_generate_stickers(trip_id: int):
     repo.replace_stickers(trip_id, items)
     logger.info("共有編集で付箋生成: trip_id=%s count=%d", trip_id, len(items))
     return jsonify({"stickers": [{"text": it["text"]} for it in items]})
+
+
+# ----------------------------------------------------------------------
+# 共有された旅の削除操作（edit 権限が必要・旅のみ）
+# ----------------------------------------------------------------------
+@share.route("/shared/trip/<int:trip_id>/photos/<int:photo_id>", methods=["DELETE"])
+def shared_delete_photo(trip_id: int, photo_id: int):
+    """共有された旅の写真を1枚削除する（編集権限が必要）。"""
+    _require_trip_edit(trip_id)
+    storage_path = repo.delete_photo(photo_id, trip_id)
+    if storage_path is None:
+        return jsonify({"deleted": False}), 404
+    storage.delete(storage_path)
+    logger.info("共有編集で写真削除: trip_id=%s photo_id=%s", trip_id, photo_id)
+    return jsonify({"deleted": True})
+
+
+@share.route("/shared/trip/<int:trip_id>/stickers/<int:sticker_id>", methods=["DELETE"])
+def shared_delete_sticker(trip_id: int, sticker_id: int):
+    """共有された旅の付箋を1枚削除する（編集権限が必要）。"""
+    _require_trip_edit(trip_id)
+    ok = repo.delete_sticker(sticker_id, trip_id)
+    return jsonify({"deleted": ok})
+
+
+@share.route("/shared/trip/<int:trip_id>", methods=["DELETE"])
+def shared_delete_trip(trip_id: int):
+    """共有された旅を丸ごと削除する（編集権限が必要）。
+
+    所有者の削除と同様に、DB削除の前にストレージ上の写真実体も消す。
+    """
+    trip, owner_id = _require_trip_edit(trip_id)
+    photos = repo.get_photos(trip_id)
+    for p in photos:
+        storage.delete(p["storage_path"])
+    ok = repo.delete_trip(trip_id, owner_id)
+    logger.info("共有編集で旅を削除: trip_id=%s owner=%s photos=%d", trip_id, owner_id, len(photos))
+    return jsonify({"deleted": ok})

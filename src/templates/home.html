@@ -11,9 +11,11 @@
 {% block content %}
 {% if not session.get('user_id') %}
 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:80vh;gap:16px;text-align:center;">
-  <img src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ" style="width:auto;height:160px;object-fit:contain;">
-  <h2 style="margin:0;font-size:1.4rem;color:#2d3436;">たびメイト</h2>
-  <p style="color:#636e72;margin:0;">無料で使えるAI旅行プランナー</p>
+  <div style="display:flex;align-items:center;justify-content:center;border-radius:50%;background:radial-gradient(circle, rgba(246,246,165,0.45) 0%, rgba(246,246,165,0) 70%);padding:20px;">
+    <img src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ" style="width:auto;height:170px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(120,110,90,0.18));">
+  </div>
+  <h2 style="margin:0;font-size:1.5rem;color:#4a4540;font-weight:700;">たびメイト</h2>
+  <p style="color:#8a817a;margin:0;">あなたの旅に、しあわせのお手伝い🍀</p>
   {% if session.get('login_error') %}
   <p style="color:#e11d48;background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:10px 20px;margin:0;font-size:0.9em;">{{ session.pop('login_error') }}</p>
   {% endif %}

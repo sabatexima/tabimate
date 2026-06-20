@@ -134,7 +134,7 @@
   <button class="btn secondary" id="title-cancel">キャンセル</button>
 </div>
 <div class="trip-dates" id="trip-dates">
-  <span id="dates-text">{% if trip.start_date %}{{ trip.start_date }}{% endif %}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}{% if not trip.start_date and not trip.end_date %}日程未設定{% endif %}</span>
+  <span id="dates-text">{% if trip.start_date or trip.end_date %}📅 {{ trip.start_date | tripdates(trip.end_date) }}{% else %}日程未設定{% endif %}</span>
   <button class="dates-edit" id="dates-edit" aria-label="日程を編集">✎</button>
 </div>
 <div class="dates-editor" id="dates-editor" hidden>
@@ -277,6 +277,23 @@
   document.getElementById('dates-cancel').addEventListener('click', () => {
     datesEditor.hidden = true; datesRow.hidden = false;
   });
+  // サーバ側の tripdates フィルターと同じ和文表記にする
+  function fmtTripDates(start, end) {
+    const p = (v) => {
+      if (!v) return null;
+      const [y, m, d] = String(v).slice(0, 10).split('-').map(Number);
+      return (y && m && d) ? { y, m, d } : null;
+    };
+    let s = p(start), e = p(end);
+    if (!s && !e) return '';
+    if (s && !e) e = s;
+    if (e && !s) s = e;
+    const one = (x) => `${x.y}年${x.m}月${x.d}日`;
+    if (s.y === e.y && s.m === e.m && s.d === e.d) return one(s);
+    if (s.y !== e.y) return `${one(s)}〜${one(e)}`;
+    if (s.m !== e.m) return `${one(s)}〜${e.m}月${e.d}日`;
+    return `${one(s)}〜${e.d}日`;
+  }
   datesSave.addEventListener('click', async () => {
     const start = dateStart.value || null;
     const end = dateEnd.value || null;
@@ -290,8 +307,8 @@
       });
       const data = await res.json();
       if (res.ok && data.updated) {
-        const s = data.start_date, e = data.end_date;
-        datesText.textContent = s && e ? `${s} 〜 ${e}` : (s || e || '日程未設定');
+        const txt = fmtTripDates(data.start_date, data.end_date);
+        datesText.textContent = txt ? `📅 ${txt}` : '日程未設定';
         datesEditor.hidden = true; datesRow.hidden = false;
       } else {
         alert(data.error || '更新に失敗しました');

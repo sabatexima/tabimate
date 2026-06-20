@@ -118,10 +118,20 @@ def create_trip():
 
 @reflection.route("/trips/<int:trip_id>", methods=["PATCH"])
 @login_required
-def rename_trip(trip_id: int):
-    """旅のタイトルを後から編集する。"""
+def update_trip(trip_id: int):
+    """旅の情報（タイトル / 出発日・帰宅日）を後から編集する。"""
     _require_trip(trip_id)
     data = request.get_json(silent=True) or request.form
+    # 日付の更新（start_date / end_date のいずれかが含まれていれば日付モード）
+    if "start_date" in data or "end_date" in data:
+        start_date = (data.get("start_date") or "").strip() or None
+        end_date = (data.get("end_date") or "").strip() or None
+        if start_date and end_date and end_date < start_date:
+            return jsonify({"error": "帰宅日は出発日以降にしてください"}), 400
+        ok = repo.update_trip_dates(trip_id, _uid(), start_date, end_date)
+        logger.info("旅の日程変更: trip_id=%s user=%s", trip_id, _uid())
+        return jsonify({"updated": ok, "start_date": start_date, "end_date": end_date})
+    # タイトルの更新
     title = (data.get("title") or "").strip()
     if not title:
         return jsonify({"error": "タイトルは必須です"}), 400

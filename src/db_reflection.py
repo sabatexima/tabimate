@@ -80,6 +80,19 @@ CREATE TABLE IF NOT EXISTS stickers (
 ) CHARACTER SET utf8mb4
 """
 
+# お気に入りはユーザーごとに持つ。共有された旅も閲覧ユーザー自身が
+# お気に入り登録できるよう、(user_id, trip_id) の組で管理する。
+# （旧来の trips.is_favorite は所有者単独の状態しか持てないため）
+_CREATE_TRIP_FAVORITES_TABLE = """
+CREATE TABLE IF NOT EXISTS trip_favorites (
+    user_id    VARCHAR(255) NOT NULL,
+    trip_id    INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, trip_id),
+    INDEX idx_tripfav_trip (trip_id)
+) CHARACTER SET utf8mb4
+"""
+
 
 def _row_to_dict(row) -> dict:
     return dict(row._mapping)
@@ -113,14 +126,44 @@ def _ensure_column(conn, table: str, column: str, ddl: str) -> None:
     _confirmed_columns.add(cache_key)
 
 
+# お気に入りの旧→新スキーマ移行（trips.is_favorite → trip_favorites）を
+# プロセス内で一度だけ実行するためのフラグ。
+_favorites_migrated = False
+
+
+def _migrate_favorites_once(conn) -> None:
+    """旧来の trips.is_favorite=1 を所有者のお気に入りとして移送する（冪等・一度だけ）。
+
+    INSERT IGNORE で重複は無視されるため複数回流れても安全だが、
+    無駄なクエリを避けるためプロセス内で一度だけ実行する。
+    """
+    global _favorites_migrated
+    if _favorites_migrated:
+        return
+    try:
+        conn.execute(
+            text(
+                "INSERT IGNORE INTO trip_favorites (user_id, trip_id) "
+                "SELECT user_id, id FROM trips WHERE is_favorite = 1"
+            )
+        )
+    except Exception:
+        # 旧列が無い等で失敗しても致命的ではない（新規DBなど）。
+        logger.debug("お気に入り移行をスキップ", exc_info=True)
+    _favorites_migrated = True
+
+
 def _ensure_all(conn) -> None:
     conn.execute(text(_CREATE_TRIPS_TABLE))
     conn.execute(text(_CREATE_PHOTOS_TABLE))
     conn.execute(text(_CREATE_ACHIEVEMENTS_TABLE))
     conn.execute(text(_CREATE_REPORTS_TABLE))
     conn.execute(text(_CREATE_STICKERS_TABLE))
-    # 既存DB向け: お気に入り列が無ければ追加
+    conn.execute(text(_CREATE_TRIP_FAVORITES_TABLE))
+    # 既存DB向け: お気に入り列が無ければ追加（移行元として保持）
     _ensure_column(conn, "trips", "is_favorite", "is_favorite TINYINT NOT NULL DEFAULT 0")
+    # 旧来のお気に入りをユーザー別テーブルへ移送
+    _migrate_favorites_once(conn)
 
 
 # ----------------------------------------------------------------------
@@ -149,10 +192,11 @@ def get_trip(trip_id: int, user_id: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-def get_trip_by_id(trip_id: int) -> dict | None:
+def get_trip_by_id(trip_id: int, viewer_id: str | None = None) -> dict | None:
     """所有者を問わず1件の旅を取得する（共有閲覧で使用）。
 
     アクセス制御は呼び出し側（共有トークン / メール権限の確認）で行う前提。
+    is_favorite は viewer_id 視点で算出する（未指定なら 0）。
     """
     with get_engine().connect() as conn:
         _ensure_all(conn)
@@ -160,13 +204,19 @@ def get_trip_by_id(trip_id: int) -> dict | None:
             text("SELECT * FROM trips WHERE id = :id"),
             {"id": trip_id},
         ).fetchone()
-    if not row:
-        return None
-    d = _row_to_dict(row)
+        if not row:
+            return None
+        d = _row_to_dict(row)
+        fav = 0
+        if viewer_id:
+            fav = conn.execute(
+                text("SELECT 1 FROM trip_favorites WHERE user_id = :uid AND trip_id = :tid"),
+                {"uid": viewer_id, "tid": trip_id},
+            ).fetchone() is not None
     for k in ("start_date", "end_date", "created_at"):
         if d.get(k) is not None:
             d[k] = str(d[k])
-    d["is_favorite"] = int(d.get("is_favorite") or 0)
+    d["is_favorite"] = 1 if fav else 0
     return d
 
 
@@ -194,7 +244,8 @@ def get_trips(user_id: str) -> list:
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
                 "     ORDER BY s.id DESC LIMIT 1) AS sticker1, "
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
-                "     ORDER BY s.id DESC LIMIT 1 OFFSET 1) AS sticker2 "
+                "     ORDER BY s.id DESC LIMIT 1 OFFSET 1) AS sticker2, "
+                "  (SELECT 1 FROM trip_favorites f WHERE f.trip_id = t.id AND f.user_id = :uid) AS viewer_favorite "
                 "FROM trips t WHERE t.user_id = :uid ORDER BY t.created_at DESC"
             ),
             {"uid": user_id},
@@ -205,16 +256,17 @@ def get_trips(user_id: str) -> list:
         for k in ("start_date", "end_date", "created_at"):
             if d.get(k) is not None:
                 d[k] = str(d[k])
-        d["is_favorite"] = int(d.get("is_favorite") or 0)
+        d["is_favorite"] = 1 if d.pop("viewer_favorite", None) else 0
         d["stickers_preview"] = [s for s in (d.pop("sticker1", None), d.pop("sticker2", None)) if s]
         result.append(d)
     return result
 
 
-def get_trip_cards(trip_ids: list) -> list:
+def get_trip_cards(trip_ids: list, viewer_id: str | None = None) -> list:
     """指定IDの旅を、一覧カード用のリッチ形式（写真枚数・代表写真・付箋）で返す。
 
     共有された旅をアルバムに混ぜて表示するために使う。get_trips と同じ整形。
+    is_favorite は viewer_id 視点で算出する（未指定なら 0）。
     入力順は問わず created_at 降順で返す。
     """
     ids = [int(i) for i in trip_ids if i is not None]
@@ -222,6 +274,7 @@ def get_trip_cards(trip_ids: list) -> list:
         return []
     placeholders = ", ".join(f":id{i}" for i in range(len(ids)))
     params = {f"id{i}": v for i, v in enumerate(ids)}
+    params["viewer"] = viewer_id
     with get_engine().connect() as conn:
         _ensure_all(conn)
         rows = conn.execute(
@@ -233,7 +286,8 @@ def get_trip_cards(trip_ids: list) -> list:
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
                 "     ORDER BY s.id DESC LIMIT 1) AS sticker1, "
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
-                "     ORDER BY s.id DESC LIMIT 1 OFFSET 1) AS sticker2 "
+                "     ORDER BY s.id DESC LIMIT 1 OFFSET 1) AS sticker2, "
+                "  (SELECT 1 FROM trip_favorites f WHERE f.trip_id = t.id AND f.user_id = :viewer) AS viewer_favorite "
                 f"FROM trips t WHERE t.id IN ({placeholders}) ORDER BY t.created_at DESC"
             ),
             params,
@@ -244,21 +298,45 @@ def get_trip_cards(trip_ids: list) -> list:
         for k in ("start_date", "end_date", "created_at"):
             if d.get(k) is not None:
                 d[k] = str(d[k])
-        d["is_favorite"] = int(d.get("is_favorite") or 0)
+        d["is_favorite"] = 1 if d.pop("viewer_favorite", None) else 0
         d["stickers_preview"] = [s for s in (d.pop("sticker1", None), d.pop("sticker2", None)) if s]
         result.append(d)
     return result
 
 
+def is_trip_favorite(user_id: str, trip_id: int) -> bool:
+    """指定ユーザーがこの旅をお気に入り登録しているか。"""
+    with get_engine().connect() as conn:
+        _ensure_all(conn)
+        row = conn.execute(
+            text("SELECT 1 FROM trip_favorites WHERE user_id = :uid AND trip_id = :tid"),
+            {"uid": user_id, "tid": trip_id},
+        ).fetchone()
+    return row is not None
+
+
 def set_trip_favorite(trip_id: int, user_id: str, favorite: bool) -> bool:
-    """旅のお気に入り状態を設定する（本人の旅のみ）。更新できたら True。"""
+    """旅のお気に入り状態をユーザー単位で設定する。
+
+    所有者でも共有された閲覧者でも、自分のお気に入りとして登録/解除できる。
+    アクセス制御（その旅を見られるか）は呼び出し側で担保する前提。
+    """
     with get_engine().begin() as conn:
         _ensure_all(conn)
-        result = conn.execute(
-            text("UPDATE trips SET is_favorite = :fav WHERE id = :id AND user_id = :uid"),
-            {"fav": 1 if favorite else 0, "id": trip_id, "uid": user_id},
-        )
-        return result.rowcount > 0
+        if favorite:
+            conn.execute(
+                text(
+                    "INSERT IGNORE INTO trip_favorites (user_id, trip_id) "
+                    "VALUES (:uid, :tid)"
+                ),
+                {"uid": user_id, "tid": trip_id},
+            )
+        else:
+            conn.execute(
+                text("DELETE FROM trip_favorites WHERE user_id = :uid AND trip_id = :tid"),
+                {"uid": user_id, "tid": trip_id},
+            )
+        return True
 
 
 def rename_trip(trip_id: int, user_id: str, title: str) -> bool:
@@ -280,6 +358,7 @@ def delete_trip(trip_id: int, user_id: str) -> bool:
         conn.execute(text("DELETE FROM achievements WHERE trip_id = :id"), {"id": trip_id})
         conn.execute(text("DELETE FROM trip_reports WHERE trip_id = :id"), {"id": trip_id})
         conn.execute(text("DELETE FROM stickers WHERE trip_id = :id"), {"id": trip_id})
+        conn.execute(text("DELETE FROM trip_favorites WHERE trip_id = :id"), {"id": trip_id})
         result = conn.execute(
             text("DELETE FROM trips WHERE id = :id AND user_id = :uid"),
             {"id": trip_id, "uid": user_id},

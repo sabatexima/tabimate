@@ -23,7 +23,7 @@
     margin: 0;
   }
 
-  #plans-container, #shared-container {
+  #plans-container {
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -170,11 +170,6 @@
 <div id="loading">読み込み中...</div>
 <div id="plans-container" style="display:none;"></div>
 
-<div id="shared-section" style="display:none;">
-  <div class="page-header" style="margin-top:32px;"><h1 style="font-size:1.25rem;">🤝 共有されたプラン</h1></div>
-  <div id="shared-container"></div>
-</div>
-
 {% include "_share_modal.html" %}
 
 <script>
@@ -272,37 +267,33 @@
     const loading = document.getElementById('loading');
     const container = document.getElementById('plans-container');
     try {
-      const res = await fetch('/get_my_plans');
-      const data = await res.json();
+      // 自分のプランと共有されたプランを同時に取得し、同じ一覧に並べる
+      const [mineRes, sharedRes] = await Promise.all([
+        fetch('/get_my_plans'),
+        fetch('/get_shared_plans'),
+      ]);
+      const mine = await mineRes.json();
+      let shared = { plans: [] };
+      try { shared = await sharedRes.json(); } catch (e) { /* 共有取得失敗は無視 */ }
+
       loading.style.display = 'none';
       container.style.display = 'flex';
 
-      if (!data.plans || data.plans.length === 0) {
+      const myPlans = (mine && mine.plans) || [];
+      const sharedPlans = (shared && shared.status === 'OK' && shared.plans) || [];
+
+      if (myPlans.length === 0 && sharedPlans.length === 0) {
         showEmpty();
         return;
       }
-      data.plans.forEach(plan => container.appendChild(renderPlan(plan)));
+      myPlans.forEach(plan => container.appendChild(renderPlan(plan)));
+      sharedPlans.forEach(plan => container.appendChild(renderPlan(plan, { shared: true })));
     } catch (err) {
       loading.textContent = 'プランの読み込みに失敗しました';
       console.error(err);
     }
   }
 
-  async function loadSharedPlans() {
-    try {
-      const res = await fetch('/get_shared_plans');
-      const data = await res.json();
-      if (data.status !== 'OK' || !data.plans || data.plans.length === 0) return;
-      const section = document.getElementById('shared-section');
-      const container = document.getElementById('shared-container');
-      data.plans.forEach(plan => container.appendChild(renderPlan(plan, { shared: true })));
-      section.style.display = 'block';
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   loadPlans();
-  loadSharedPlans();
 </script>
 {% endblock %}

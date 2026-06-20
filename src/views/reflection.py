@@ -76,7 +76,7 @@ def index():
     grants = db_sharing.get_grants_for_email(session.get("user_email"))
     shared_ids = [g["resource_id"] for g in grants if g["resource_type"] == "trip"]
     perm_by_id = {g["resource_id"]: g["permission"] for g in grants if g["resource_type"] == "trip"}
-    shared_trips = repo.get_trip_cards(shared_ids) if shared_ids else []
+    shared_trips = repo.get_trip_cards(shared_ids, viewer_id=_uid()) if shared_ids else []
     for t in shared_trips:
         t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
         t["permission"] = perm_by_id.get(t["id"], "view")
@@ -130,21 +130,36 @@ def rename_trip(trip_id: int):
     return jsonify({"updated": ok, "title": title})
 
 
+def _can_view_trip(trip_id: int) -> bool:
+    """この旅を本人が見られるか（所有者 or 共有を受けている）。
+
+    お気に入りはユーザー単位なので、所有者だけでなく共有された閲覧者も
+    自分のお気に入りとして登録できる。閲覧資格をここで確認する。
+    """
+    if repo.get_trip(trip_id, _uid()):
+        return True
+    import db_sharing
+    grant = db_sharing.get_grant_for_email("trip", trip_id, session.get("user_email"))
+    return grant is not None
+
+
 @reflection.route("/trips/<int:trip_id>/favorite", methods=["PATCH"])
 @login_required
 def toggle_favorite(trip_id: int):
-    """旅のお気に入り状態を切り替える（本人の旅のみ）。
+    """旅のお気に入り状態を切り替える（所有者・共有された閲覧者の双方が可能）。
 
+    お気に入りはユーザー単位（trip_favorites）で保持する。
     body の favorite が与えられればその値に、無ければ現在値を反転する。
     """
-    trip = _require_trip(trip_id)
+    if not _can_view_trip(trip_id):
+        abort(404)
     data = request.get_json(silent=True) or {}
     if "favorite" in data:
         favorite = bool(data.get("favorite"))
     else:
-        favorite = not bool(trip.get("is_favorite"))
+        favorite = not repo.is_trip_favorite(_uid(), trip_id)
     repo.set_trip_favorite(trip_id, _uid(), favorite)
-    logger.info("お気に入り更新: trip_id=%s favorite=%s", trip_id, favorite)
+    logger.info("お気に入り更新: trip_id=%s user=%s favorite=%s", trip_id, _uid(), favorite)
     return jsonify({"is_favorite": favorite})
 
 

@@ -98,19 +98,12 @@
   .fav-btn:hover { background: rgba(0,0,0,0.65); transform: scale(1.08); }
   .fav-btn.on { color: #ffd23f; }
 
-  /* 共有された旅セクション */
-  .shared-section { margin-top: 30px; }
-  .shared-title {
-    font-size: 1.1rem; font-weight: 700; color: var(--text-main);
-    margin: 0 0 4px; display: flex; align-items: center; gap: 8px;
-  }
-  .shared-lead { color: var(--text-muted); font-size: 0.85em; margin: 0 0 16px; }
+  /* 共有された旅であることを示すフラグ（カバー右上）*/
   .share-flag {
     position: absolute; top: 8px; right: 8px; z-index: 4;
     background: var(--primary-color); color: #fff; border-radius: 20px;
     padding: 3px 10px; font-size: 0.72em; font-weight: 700;
   }
-  #shared-trips { display: flex; flex-direction: column; gap: 18px; }
 
   /* 旅カード（SNSフィード風: 大きな写真主体）*/
   #trips { display: flex; flex-direction: column; gap: 18px; }
@@ -185,15 +178,13 @@
     .page-header, .page-lead, .new-trip-bar, .album-controls, .no-results {
       max-width: 640px; margin-right: auto;
     }
-    #trips, #shared-trips {
+    #trips {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: 18px;
       /* 各行のカード高さを揃える（日付有無のガタつき解消） */
     }
     #trips .empty-state { grid-column: 1 / -1; }
-    .shared-section { max-width: 1040px; }
-    .shared-title, .shared-lead { max-width: 640px; }
   }
 </style>
 {% endblock %}
@@ -229,7 +220,7 @@
     </div>
   </div>
 
-  {% if trips %}
+  {% if trips or shared_trips %}
   <div class="album-controls">
     <div class="search-wrap">
       <span class="search-icon">🔍</span>
@@ -252,6 +243,7 @@
   {% endif %}
 
   <div id="trips">
+    {# 自分の旅と共有された旅を同じグリッドに並べる（検索・並び替え・お気に入りを共通化）#}
     {% for trip in trips %}
       <div class="trip-card" data-id="{{ trip.id }}" data-title="{{ trip.title }}"
            data-created="{{ trip.created_at or '' }}"
@@ -289,45 +281,47 @@
           </div>
         </div>
       </div>
-    {% else %}
-      <div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>
     {% endfor %}
-  </div>
 
-  {% if shared_trips %}
-  <div class="shared-section">
-    <h2 class="shared-title">🤝 共有された旅</h2>
-    <p class="shared-lead">ほかの人があなたに共有した旅の記録です。</p>
-    <div id="shared-trips">
-      {% for trip in shared_trips %}
-        <div class="trip-card">
-          <a class="card-link" href="{{ url_for('sharing.shared_view', resource_type='trip', resource_id=trip.id) }}">
-            <div class="cover">
-              {% if trip.cover_url %}
-                <img src="{{ trip.cover_url }}" alt="" loading="lazy" decoding="async">
-              {% else %}
-                <span class="cover-empty">🧳</span>
-              {% endif %}
-              <span class="share-flag">{{ '編集可' if trip.permission == 'edit' else '閲覧' }}</span>
-              {% if trip.stickers_preview %}
-                <div class="badges">
-                  {% for s in trip.stickers_preview %}<span class="badge">🪧 {{ s }}</span>{% endfor %}
-                </div>
-              {% endif %}
-            </div>
-            <div class="card-body">
-              <div class="t">{{ trip.title }}</div>
-              {% if trip.start_date %}
-                <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
-              {% endif %}
-              <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
-            </div>
-          </a>
-        </div>
-      {% endfor %}
-    </div>
+    {% for trip in shared_trips %}
+      <div class="trip-card" data-id="{{ trip.id }}" data-title="{{ trip.title }}"
+           data-created="{{ trip.created_at or '' }}"
+           data-start="{{ trip.start_date or '' }}"
+           data-photos="{{ trip.photo_count or 0 }}"
+           data-favorite="{{ 1 if trip.is_favorite else 0 }}"
+           data-shared="1"
+           data-stickers="{{ trip.stickers_preview|join(' ') if trip.stickers_preview else '' }}">
+        <a class="card-link" href="{{ url_for('sharing.shared_view', resource_type='trip', resource_id=trip.id) }}">
+          <div class="cover">
+            {% if trip.cover_url %}
+              <img src="{{ trip.cover_url }}" alt="" loading="lazy" decoding="async">
+            {% else %}
+              <span class="cover-empty">🧳</span>
+            {% endif %}
+            <button class="fav-btn {{ 'on' if trip.is_favorite else '' }}" type="button"
+                    aria-label="お気に入り">{{ '★' if trip.is_favorite else '☆' }}</button>
+            <span class="share-flag">🤝 {{ '編集可' if trip.permission == 'edit' else '閲覧' }}</span>
+            {% if trip.stickers_preview %}
+              <div class="badges">
+                {% for s in trip.stickers_preview %}<span class="badge">🪧 {{ s }}</span>{% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            <div class="t">{{ trip.title }}</div>
+            {% if trip.start_date %}
+              <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
+            {% endif %}
+            <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
+          </div>
+        </a>
+      </div>
+    {% endfor %}
+
+    {% if not trips and not shared_trips %}
+      <div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 <script>

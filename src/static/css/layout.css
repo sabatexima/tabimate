@@ -4,6 +4,8 @@
       --glow-cream: #f6f6a5;      /* 四つ葉まわりの淡い光 */
       --text-main: #4a4540;
       --text-muted: #8a817a;
+      /* クリーム→淡い若葉色のやわらかいグラデ（全ページ共通の背景） */
+      --bg-gradient: linear-gradient(180deg, #fdfaf2 0%, #f4f6e9 55%, #edf3de 100%);
     }
     html, body {
       margin: 0;
@@ -12,6 +14,7 @@
         "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP",
         Meiryo, sans-serif;
       color: var(--text-main);
+      background: var(--bg-gradient) fixed no-repeat;
     }
     /* ページ共通の中央寄せコンテナ（各画面で利用） */
     .container { max-width: 1040px; margin: 0 auto; }
@@ -89,7 +92,7 @@
       flex: 1;
       min-width: 0;
       padding: 20px;
-      background-color: #faf6ee;
+      background: transparent;
     }
 
     @media (max-width: 768px) {

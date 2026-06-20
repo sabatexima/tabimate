@@ -156,7 +156,7 @@
   }
 
   .main {
-    background: var(--bg-app) !important;
+    background: transparent !important;
     padding: 0 !important;
     display: flex;
     justify-content: center;

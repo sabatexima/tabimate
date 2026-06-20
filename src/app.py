@@ -36,6 +36,48 @@ app.register_blueprint(reflection)
 app.register_blueprint(share)
 init_oauth(app)
 
+
+def _parse_date(value):
+    """文字列(YYYY-MM-DD)/date/datetime を date に正規化する。失敗時は None。"""
+    from datetime import date, datetime
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+@app.template_filter("tripdates")
+def tripdates(start, end=None):
+    """旅の出発日・帰宅日を日本語で読みやすく整形する。
+
+    例:
+      単日              -> 2026年6月13日
+      同年同月の期間    -> 2026年6月13日〜15日
+      同年別月の期間    -> 2026年6月13日〜7月2日
+      年をまたぐ期間    -> 2026年12月30日〜2027年1月2日
+    """
+    s = _parse_date(start)
+    e = _parse_date(end)
+    if not s and not e:
+        return ""
+    if s and not e:
+        e = s
+    if e and not s:
+        s = e
+    if s == e:
+        return f"{s.year}年{s.month}月{s.day}日"
+    if s.year != e.year:
+        return f"{s.year}年{s.month}月{s.day}日〜{e.year}年{e.month}月{e.day}日"
+    if s.month != e.month:
+        return f"{s.year}年{s.month}月{s.day}日〜{e.month}月{e.day}日"
+    return f"{s.year}年{s.month}月{s.day}日〜{e.day}日"
+
 if __name__ == "__main__":
     # ローカル開発用の簡易サーバ起動（本番は Gunicorn を使用）
     port = 5007

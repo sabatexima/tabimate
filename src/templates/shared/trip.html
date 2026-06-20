@@ -101,10 +101,9 @@
       </button>
     {% endif %}
   </div>
-  <div class="trip-dates">
-    {% if trip.start_date %}{{ trip.start_date }}{% endif %}
-    {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
-  </div>
+  {% if trip.start_date or trip.end_date %}
+  <div class="trip-dates">📅 {{ trip.start_date | tripdates(trip.end_date) }}</div>
+  {% endif %}
 
   <!-- 付箋ボード -->
   <div class="section sticker-section">

@@ -266,7 +266,7 @@
           <div class="card-body">
             <div class="t">{{ trip.title }}</div>
             {% if trip.start_date %}
-              <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
+              <div class="m">📅 {{ trip.start_date | tripdates(trip.end_date) }}</div>
             {% endif %}
             <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
           </div>
@@ -307,7 +307,7 @@
           <div class="card-body">
             <div class="t">{{ trip.title }}</div>
             {% if trip.start_date %}
-              <div class="m">{{ trip.start_date }}{% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}</div>
+              <div class="m">📅 {{ trip.start_date | tripdates(trip.end_date) }}</div>
             {% endif %}
             <div class="meta">{% if trip.photo_count %}📷 {{ trip.photo_count }}枚{% else %}写真なし{% endif %}</div>
           </div>

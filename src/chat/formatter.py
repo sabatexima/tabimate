@@ -39,8 +39,6 @@ def _format_plan(state: dict) -> str:
       <span>⏱️ 期間: {esc(state['duration'])}</span>
       <span>👥 人数: {esc(state['num_people'])}人</span>
       <span>💴 予算上限: {state['budget_limit']:,}円/人</span>
-      <span>🚄 交通費: {state.get('transport_cost', 0):,}円/人</span>
-      <span>💰 残り予算: {state.get('remaining_budget', 0):,}円/人</span>
     </div>
   </div>"""
 

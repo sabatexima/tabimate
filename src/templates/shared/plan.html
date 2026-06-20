@@ -1,0 +1,98 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ plan.destination }} の旅行プラン — 共有{% endblock %}
+
+{% block head %}
+<style>
+  .share-banner {
+    background: #eef0ff; border: 1px solid rgba(108,92,231,0.25);
+    color: var(--text-main); border-radius: 10px; padding: 10px 14px;
+    font-size: 0.88em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    max-width: 860px;
+  }
+  .share-banner .tag {
+    background: var(--primary-color); color: #fff; border-radius: 20px;
+    padding: 2px 10px; font-size: 0.8em; font-weight: 700;
+  }
+
+  .plan-card {
+    background: #fff; border-radius: 12px; border: 1px solid rgba(108,92,231,0.15);
+    overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); max-width: 860px;
+  }
+  .plan-summary-block {
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    color: white; padding: 14px 16px;
+  }
+  .plan-title { font-size: 1.05em; font-weight: 700; margin-bottom: 8px; }
+  .plan-summary-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
+    font-size: 0.88em; opacity: 0.95;
+  }
+  .plan-summary-grid span { display: block; }
+
+  .plan-accordion { border-top: 1px solid rgba(108,92,231,0.1); }
+  .plan-accordion details { border-bottom: 1px solid rgba(108,92,231,0.08); }
+  .plan-accordion details:last-child { border-bottom: none; }
+  .plan-accordion summary {
+    display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+    font-weight: 600; font-size: 0.95em; cursor: pointer; list-style: none;
+    user-select: none; color: var(--text-main); transition: background 0.15s;
+  }
+  .plan-accordion summary::-webkit-details-marker { display: none; }
+  .plan-accordion summary:hover { background: #f8f7ff; }
+  .plan-accordion summary::after {
+    content: '›'; margin-left: auto; font-size: 1.2em; color: var(--primary-color);
+    transition: transform 0.2s; display: inline-block;
+  }
+  .plan-accordion details[open] summary::after { transform: rotate(90deg); }
+  .plan-accordion-body { padding: 4px 16px 14px 16px; font-size: 0.9em; color: var(--text-main); line-height: 1.6; }
+  .plan-accordion-body ul { margin: 0; padding-left: 1.2em; }
+  .plan-accordion-body li { margin: 5px 0; }
+  .plan-review {
+    padding: 12px 16px; border-top: 1px solid rgba(108,92,231,0.1);
+    font-size: 0.9em; color: var(--text-main); line-height: 1.6;
+  }
+</style>
+{% endblock %}
+
+{% macro accordion(icon, label, items) %}
+  {% if items %}
+  <details>
+    <summary>{{ icon }} {{ label }}</summary>
+    <div class="plan-accordion-body"><ul>
+      {% for i in items %}<li>{{ i }}</li>{% endfor %}
+    </ul></div>
+  </details>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="share-banner">
+  <span class="tag">共有</span>
+  <span>これは共有された旅行プランです（閲覧のみ）。</span>
+</div>
+
+<div class="plan-card">
+  <div class="plan-summary-block">
+    <div class="plan-title">🗾 旅行プラン：{{ plan.destination }}</div>
+    <div class="plan-summary-grid">
+      <span>📍 出発地: {{ plan.departure_location or '—' }}</span>
+      <span>⏱️ 期間: {{ plan.duration or '—' }}</span>
+      <span>👥 人数: {% if plan.num_people is not none %}{{ plan.num_people }}人{% else %}—{% endif %}</span>
+      <span>💴 予算上限: {% if plan.budget_limit is not none %}{{ "{:,}".format(plan.budget_limit) }}円/人{% else %}—{% endif %}</span>
+      <span>🚄 交通費: {% if plan.transport_cost is not none %}{{ "{:,}".format(plan.transport_cost) }}円/人{% else %}—{% endif %}</span>
+      <span>💰 残り予算: {% if plan.remaining_budget is not none %}{{ "{:,}".format(plan.remaining_budget) }}円/人{% else %}—{% endif %}</span>
+    </div>
+  </div>
+  <div class="plan-accordion">
+    {{ accordion('✨', '主要観光地', plan.spots) }}
+    {{ accordion('🍱', 'グルメ', plan.restaurants) }}
+    {{ accordion('🏨', '宿泊施設', plan.accommodation) }}
+    {{ accordion('📅', 'スケジュール', plan.schedule) }}
+    {{ accordion('💰', '費用見積もり', plan.budget_estimate) }}
+  </div>
+  {% if plan.feedback %}
+  <div class="plan-review"><strong>💬 総評</strong><br>{{ plan.feedback }}</div>
+  {% endif %}
+</div>
+{% endblock %}

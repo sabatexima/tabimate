@@ -15,6 +15,12 @@
     font-size: 1.05rem; padding: 4px 8px; border-radius: 8px; line-height: 1;
   }
   .title-edit:hover { background: #f0eefb; color: var(--primary-color); }
+  .fav-toggle {
+    background: none; border: none; cursor: pointer; font-size: 1.3rem; line-height: 1;
+    color: #c9c5d6; padding: 2px 6px; border-radius: 8px;
+  }
+  .fav-toggle:hover { background: #fff7e6; }
+  .fav-toggle.on { color: #ffc107; }
   .title-editor { display: flex; gap: 8px; align-items: center; margin: 8px 0 2px; flex-wrap: wrap; }
   .title-editor[hidden] { display: none; }
   .title-editor input {
@@ -89,6 +95,9 @@
 <div class="title-row">
   <div class="trip-title" id="trip-title">{{ trip.title }}</div>
   <button class="title-edit" id="title-edit" aria-label="タイトルを編集">✎</button>
+  <button class="fav-toggle {{ 'on' if trip.is_favorite else '' }}" id="fav-toggle"
+          style="margin-left:auto;" aria-label="お気に入り">{{ '★' if trip.is_favorite else '☆' }}</button>
+  <button class="btn secondary" id="share-btn">🔗 共有</button>
 </div>
 <div class="title-editor" id="title-editor" hidden>
   <input id="title-input" type="text" maxlength="100" value="{{ trip.title }}">
@@ -129,6 +138,8 @@
   <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
 
+{% include "_share_modal.html" %}
+
 <!-- 危険ゾーン（旅の削除）-->
 <div class="section danger-zone">
   <h2>🗑 この旅を削除</h2>
@@ -142,6 +153,32 @@
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // --- 共有モーダル ---
+  document.getElementById('share-btn').addEventListener('click', () => {
+    window.openShareModal('trip', TRIP_ID);
+  });
+
+  // --- お気に入り ---
+  const favToggle = document.getElementById('fav-toggle');
+  favToggle.addEventListener('click', async () => {
+    const next = !favToggle.classList.contains('on');
+    favToggle.disabled = true;
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}/favorite`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorite: next }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const on = !!data.is_favorite;
+        favToggle.classList.toggle('on', on);
+        favToggle.textContent = on ? '★' : '☆';
+      }
+    } catch (e) { /* 据え置き */ }
+    favToggle.disabled = false;
+  });
 
   // --- タイトル編集 ---
   const titleEl = document.getElementById('trip-title');

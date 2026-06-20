@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS trips (
     title       VARCHAR(255) NOT NULL,
     start_date  DATE,
     end_date    DATE,
+    is_favorite TINYINT NOT NULL DEFAULT 0,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_trips_user (user_id)
 ) CHARACTER SET utf8mb4
@@ -84,12 +85,42 @@ def _row_to_dict(row) -> dict:
     return dict(row._mapping)
 
 
+# プロセス内で確認済みのカラムをキャッシュし、information_schema 問い合わせを
+# 毎回走らせない（スキーマは実行中に変わらない前提）。
+_confirmed_columns: set = set()
+
+
+def _ensure_column(conn, table: str, column: str, ddl: str) -> None:
+    """既存テーブルに不足カラムがあれば追加する（冪等な遅延マイグレーション）。
+
+    CREATE TABLE IF NOT EXISTS では既存テーブルへの列追加ができないため、
+    information_schema で存在確認してから ALTER する（MySQL/TiDB 両対応）。
+    一度確認できたカラムはプロセス内キャッシュして再問い合わせを避ける。
+    """
+    cache_key = f"{table}.{column}"
+    if cache_key in _confirmed_columns:
+        return
+    exists = conn.execute(
+        text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = :t AND column_name = :c"
+        ),
+        {"t": table, "c": column},
+    ).scalar()
+    if not exists:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+        logger.info("カラム追加(遅延マイグレーション): %s.%s", table, column)
+    _confirmed_columns.add(cache_key)
+
+
 def _ensure_all(conn) -> None:
     conn.execute(text(_CREATE_TRIPS_TABLE))
     conn.execute(text(_CREATE_PHOTOS_TABLE))
     conn.execute(text(_CREATE_ACHIEVEMENTS_TABLE))
     conn.execute(text(_CREATE_REPORTS_TABLE))
     conn.execute(text(_CREATE_STICKERS_TABLE))
+    # 既存DB向け: お気に入り列が無ければ追加
+    _ensure_column(conn, "trips", "is_favorite", "is_favorite TINYINT NOT NULL DEFAULT 0")
 
 
 # ----------------------------------------------------------------------
@@ -116,6 +147,27 @@ def get_trip(trip_id: int, user_id: str) -> dict | None:
             {"id": trip_id, "uid": user_id},
         ).fetchone()
     return _row_to_dict(row) if row else None
+
+
+def get_trip_by_id(trip_id: int) -> dict | None:
+    """所有者を問わず1件の旅を取得する（共有閲覧で使用）。
+
+    アクセス制御は呼び出し側（共有トークン / メール権限の確認）で行う前提。
+    """
+    with get_engine().connect() as conn:
+        _ensure_all(conn)
+        row = conn.execute(
+            text("SELECT * FROM trips WHERE id = :id"),
+            {"id": trip_id},
+        ).fetchone()
+    if not row:
+        return None
+    d = _row_to_dict(row)
+    for k in ("start_date", "end_date", "created_at"):
+        if d.get(k) is not None:
+            d[k] = str(d[k])
+    d["is_favorite"] = int(d.get("is_favorite") or 0)
+    return d
 
 
 def get_trips(user_id: str) -> list:
@@ -153,9 +205,60 @@ def get_trips(user_id: str) -> list:
         for k in ("start_date", "end_date", "created_at"):
             if d.get(k) is not None:
                 d[k] = str(d[k])
+        d["is_favorite"] = int(d.get("is_favorite") or 0)
         d["stickers_preview"] = [s for s in (d.pop("sticker1", None), d.pop("sticker2", None)) if s]
         result.append(d)
     return result
+
+
+def get_trip_cards(trip_ids: list) -> list:
+    """指定IDの旅を、一覧カード用のリッチ形式（写真枚数・代表写真・付箋）で返す。
+
+    共有された旅をアルバムに混ぜて表示するために使う。get_trips と同じ整形。
+    入力順は問わず created_at 降順で返す。
+    """
+    ids = [int(i) for i in trip_ids if i is not None]
+    if not ids:
+        return []
+    placeholders = ", ".join(f":id{i}" for i in range(len(ids)))
+    params = {f"id{i}": v for i, v in enumerate(ids)}
+    with get_engine().connect() as conn:
+        _ensure_all(conn)
+        rows = conn.execute(
+            text(
+                "SELECT t.*, "
+                "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
+                "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
+                "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path, "
+                "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
+                "     ORDER BY s.id DESC LIMIT 1) AS sticker1, "
+                "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
+                "     ORDER BY s.id DESC LIMIT 1 OFFSET 1) AS sticker2 "
+                f"FROM trips t WHERE t.id IN ({placeholders}) ORDER BY t.created_at DESC"
+            ),
+            params,
+        ).fetchall()
+    result = []
+    for row in rows:
+        d = _row_to_dict(row)
+        for k in ("start_date", "end_date", "created_at"):
+            if d.get(k) is not None:
+                d[k] = str(d[k])
+        d["is_favorite"] = int(d.get("is_favorite") or 0)
+        d["stickers_preview"] = [s for s in (d.pop("sticker1", None), d.pop("sticker2", None)) if s]
+        result.append(d)
+    return result
+
+
+def set_trip_favorite(trip_id: int, user_id: str, favorite: bool) -> bool:
+    """旅のお気に入り状態を設定する（本人の旅のみ）。更新できたら True。"""
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        result = conn.execute(
+            text("UPDATE trips SET is_favorite = :fav WHERE id = :id AND user_id = :uid"),
+            {"fav": 1 if favorite else 0, "id": trip_id, "uid": user_id},
+        )
+        return result.rowcount > 0
 
 
 def rename_trip(trip_id: int, user_id: str, title: str) -> bool:

@@ -21,6 +21,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 from views.planner import planner
 from views.auth import auth, init_oauth
 from views.reflection import reflection
+from views.sharing import share
 
 app = Flask(__name__)
 # Cloud Run のプロキシが付与する X-Forwarded-Proto / Host を信頼し、
@@ -32,6 +33,7 @@ app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-change-in-production')
 app.register_blueprint(planner, url_prefix='/')
 app.register_blueprint(auth)
 app.register_blueprint(reflection)
+app.register_blueprint(share)
 init_oauth(app)
 
 if __name__ == "__main__":

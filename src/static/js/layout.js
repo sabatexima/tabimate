@@ -5,10 +5,12 @@ const hamburger = document.getElementById('hamburger');
     function openSidebar() {
       sidebar.classList.add('open');
       overlay.classList.add('open');
+      document.body.classList.add('sidebar-open');
     }
     function closeSidebar() {
       sidebar.classList.remove('open');
       overlay.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
     }
 
     hamburger.addEventListener('click', openSidebar);

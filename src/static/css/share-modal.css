@@ -1,0 +1,46 @@
+.sm-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 300; align-items: center; justify-content: center; padding: 16px;
+  }
+  .sm-box {
+    background: #fff; border-radius: 14px; width: 100%; max-width: 520px;
+    max-height: 88vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  }
+  .sm-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff;
+  }
+  .sm-head h3 { margin: 0; font-size: 1.15rem; color: var(--text-main); }
+  .sm-close { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
+  .sm-body { padding: 18px; }
+  .sm-section { margin-bottom: 24px; }
+  .sm-section h4 { margin: 0 0 4px; font-size: 0.98rem; color: var(--text-main); }
+  .sm-section .sm-hint { margin: 0 0 12px; font-size: 0.8em; color: var(--text-muted); line-height: 1.5; }
+  .sm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .sm-row input[type=email], .sm-row input[type=text] {
+    flex: 1 1 180px; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 9px 11px; font-size: 0.9em;
+  }
+  .sm-row select { border: 1px solid #ddd; border-radius: 8px; padding: 9px 8px; font-size: 0.9em; }
+  .sm-btn {
+    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 16px; font-weight: 600; cursor: pointer; font-size: 0.88em; white-space: nowrap;
+  }
+  .sm-btn:disabled { opacity: 0.6; cursor: default; }
+  .sm-btn.ghost { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
+  .sm-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .sm-li {
+    display: flex; align-items: center; gap: 8px; background: #f7f6ff;
+    border: 1px solid rgba(108,92,231,0.12); border-radius: 8px; padding: 8px 10px; font-size: 0.85em;
+  }
+  .sm-li .sm-grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sm-li .sm-url { color: var(--text-muted); font-size: 0.92em; }
+  .sm-badge {
+    border-radius: 20px; padding: 1px 8px; font-size: 0.78em; font-weight: 700;
+    background: #b2bec3; color: #fff;
+  }
+  .sm-badge.edit { background: var(--primary-color); }
+  .sm-perm { border: 1px solid #ddd; border-radius: 8px; padding: 4px 6px; font-size: 0.82em; background: #fff; cursor: pointer; }
+  .sm-mini { background: none; border: none; cursor: pointer; font-size: 0.85em; padding: 2px 6px; border-radius: 6px; }
+  .sm-mini.copy { color: var(--primary-color); }
+  .sm-mini.del { color: #e74c3c; }
+  .sm-empty { color: var(--text-muted); font-size: 0.82em; margin-top: 10px; }

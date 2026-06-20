@@ -6,7 +6,7 @@
   .share-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); max-width: 1040px; }
   .share-item {
     display: block; text-decoration: none; color: inherit; background: #fff;
-    border: 1px solid rgba(108,92,231,0.15); border-radius: 12px; padding: 16px;
+    border: 1px solid rgba(79,168,58,0.15); border-radius: 12px; padding: 16px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.1s, box-shadow 0.1s;
   }
   .share-item:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }

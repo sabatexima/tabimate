@@ -1,6 +1,6 @@
 .detail { max-width: 820px; margin: 0 auto; }
   .share-banner {
-    background: #eef0ff; border: 1px solid rgba(108,92,231,0.25);
+    background: #eef6ec; border: 1px solid rgba(79,168,58,0.25);
     color: var(--text-main); border-radius: 10px; padding: 10px 14px;
     font-size: 0.88em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
   }
@@ -20,7 +20,7 @@
   .fav-toggle:hover { background: #fff7e6; }
 
   .section {
-    background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
+    background: #fff; border: 1px solid rgba(79,168,58,0.15); border-radius: 12px;
     padding: 18px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
   .section h2 { font-size: 1.1em; margin: 0 0 4px; color: var(--text-main); }
@@ -33,7 +33,7 @@
   .btn.secondary { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
   .btn:disabled { opacity: 0.6; cursor: default; }
 
-  .sticker-section { border-color: rgba(108,92,231,0.28); }
+  .sticker-section { border-color: rgba(79,168,58,0.28); }
   .sticker-board { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
   .sticker {
     position: relative;

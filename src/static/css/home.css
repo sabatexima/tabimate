@@ -28,11 +28,11 @@
   /* 旅行プランHTML用スタイル */
   .plan-card {
     background: #fff;
-    border-radius: 12px;
+    border-radius: 16px;
     border: 1px solid rgba(79,168,58,0.15);
     overflow: hidden;
     margin-top: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    box-shadow: 0 6px 18px rgba(120,110,90,0.10);
   }
 
   .plan-summary-block {

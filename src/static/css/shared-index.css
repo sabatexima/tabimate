@@ -6,10 +6,10 @@
   .share-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); max-width: 1040px; }
   .share-item {
     display: block; text-decoration: none; color: inherit; background: #fff;
-    border: 1px solid rgba(79,168,58,0.15); border-radius: 12px; padding: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.1s, box-shadow 0.1s;
+    border: 1px solid rgba(79,168,58,0.15); border-radius: 16px; padding: 16px;
+    box-shadow: 0 6px 18px rgba(120,110,90,0.10); transition: transform 0.1s, box-shadow 0.1s;
   }
-  .share-item:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  .share-item:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(120,110,90,0.16); }
   .share-item .name { font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
   .share-item .meta { font-size: 0.82em; color: var(--text-muted); }
   .perm-tag {

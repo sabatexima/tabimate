@@ -10,8 +10,8 @@
   }
 
   .plan-card {
-    background: #fff; border-radius: 12px; border: 1px solid rgba(79,168,58,0.15);
-    overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); max-width: 860px;
+    background: #fff; border-radius: 16px; border: 1px solid rgba(79,168,58,0.15);
+    overflow: hidden; box-shadow: 0 6px 18px rgba(120,110,90,0.10); max-width: 860px;
   }
   .plan-summary-block {
     background: linear-gradient(135deg, #4fa83a 0%, #84d65f 100%);

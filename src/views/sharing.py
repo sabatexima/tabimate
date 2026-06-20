@@ -217,7 +217,7 @@ def shared_view(resource_type: str, resource_id: int):
 def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_token: str | None):
     """共有閲覧ページを描画する（trip / plan 共通の入口）。"""
     if resource_type == "trip":
-        trip = repo.get_trip_by_id(resource_id)
+        trip = repo.get_trip_by_id(resource_id, viewer_id=session.get("user_id"))
         if not trip:
             abort(404)
         photos = repo.get_photos(resource_id)

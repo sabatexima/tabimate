@@ -14,8 +14,16 @@
     background: var(--primary-color); color: #fff; border-radius: 20px;
     padding: 2px 10px; font-size: 0.8em; font-weight: 700;
   }
-  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin: 4px 0 2px; }
+  .title-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 2px; }
+  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
   .trip-dates { color: var(--text-muted); font-size: 0.88em; margin-bottom: 24px; }
+  .fav-toggle {
+    flex: 0 0 auto; background: #fff; border: 1px solid #f5b301; color: #b9820a;
+    border-radius: 20px; padding: 6px 14px; font-size: 0.85em; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  .fav-toggle.on { background: #fff7e6; }
+  .fav-toggle:hover { background: #fff7e6; }
 
   .section {
     background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
@@ -62,7 +70,14 @@
     <span>これは共有された旅の記録です{% if can_edit %}（編集できます）{% else %}（閲覧のみ）{% endif %}。</span>
   </div>
 
-  <div class="trip-title">{{ trip.title }}</div>
+  <div class="title-row">
+    <div class="trip-title">{{ trip.title }}</div>
+    {% if session.get('user_id') %}
+      <button class="fav-toggle {{ 'on' if trip.is_favorite else '' }}" id="fav-toggle" type="button">
+        {{ '★ お気に入り' if trip.is_favorite else '☆ お気に入り' }}
+      </button>
+    {% endif %}
+  </div>
   <div class="trip-dates">
     {% if trip.start_date %}{{ trip.start_date }}{% endif %}
     {% if trip.end_date %} 〜 {{ trip.end_date }}{% endif %}
@@ -148,6 +163,36 @@
     } catch (e) { alert('付箋を作れませんでした'); }
     stickerBtn.disabled = false; stickerBtn.textContent = '付箋を作り直す';
   });
+</script>
+{% endif %}
+
+{% if session.get('user_id') %}
+<script>
+  // 共有された旅を、閲覧者自身のお気に入りとして登録/解除する
+  (function () {
+    const btn = document.getElementById('fav-toggle');
+    if (!btn) return;
+    const tripId = {{ trip.id }};
+    let on = {{ 'true' if trip.is_favorite else 'false' }};
+    btn.addEventListener('click', async () => {
+      const next = !on;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/reflection/trips/${tripId}/favorite`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ favorite: next }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          on = !!data.is_favorite;
+          btn.classList.toggle('on', on);
+          btn.textContent = on ? '★ お気に入り' : '☆ お気に入り';
+        }
+      } catch (e) { /* 失敗時は据え置き */ }
+      btn.disabled = false;
+    });
+  })();
 </script>
 {% endif %}
 {% endblock %}

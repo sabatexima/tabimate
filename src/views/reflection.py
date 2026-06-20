@@ -226,6 +226,19 @@ def upload_photos(trip_id: int):
     return jsonify({"saved": saved, "count": len(saved)}), 201
 
 
+@reflection.route("/trips/<int:trip_id>/photos/<int:photo_id>", methods=["DELETE"])
+@login_required
+def delete_photo(trip_id: int, photo_id: int):
+    """写真を1枚削除する（本人の旅のみ）。ストレージ実体も消す。"""
+    _require_trip(trip_id)
+    storage_path = repo.delete_photo(photo_id, trip_id)
+    if storage_path is None:
+        return jsonify({"deleted": False}), 404
+    storage.delete(storage_path)
+    logger.info("写真を削除: trip_id=%s photo_id=%s", trip_id, photo_id)
+    return jsonify({"deleted": True})
+
+
 # ----------------------------------------------------------------------
 # ローカルFS保存写真の配信（GCS時は使わない）
 # ----------------------------------------------------------------------

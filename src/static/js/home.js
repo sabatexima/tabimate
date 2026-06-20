@@ -42,7 +42,7 @@ const chatBox = document.getElementById('chat-box');
       label.textContent = 'あなた';
     } else {
       const icon = document.createElement('img');
-      icon.src = '/static/img/mate.svg';
+      icon.src = '/static/img/mate.png';
       icon.alt = '';
       icon.classList.add('mate-avatar');
       label.appendChild(icon);

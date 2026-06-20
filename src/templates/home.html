@@ -11,7 +11,7 @@
 {% block content %}
 {% if not session.get('user_id') %}
 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:80vh;gap:16px;text-align:center;">
-  <img src="{{ url_for('static', filename='img/mate.svg') }}" alt="みつば" style="width:120px;height:120px;">
+  <img src="{{ url_for('static', filename='img/mate.png') }}" alt="みつば" style="width:120px;height:120px;">
   <h2 style="margin:0;font-size:1.4rem;color:#2d3436;">たびメイト</h2>
   <p style="color:#636e72;margin:0;">無料で使えるAI旅行プランナー</p>
   {% if session.get('login_error') %}

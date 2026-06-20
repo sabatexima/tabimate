@@ -1,5 +1,5 @@
 .share-banner {
-    background: #eef0ff; border: 1px solid rgba(108,92,231,0.25);
+    background: #eef6ec; border: 1px solid rgba(79,168,58,0.25);
     color: var(--text-main); border-radius: 10px; padding: 10px 14px;
     font-size: 0.88em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
     max-width: 860px;
@@ -10,11 +10,11 @@
   }
 
   .plan-card {
-    background: #fff; border-radius: 12px; border: 1px solid rgba(108,92,231,0.15);
+    background: #fff; border-radius: 12px; border: 1px solid rgba(79,168,58,0.15);
     overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); max-width: 860px;
   }
   .plan-summary-block {
-    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    background: linear-gradient(135deg, #4fa83a 0%, #84d65f 100%);
     color: white; padding: 14px 16px;
   }
   .plan-title { font-size: 1.05em; font-weight: 700; margin-bottom: 8px; }
@@ -24,8 +24,8 @@
   }
   .plan-summary-grid span { display: block; }
 
-  .plan-accordion { border-top: 1px solid rgba(108,92,231,0.1); }
-  .plan-accordion details { border-bottom: 1px solid rgba(108,92,231,0.08); }
+  .plan-accordion { border-top: 1px solid rgba(79,168,58,0.1); }
+  .plan-accordion details { border-bottom: 1px solid rgba(79,168,58,0.08); }
   .plan-accordion details:last-child { border-bottom: none; }
   .plan-accordion summary {
     display: flex; align-items: center; gap: 8px; padding: 11px 16px;
@@ -33,7 +33,7 @@
     user-select: none; color: var(--text-main); transition: background 0.15s;
   }
   .plan-accordion summary::-webkit-details-marker { display: none; }
-  .plan-accordion summary:hover { background: #f8f7ff; }
+  .plan-accordion summary:hover { background: #f3f8f1; }
   .plan-accordion summary::after {
     content: '›'; margin-left: auto; font-size: 1.2em; color: var(--primary-color);
     transition: transform 0.2s; display: inline-block;

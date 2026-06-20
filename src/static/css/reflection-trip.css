@@ -43,7 +43,7 @@
   }
 
   .section {
-    background: #fff; border: 1px solid rgba(108,92,231,0.15); border-radius: 12px;
+    background: #fff; border: 1px solid rgba(79,168,58,0.15); border-radius: 12px;
     padding: 18px; margin-bottom: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
@@ -58,7 +58,7 @@
   .btn:disabled { opacity: 0.6; cursor: default; }
 
   /* 付箋ボード（主役・最上部） */
-  .sticker-section { border-color: rgba(108,92,231,0.28); }
+  .sticker-section { border-color: rgba(79,168,58,0.28); }
   .sticker-board {
     display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px;
   }

@@ -29,14 +29,14 @@
   .plan-card {
     background: #fff;
     border-radius: 12px;
-    border: 1px solid rgba(108,92,231,0.15);
+    border: 1px solid rgba(79,168,58,0.15);
     overflow: hidden;
     margin-top: 6px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
 
   .plan-summary-block {
-    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    background: linear-gradient(135deg, #4fa83a 0%, #84d65f 100%);
     color: white;
     padding: 14px 16px;
   }
@@ -56,10 +56,10 @@
   .plan-summary-grid span { display: block; }
 
   .plan-accordion {
-    border-top: 1px solid rgba(108,92,231,0.1);
+    border-top: 1px solid rgba(79,168,58,0.1);
   }
   .plan-accordion details {
-    border-bottom: 1px solid rgba(108,92,231,0.08);
+    border-bottom: 1px solid rgba(79,168,58,0.08);
   }
   .plan-accordion details:last-child { border-bottom: none; }
 
@@ -77,7 +77,7 @@
     transition: background 0.15s;
   }
   .plan-accordion summary::-webkit-details-marker { display: none; }
-  .plan-accordion summary:hover { background: #f8f7ff; }
+  .plan-accordion summary:hover { background: #f3f8f1; }
 
   .plan-accordion summary::after {
     content: '›';
@@ -124,12 +124,12 @@
 
   .plan-save-area {
     padding: 12px 16px;
-    border-top: 1px solid rgba(108,92,231,0.1);
+    border-top: 1px solid rgba(79,168,58,0.1);
     display: flex;
     justify-content: flex-end;
   }
   .plan-save-btn {
-    background: #6c5ce7;
+    background: #4fa83a;
     color: white;
     border: none;
     border-radius: 20px;
@@ -139,18 +139,18 @@
     cursor: pointer;
     transition: background 0.2s;
   }
-  .plan-save-btn:hover { background: #5b4bc4; }
+  .plan-save-btn:hover { background: #418c30; }
   .plan-save-btn:disabled { background: #aaa; cursor: not-allowed; }
   .plan-save-btn.saved { background: #22c55e; }
 
   :root {
-    --primary-color: #6c5ce7;
-    --primary-soft: rgba(108, 92, 231, 0.1);
-    --user-bg: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    --primary-color: #4fa83a;
+    --primary-soft: rgba(79, 168, 58, 0.1);
+    --user-bg: linear-gradient(135deg, #4fa83a 0%, #84d65f 100%);
     --ai-bg: #ffffff;
     --text-main: #2d3436;
     --text-muted: #636e72;
-    --bg-app: #f1f2f6;
+    --bg-app: #faf6ee;
     --glass: rgba(255, 255, 255, 0.7);
     --border-soft: rgba(0, 0, 0, 0.05);
   }
@@ -254,8 +254,9 @@
   }
 
   .mate-avatar {
-    width: 18px;
+    width: auto;
     height: 18px;
+    object-fit: contain;
     vertical-align: middle;
     margin-right: 4px;
   }
@@ -392,7 +393,7 @@
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+    box-shadow: 0 4px 12px rgba(79, 168, 58, 0.3);
   }
 
   #stop-button {
@@ -423,7 +424,7 @@
 
   #send-button:hover {
     transform: translateY(-2px);
-    background: #5b4bc4;
+    background: #418c30;
   }
 
   #send-button:disabled {

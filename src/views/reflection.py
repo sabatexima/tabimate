@@ -70,7 +70,18 @@ def index():
     # 一覧カードのサムネイル用に、代表写真の配信URLを付与（無ければ None）
     for t in trips:
         t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
-    return render_template("reflection/index.html", trips=trips)
+
+    # 自分宛に共有された旅も同じ画面にまとめて表示する
+    import db_sharing
+    grants = db_sharing.get_grants_for_email(session.get("user_email"))
+    shared_ids = [g["resource_id"] for g in grants if g["resource_type"] == "trip"]
+    perm_by_id = {g["resource_id"]: g["permission"] for g in grants if g["resource_type"] == "trip"}
+    shared_trips = repo.get_trip_cards(shared_ids) if shared_ids else []
+    for t in shared_trips:
+        t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
+        t["permission"] = perm_by_id.get(t["id"], "view")
+
+    return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 
 
 @reflection.route("/trips/<int:trip_id>")
@@ -117,6 +128,24 @@ def rename_trip(trip_id: int):
     ok = repo.rename_trip(trip_id, _uid(), title)
     logger.info("旅のタイトル変更: trip_id=%s user=%s", trip_id, _uid())
     return jsonify({"updated": ok, "title": title})
+
+
+@reflection.route("/trips/<int:trip_id>/favorite", methods=["PATCH"])
+@login_required
+def toggle_favorite(trip_id: int):
+    """旅のお気に入り状態を切り替える（本人の旅のみ）。
+
+    body の favorite が与えられればその値に、無ければ現在値を反転する。
+    """
+    trip = _require_trip(trip_id)
+    data = request.get_json(silent=True) or {}
+    if "favorite" in data:
+        favorite = bool(data.get("favorite"))
+    else:
+        favorite = not bool(trip.get("is_favorite"))
+    repo.set_trip_favorite(trip_id, _uid(), favorite)
+    logger.info("お気に入り更新: trip_id=%s favorite=%s", trip_id, favorite)
+    return jsonify({"is_favorite": favorite})
 
 
 @reflection.route("/trips/<int:trip_id>", methods=["DELETE"])

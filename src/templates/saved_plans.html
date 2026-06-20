@@ -23,12 +23,25 @@
     margin: 0;
   }
 
-  #plans-container {
+  #plans-container, #shared-container {
     display: flex;
     flex-direction: column;
     gap: 20px;
     max-width: 860px;
   }
+  .shared-flag {
+    margin-right: auto;
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 0.85em;
+  }
+  .open-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.88em;
+  }
+  .open-link:hover { text-decoration: underline; }
 
   .plan-card {
     background: #fff;
@@ -157,6 +170,11 @@
 <div id="loading">読み込み中...</div>
 <div id="plans-container" style="display:none;"></div>
 
+<div id="shared-section" style="display:none;">
+  <div class="page-header" style="margin-top:32px;"><h1 style="font-size:1.25rem;">🤝 共有されたプラン</h1></div>
+  <div id="shared-container"></div>
+</div>
+
 {% include "_share_modal.html" %}
 
 <script>
@@ -177,13 +195,24 @@
     </details>`;
   }
 
-  function renderPlan(plan) {
+  function renderPlan(plan, opts = {}) {
+    const shared = !!opts.shared;
     const card = document.createElement('div');
     card.className = 'plan-card';
 
     const saved = plan.created_at
       ? new Date(plan.created_at).toLocaleDateString('ja-JP')
       : '';
+
+    const footer = shared
+      ? `<div class="plan-footer">
+           <span class="shared-flag">🤝 共有された</span>
+           <a class="open-link" href="/shared/plan/${esc(plan.id)}">詳細を開く ›</a>
+         </div>`
+      : `<div class="plan-footer">
+           <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
+           <button class="delete-btn" data-id="${esc(plan.id)}">削除</button>
+         </div>`;
 
     card.innerHTML = `
       <div class="plan-summary-block">
@@ -205,32 +234,31 @@
         ${accordion('📅', 'スケジュール', plan.schedule)}
         ${accordion('💰', '費用見積もり', plan.budget_estimate)}
       </div>
-      <div class="plan-footer">
-        <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
-        <button class="delete-btn" data-id="${esc(plan.id)}">削除</button>
-      </div>
+      ${footer}
     `;
 
-    card.querySelector('.share-btn').addEventListener('click', () => {
-      window.openShareModal('plan', plan.id);
-    });
+    if (!shared) {
+      card.querySelector('.share-btn').addEventListener('click', () => {
+        window.openShareModal('plan', plan.id);
+      });
 
-    card.querySelector('.delete-btn').addEventListener('click', async (e) => {
-      if (!confirm('このプランを削除しますか？')) return;
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      btn.textContent = '削除中...';
-      const res = await fetch(`/delete_plan/${plan.id}`, { method: 'DELETE' });
-      const result = await res.json();
-      if (result.status === 'OK') {
-        card.remove();
-        if (!document.querySelector('.plan-card')) showEmpty();
-      } else {
-        btn.disabled = false;
-        btn.textContent = '削除';
-        alert('削除に失敗しました');
-      }
-    });
+      card.querySelector('.delete-btn').addEventListener('click', async (e) => {
+        if (!confirm('このプランを削除しますか？')) return;
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = '削除中...';
+        const res = await fetch(`/delete_plan/${plan.id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.status === 'OK') {
+          card.remove();
+          if (!document.querySelector('#plans-container .plan-card')) showEmpty();
+        } else {
+          btn.disabled = false;
+          btn.textContent = '削除';
+          alert('削除に失敗しました');
+        }
+      });
+    }
 
     return card;
   }
@@ -260,6 +288,21 @@
     }
   }
 
+  async function loadSharedPlans() {
+    try {
+      const res = await fetch('/get_shared_plans');
+      const data = await res.json();
+      if (data.status !== 'OK' || !data.plans || data.plans.length === 0) return;
+      const section = document.getElementById('shared-section');
+      const container = document.getElementById('shared-container');
+      data.plans.forEach(plan => container.appendChild(renderPlan(plan, { shared: true })));
+      section.style.display = 'block';
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   loadPlans();
+  loadSharedPlans();
 </script>
 {% endblock %}

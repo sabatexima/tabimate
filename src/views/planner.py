@@ -251,3 +251,24 @@ def get_my_plans():
     except Exception as e:
         logger.exception("プラン一覧取得失敗: %s", e)
         return json.dumps({'status': 'ERROR', 'message': str(e)}), 500, {'Content-Type': 'application/json'}
+
+
+@planner.route('/get_shared_plans')
+@login_required
+def get_shared_plans():
+    """自分宛に共有された旅行プランを返す（保存プラン画面に統合表示する）。"""
+    try:
+        import db_sharing
+        from db import get_travel_plan_by_id
+        grants = db_sharing.get_grants_for_email(session.get('user_email'))
+        plans = []
+        for g in grants:
+            if g['resource_type'] != 'plan':
+                continue
+            p = get_travel_plan_by_id(g['resource_id'])
+            if p:
+                plans.append(p)
+        return json.dumps({'status': 'OK', 'plans': plans}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        logger.exception("共有プラン一覧取得失敗: %s", e)
+        return json.dumps({'status': 'ERROR', 'message': str(e)}), 500, {'Content-Type': 'application/json'}

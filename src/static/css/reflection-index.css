@@ -98,6 +98,13 @@
     background: var(--primary-color); color: #fff; border-radius: 20px;
     padding: 3px 10px; font-size: 0.72em; font-weight: 700;
   }
+  .unshare-btn {
+    position: absolute; bottom: 8px; right: 8px; z-index: 6;
+    background: rgba(255,255,255,0.92); border: 1px solid rgba(0,0,0,0.12);
+    color: var(--text-muted); border-radius: 14px; padding: 3px 10px;
+    font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s;
+  }
+  .unshare-btn:hover { background: #f43f5e; color: #fff; border-color: #f43f5e; }
 
   /* 旅カード（SNSフィード風: 大きな写真主体）*/
   #trips { display: flex; flex-direction: column; gap: 18px; }

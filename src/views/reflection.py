@@ -76,10 +76,12 @@ def index():
     grants = db_sharing.get_grants_for_email(session.get("user_email"))
     shared_ids = [g["resource_id"] for g in grants if g["resource_type"] == "trip"]
     perm_by_id = {g["resource_id"]: g["permission"] for g in grants if g["resource_type"] == "trip"}
+    grant_by_id = {g["resource_id"]: g["id"] for g in grants if g["resource_type"] == "trip"}
     shared_trips = repo.get_trip_cards(shared_ids, viewer_id=_uid()) if shared_ids else []
     for t in shared_trips:
         t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
         t["permission"] = perm_by_id.get(t["id"], "view")
+        t["grant_id"] = grant_by_id.get(t["id"])
 
     return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 

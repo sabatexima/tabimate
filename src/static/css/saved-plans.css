@@ -140,6 +140,18 @@
     transition: background 0.15s, color 0.15s;
   }
   .delete-btn:hover { background: #f43f5e; color: white; }
+  .unshare-btn {
+    background: none;
+    border: 1px solid #f43f5e;
+    color: #f43f5e;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .unshare-btn:hover { background: #f43f5e; color: white; }
 
   .empty-state {
     text-align: center;

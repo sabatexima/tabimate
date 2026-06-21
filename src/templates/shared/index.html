@@ -21,15 +21,18 @@
   <div class="group-title">📷 旅の記録</div>
   <div class="share-list">
     {% for t in trips %}
-      <a class="share-item" href="{{ url_for('sharing.shared_view', resource_type='trip', resource_id=t.id) }}">
-        <div class="name">{{ t.title }}
-          <span class="perm-tag {{ 'view' if t.permission != 'edit' else '' }}">{{ '編集可' if t.permission == 'edit' else '閲覧' }}</span>
-        </div>
-        <div class="meta">
-          {% if t.start_date %}{{ t.start_date }}{% endif %}
-          {% if t.end_date %} 〜 {{ t.end_date }}{% endif %}
-        </div>
-      </a>
+      <div class="share-item-wrap">
+        <a class="share-item" href="{{ url_for('sharing.shared_view', resource_type='trip', resource_id=t.id) }}">
+          <div class="name">{{ t.title }}
+            <span class="perm-tag {{ 'view' if t.permission != 'edit' else '' }}">{{ '編集可' if t.permission == 'edit' else '閲覧' }}</span>
+          </div>
+          <div class="meta">
+            {% if t.start_date %}{{ t.start_date }}{% endif %}
+            {% if t.end_date %} 〜 {{ t.end_date }}{% endif %}
+          </div>
+        </a>
+        <button class="unshare-btn" data-grant="{{ t.grant_id }}" type="button" aria-label="共有を解除">共有解除</button>
+      </div>
     {% endfor %}
   </div>
 {% endif %}
@@ -38,13 +41,40 @@
   <div class="group-title">🗂️ 旅行プラン</div>
   <div class="share-list">
     {% for p in plans %}
-      <a class="share-item" href="{{ url_for('sharing.shared_view', resource_type='plan', resource_id=p.id) }}">
-        <div class="name">{{ p.destination }}
-          <span class="perm-tag view">閲覧</span>
-        </div>
-        <div class="meta">{{ p.duration or '' }}{% if p.num_people is not none %} ・ {{ p.num_people }}人{% endif %}</div>
-      </a>
+      <div class="share-item-wrap">
+        <a class="share-item" href="{{ url_for('sharing.shared_view', resource_type='plan', resource_id=p.id) }}">
+          <div class="name">{{ p.destination }}
+            <span class="perm-tag view">閲覧</span>
+          </div>
+          <div class="meta">{{ p.duration or '' }}{% if p.num_people is not none %} ・ {{ p.num_people }}人{% endif %}</div>
+        </a>
+        <button class="unshare-btn" data-grant="{{ p.grant_id }}" type="button" aria-label="共有を解除">共有解除</button>
+      </div>
     {% endfor %}
   </div>
 {% endif %}
+
+<script>
+  document.querySelectorAll('.unshare-btn').forEach(function (btn) {
+    btn.addEventListener('click', async function (e) {
+      e.preventDefault();
+      const id = btn.dataset.grant;
+      if (!id || !confirm('この共有を自分の一覧から解除しますか？\n（相手の元データは消えません）')) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/shared/grant/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.deleted) {
+          btn.closest('.share-item-wrap').remove();
+        } else {
+          alert('解除に失敗しました');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        alert('解除に失敗しました');
+        btn.disabled = false;
+      }
+    });
+  });
+</script>
 {% endblock %}

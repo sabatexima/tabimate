@@ -45,6 +45,31 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   }
 
   tripsEl.addEventListener('click', async (ev) => {
+    // 共有された旅の「共有解除」（受領者が自分のアルバムから外す）
+    const unshare = ev.target.closest('.unshare-btn');
+    if (unshare) {
+      ev.preventDefault();
+      const card = unshare.closest('.trip-card');
+      const id = unshare.dataset.grant;
+      if (!id || !confirm('この共有を自分のアルバムから解除しますか？\n（相手の元データは消えません）')) return;
+      unshare.disabled = true;
+      try {
+        const res = await fetch(`/shared/grant/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.deleted) {
+          card.remove();
+          if (typeof applyFilterSort === 'function') applyFilterSort();
+        } else {
+          alert('解除に失敗しました');
+          unshare.disabled = false;
+        }
+      } catch (e) {
+        alert('解除に失敗しました');
+        unshare.disabled = false;
+      }
+      return;
+    }
+
     // お気に入りトグル（カードリンク内にあるので遷移を止める）
     const fav = ev.target.closest('.fav-btn');
     if (fav) {

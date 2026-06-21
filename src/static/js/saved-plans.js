@@ -28,6 +28,7 @@ function esc(str) {
       ? `<div class="plan-footer">
            <span class="shared-flag">🤝 共有された</span>
            <a class="open-link" href="/shared/plan/${esc(plan.id)}">詳細を開く ›</a>
+           <button class="unshare-btn" data-grant="${esc(plan.grant_id)}">共有解除</button>
          </div>`
       : `<div class="plan-footer">
            <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
@@ -74,6 +75,27 @@ function esc(str) {
           btn.disabled = false;
           btn.textContent = '削除';
           alert('削除に失敗しました');
+        }
+      });
+    } else {
+      // 共有された側が自分の保存プラン一覧から共有を解除する
+      const ub = card.querySelector('.unshare-btn');
+      if (ub) ub.addEventListener('click', async () => {
+        if (!plan.grant_id || !confirm('この共有を保存プランから解除しますか？\n（相手の元データは消えません）')) return;
+        ub.disabled = true;
+        try {
+          const res = await fetch(`/shared/grant/${plan.grant_id}`, { method: 'DELETE' });
+          const result = await res.json();
+          if (res.ok && result.deleted) {
+            card.remove();
+            if (!document.querySelector('#plans-container .plan-card')) showEmpty();
+          } else {
+            ub.disabled = false;
+            alert('解除に失敗しました');
+          }
+        } catch (e) {
+          ub.disabled = false;
+          alert('解除に失敗しました');
         }
       });
     }

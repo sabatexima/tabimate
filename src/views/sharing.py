@@ -165,6 +165,18 @@ def revoke_grant(grant_id: int):
     return jsonify({"deleted": ok})
 
 
+@share.route("/shared/grant/<int:grant_id>", methods=["DELETE"])
+@login_required
+def leave_shared(grant_id: int):
+    """共有された側が、自分宛の共有を解除する（自分の一覧から外す）。
+
+    所有者による取消（revoke_grant）とは別で、ここでは受領者本人が
+    自分宛のグラントだけを削除できる。再共有されれば再び表示される。
+    """
+    ok = sharing.delete_grant_as_grantee(grant_id, session.get("user_email"))
+    return jsonify({"deleted": ok})
+
+
 # ----------------------------------------------------------------------
 # 共有された側の閲覧
 # ----------------------------------------------------------------------
@@ -192,11 +204,13 @@ def shared_with_me():
             t = repo.get_trip_by_id(g["resource_id"])
             if t:
                 t["permission"] = g["permission"]
+                t["grant_id"] = g["id"]
                 trips.append(t)
         elif g["resource_type"] == "plan":
             p = db.get_travel_plan_by_id(g["resource_id"])
             if p:
                 p["permission"] = "view"
+                p["grant_id"] = g["id"]
                 plans.append(p)
     return render_template("shared/index.html", trips=trips, plans=plans)
 

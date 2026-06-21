@@ -10,6 +10,8 @@ generate_travel_plan() が外部からの呼び出し口。
 末尾の __main__ ブロックは単体動作確認用のCLIテストハーネス。
 """
 
+from concurrent.futures import ThreadPoolExecutor
+
 from langgraph.graph import StateGraph, START, END
 from chat.models import TravelPlanState
 from chat.agents import (
@@ -21,11 +23,12 @@ from chat.agents import (
 )
 
 
-# プラン生成の状態グラフを構築する
+# プラン生成の状態グラフを構築する。
+# transport（交通費）と sightseeing_candidates（観光候補抽出）は互いに独立なので、
+# グラフには含めず generate_travel_plan で並列に先行実行してから本体を回す
+# （これらは差し戻しの戻り先ではないため、グラフから外しても再生成ループに影響しない）。
 workflow = StateGraph(TravelPlanState)
 
-workflow.add_node("transport", transport_agent)
-workflow.add_node("sightseeing_candidates", sightseeing_candidates)
 workflow.add_node("sightseeing", sightseeing_expert)
 workflow.add_node("accommodation_candidates", accommodation_candidates)
 workflow.add_node("accommodation", accommodation_agent)
@@ -35,9 +38,7 @@ workflow.add_node("timekeeper", timekeeper)
 workflow.add_node("cost_manager", cost_manager)
 workflow.add_node("balancer", balancer)
 
-workflow.add_edge(START, "transport")
-workflow.add_edge("transport", "sightseeing_candidates")
-workflow.add_edge("sightseeing_candidates", "sightseeing")
+workflow.add_edge(START, "sightseeing")
 workflow.add_edge("sightseeing", "accommodation_candidates")
 workflow.add_edge("accommodation_candidates", "accommodation")
 workflow.add_edge("accommodation", "gourmet_candidates")
@@ -79,6 +80,18 @@ def generate_travel_plan(inputs: dict):
     inputs.setdefault("spot_candidates", [])
     inputs.setdefault("accommodation_candidates", [])
     inputs.setdefault("restaurant_candidates", [])
+
+    # 互いに独立な「交通費の試算」と「観光候補の抽出」を並列に先行実行して数秒短縮する。
+    # どちらも inputs を読むだけで書き換えないためスレッド共有して安全。
+    # transport_agent は予算超過時に ValueError を投げるので result() で伝播させる。
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_transport = ex.submit(transport_agent, inputs)
+        f_sightseeing = ex.submit(sightseeing_candidates, inputs)
+        transport_out = f_transport.result()
+        sightseeing_out = f_sightseeing.result()
+    inputs.update(transport_out)
+    inputs.update(sightseeing_out)
+
     return graph.invoke(inputs, {"recursion_limit": 60})
 
 

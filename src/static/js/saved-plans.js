@@ -15,16 +15,85 @@ function esc(str) {
     </details>`;
   }
 
+  // プラン本体（概要＋アコーディオン）のHTML。renderPlan / プレビューで共用。
+  function planBodyHtml(plan) {
+    const saved = plan.created_at
+      ? new Date(plan.created_at).toLocaleDateString('ja-JP')
+      : '';
+    return `
+      <div class="plan-summary-block">
+        <div class="plan-title">🗾 旅行プラン：${esc(plan.destination)}</div>
+        ${saved ? `<div class="plan-meta">保存日: ${esc(saved)}</div>` : ''}
+        <div class="plan-summary-grid">
+          <span>📍 出発地: ${esc(plan.departure_location || '—')}</span>
+          <span>⏱️ 期間: ${esc(plan.duration || '—')}</span>
+          <span>👥 人数: ${plan.num_people != null ? esc(plan.num_people) + '人' : '—'}</span>
+          <span>💴 予算上限: ${fmt(plan.budget_limit)}円/人</span>
+        </div>
+      </div>
+      <div class="plan-accordion">
+        ${accordion('✨', '主要観光地', plan.spots)}
+        ${accordion('🍱', 'グルメ', plan.restaurants)}
+        ${accordion('🏨', '宿泊施設', plan.accommodation)}
+        ${accordion('📅', 'スケジュール', plan.schedule)}
+        ${accordion('💰', '費用見積もり', plan.budget_estimate)}
+      </div>`;
+  }
+
+  // 修正案のプレビュー（未保存）。確定するまで元プランは変更しない。
+  function renderPreview(proposed, origPlan, opts = {}) {
+    const shared = !!opts.shared;
+    const card = document.createElement('div');
+    card.className = 'plan-card plan-preview';
+    card.innerHTML = `
+      <div class="preview-banner">✏️ 修正案のプレビュー（まだ保存していません）</div>
+      ${planBodyHtml(proposed)}
+      <div class="plan-footer">
+        <button class="preview-cancel" type="button">やめる</button>
+        <button class="preview-apply" type="button">この内容で更新する</button>
+      </div>`;
+
+    card.querySelector('.preview-cancel').addEventListener('click', () => {
+      card.replaceWith(renderPlan(origPlan, { shared }));  // 元のプランに戻す
+    });
+
+    card.querySelector('.preview-apply').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = '保存中…';
+      try {
+        const res = await fetch(`/apply_saved_plan/${proposed.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: proposed }),
+        });
+        const result = await res.json();
+        if (result.status === 'OK' && result.plan) {
+          const merged = Object.assign({}, result.plan, {
+            permission: origPlan.permission, grant_id: origPlan.grant_id,
+          });
+          card.replaceWith(renderPlan(merged, { shared }));
+        } else {
+          alert(result.message || '更新に失敗しました');
+          btn.disabled = false;
+          btn.textContent = 'この内容で更新する';
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。もう一度お試しください。');
+        btn.disabled = false;
+        btn.textContent = 'この内容で更新する';
+      }
+    });
+
+    return card;
+  }
+
   function renderPlan(plan, opts = {}) {
     const shared = !!opts.shared;
     // 自分のプラン、または「編集可」で共有されたプランはチャット修正できる
     const editable = !shared || plan.permission === 'edit';
     const card = document.createElement('div');
     card.className = 'plan-card';
-
-    const saved = plan.created_at
-      ? new Date(plan.created_at).toLocaleDateString('ja-JP')
-      : '';
 
     const editBtnHtml = editable
       ? `<button class="edit-btn" data-id="${esc(plan.id)}">✏️ チャットで修正</button>`
@@ -49,23 +118,7 @@ function esc(str) {
       </div>` : '';
 
     card.innerHTML = `
-      <div class="plan-summary-block">
-        <div class="plan-title">🗾 旅行プラン：${esc(plan.destination)}</div>
-        ${saved ? `<div class="plan-meta">保存日: ${esc(saved)}</div>` : ''}
-        <div class="plan-summary-grid">
-          <span>📍 出発地: ${esc(plan.departure_location || '—')}</span>
-          <span>⏱️ 期間: ${esc(plan.duration || '—')}</span>
-          <span>👥 人数: ${plan.num_people != null ? esc(plan.num_people) + '人' : '—'}</span>
-          <span>💴 予算上限: ${fmt(plan.budget_limit)}円/人</span>
-        </div>
-      </div>
-      <div class="plan-accordion">
-        ${accordion('✨', '主要観光地', plan.spots)}
-        ${accordion('🍱', 'グルメ', plan.restaurants)}
-        ${accordion('🏨', '宿泊施設', plan.accommodation)}
-        ${accordion('📅', 'スケジュール', plan.schedule)}
-        ${accordion('💰', '費用見積もり', plan.budget_estimate)}
-      </div>
+      ${planBodyHtml(plan)}
       ${footer}
       ${editArea}
     `;
@@ -121,11 +174,11 @@ function esc(str) {
               try { d = JSON.parse(line.slice(6)); } catch (e) { continue; }
               if (d.status === 'OK' && d.plan) {
                 settled = true;
-                // 共有編集時は共有コンテキスト（共有バッジ/編集権/解除）を維持して差し替え
-                const merged = Object.assign({}, d.plan, {
+                // まだ保存せず、修正案をプレビュー表示（確定は「更新する」で）
+                const proposed = Object.assign({}, d.plan, {
                   permission: plan.permission, grant_id: plan.grant_id,
                 });
-                card.replaceWith(renderPlan(merged, { shared }));
+                card.replaceWith(renderPreview(proposed, plan, { shared }));
                 if (d.plan.feedback && d.plan.feedback.includes('⚠️')) alert(d.plan.feedback);
               } else if (d.status === 'ERROR') {
                 settled = true;

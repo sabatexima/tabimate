@@ -215,6 +215,57 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
     return d
 
 
+def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
+    """既存の保存プランを上書き更新する（本人のプランのみ）。チャット修正で使用。"""
+    with _get_engine().begin() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        result = conn.execute(
+            text("""
+                UPDATE travel_plans SET
+                    destination = :destination,
+                    travel_date = :travel_date,
+                    duration = :duration,
+                    num_people = :num_people,
+                    budget_limit = :budget_limit,
+                    departure_location = :departure_location,
+                    transport_cost = :transport_cost,
+                    remaining_budget = :remaining_budget,
+                    status = :status,
+                    feedback = :feedback,
+                    themes = :themes,
+                    special_requirements = :special_requirements,
+                    spots = :spots,
+                    restaurants = :restaurants,
+                    schedule_items = :schedule_items,
+                    accommodation = :accommodation,
+                    budget_estimate = :budget_estimate
+                WHERE id = :id AND google_user_id = :uid
+            """),
+            {
+                "id":                   plan_id,
+                "uid":                  google_user_id,
+                "destination":          state.get("destination"),
+                "travel_date":          state.get("travel_date"),
+                "duration":             state.get("duration"),
+                "num_people":           state.get("num_people"),
+                "budget_limit":         state.get("budget_limit"),
+                "departure_location":   state.get("departure_location"),
+                "transport_cost":       state.get("transport_cost"),
+                "remaining_budget":     state.get("remaining_budget"),
+                "status":               state.get("status"),
+                "feedback":             state.get("feedback"),
+                "themes":               json.dumps(state.get("themes", []), ensure_ascii=False),
+                "special_requirements": json.dumps(state.get("special_requirements", []), ensure_ascii=False),
+                "spots":                json.dumps(state.get("spots", []), ensure_ascii=False),
+                "restaurants":          json.dumps(state.get("restaurants", []), ensure_ascii=False),
+                "schedule_items":       json.dumps(state.get("schedule", []), ensure_ascii=False),
+                "accommodation":        json.dumps(state.get("accommodation", []), ensure_ascii=False),
+                "budget_estimate":      json.dumps(state.get("budget_estimate", []), ensure_ascii=False),
+            },
+        )
+        return result.rowcount > 0
+
+
 def delete_travel_plan(plan_id: int, google_user_id: str) -> bool:
     with _get_engine().begin() as conn:
         result = conn.execute(

@@ -206,3 +206,71 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     formatted = _format_plan(final_state)
     logger.info("プラン生成が完了しました: request_id=%s, status=%s", request_id, final_state.get("status"))
     return formatted
+
+
+class _PlanEditIntent(BaseModel):
+    edit_targets: List[str] = Field(
+        default_factory=list,
+        description=(
+            "変更が必要な領域だけを列挙: sightseeing(観光地)/gourmet(飲食店)/"
+            "accommodation(宿泊)/schedule(スケジュール)/budget(費用)/transport(交通手段)。"
+            "全体的に作り直す場合は ['all']。"
+        ),
+    )
+
+
+def _as_list(value) -> list:
+    if isinstance(value, list):
+        return value
+    if value in (None, ""):
+        return []
+    return [value]
+
+
+def edit_saved_plan(plan: dict, message: str) -> dict:
+    """保存済みプランに対するチャット修正を実行し、更新後の最終状態を返す。
+
+    変更要望から対象領域を判定し、対象だけを再生成する（指定外は前回値を維持）。
+    予算超過時は generate_travel_plan が ValueError を送出する。
+    """
+    intent_messages = [
+        SystemMessage(content=(
+            "あなたは旅行プラン編集の意図分類器です。ユーザーの変更指示から、変更が必要な領域だけを "
+            "edit_targets に列挙してください。領域: sightseeing(観光地)/gourmet(飲食店)/"
+            "accommodation(宿泊)/schedule(スケジュール)/budget(費用)/transport(交通手段)。"
+            "全体的な作り直しは ['all']。"
+        )),
+        HumanMessage(content=(
+            f"現在のプラン: 行き先={plan.get('destination')} / 期間={plan.get('duration')}。\n"
+            f"変更指示: {message}"
+        )),
+    ]
+    try:
+        intent = invoke_with_retry(llm.with_structured_output(_PlanEditIntent), intent_messages)
+        targets = intent.edit_targets or ["all"]
+    except Exception:
+        logger.warning("プラン編集の意図分類に失敗。全体作り直しにフォールバック", exc_info=True)
+        targets = ["all"]
+
+    inputs = {
+        "destination":          plan.get("destination"),
+        "travel_date":          plan.get("travel_date"),
+        "duration":             plan.get("duration"),
+        "themes":               _as_list(plan.get("themes")),
+        "num_people":           plan.get("num_people"),
+        "budget_limit":         plan.get("budget_limit"),
+        "departure_location":   plan.get("departure_location"),
+        "transport_mode":       "おまかせ",
+        "no_car":               False,
+        "special_requirements": _as_list(plan.get("special_requirements")),
+        "user_feedback":        message,
+    }
+    # 対象が限定されていれば、前回プランの成果物を引き継いで対象だけ再生成（部分編集）
+    if targets and "all" not in targets:
+        for key in ("spots", "restaurants", "accommodation", "schedule", "budget_estimate"):
+            inputs[key] = _as_list(plan.get(key))
+        inputs["transport_cost"] = plan.get("transport_cost") or 0
+        inputs["remaining_budget"] = plan.get("remaining_budget") or 0
+        inputs["edit_targets"] = targets
+    logger.info("保存プランのチャット修正: targets=%s request=%s", targets, message)
+    return generate_travel_plan(inputs)

@@ -146,6 +146,51 @@
   }
   .unshare-btn:hover { background: #f43f5e; color: white; }
 
+  /* チャットで修正 */
+  .edit-btn {
+    margin-right: auto;  /* 左寄せ（共有・削除は右側に残す）*/
+    background: none;
+    border: 1px solid rgba(79,168,58,0.5);
+    color: var(--primary-color);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .edit-btn:hover { background: var(--primary-color); color: white; }
+  .plan-edit {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px 14px;
+  }
+  .plan-edit[hidden] { display: none; }
+  .plan-edit-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 0.9em;
+    outline: none;
+  }
+  .plan-edit-input:focus { border-color: var(--primary-color); }
+  .plan-edit-send {
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .plan-edit-send:hover { background: #418c30; }
+  .plan-edit-send:disabled { background: #aaa; cursor: not-allowed; }
+
   .empty-state {
     text-align: center;
     color: var(--text-muted);

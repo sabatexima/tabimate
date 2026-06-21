@@ -118,6 +118,7 @@
             <button class="fav-btn {{ 'on' if trip.is_favorite else '' }}" type="button"
                     aria-label="お気に入り">{{ '★' if trip.is_favorite else '☆' }}</button>
             <span class="share-flag">🤝 {{ '編集可' if trip.permission == 'edit' else '閲覧' }}</span>
+            <button class="unshare-btn" type="button" data-grant="{{ trip.grant_id }}" aria-label="共有を解除">共有解除</button>
             {% if trip.stickers_preview %}
               <div class="badges">
                 {% for s in trip.stickers_preview %}<span class="badge">🪧 {{ s }}</span>{% endfor %}

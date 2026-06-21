@@ -17,5 +17,13 @@
     border-radius: 20px; padding: 1px 9px; font-size: 0.72em; font-weight: 700; margin-left: 6px;
   }
   .perm-tag.view { background: #b2bec3; }
+  .share-item-wrap { position: relative; }
+  .unshare-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(255,255,255,0.92); border: 1px solid rgba(0,0,0,0.12);
+    color: var(--text-muted); border-radius: 14px; padding: 3px 10px;
+    font-size: 0.72em; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s;
+  }
+  .unshare-btn:hover { background: #f43f5e; color: #fff; border-color: #f43f5e; }
   .empty-state { text-align: center; color: var(--text-muted); padding: 50px 0; font-size: 1.0em; }
   .empty-state .icon { font-size: 2.6rem; margin-bottom: 10px; }

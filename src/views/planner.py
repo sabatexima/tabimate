@@ -267,6 +267,7 @@ def get_shared_plans():
                 continue
             p = get_travel_plan_by_id(g['resource_id'])
             if p:
+                p['grant_id'] = g['id']
                 plans.append(p)
         return json.dumps({'status': 'OK', 'plans': plans}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
     except Exception as e:

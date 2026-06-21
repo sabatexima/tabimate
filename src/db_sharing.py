@@ -226,6 +226,24 @@ def delete_grant(grant_id: int, owner_user_id: str) -> bool:
         return result.rowcount > 0
 
 
+def delete_grant_as_grantee(grant_id: int, grantee_email: str) -> bool:
+    """共有された側が、自分宛の共有を解除する（自分のメール宛グラントのみ）。
+
+    所有者が取り消す delete_grant とは別物で、ここでは grantee_email 本人だけが
+    自分宛のグラントを削除できる（他人宛のグラントは消せない）。
+    """
+    email = _norm_email(grantee_email)
+    if not email:
+        return False
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        result = conn.execute(
+            text("DELETE FROM share_grants WHERE id = :id AND grantee_email = :email"),
+            {"id": grant_id, "email": email},
+        )
+        return result.rowcount > 0
+
+
 def get_grant_for_email(resource_type: str, resource_id: int, grantee_email: str) -> dict | None:
     """指定リソースに対する、あるメールの共有権限を返す（アクセス判定用）。"""
     email = _norm_email(grantee_email)

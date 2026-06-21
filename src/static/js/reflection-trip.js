@@ -157,7 +157,10 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     fig.className = 'photo';
     if (p.id != null) fig.dataset.id = p.id;
     const img = document.createElement('img');
-    img.src = p.url; img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
+    img.src = p.thumb_url || p.url;
+    img.dataset.full = p.url;
+    img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
+    img.onerror = () => { img.onerror = null; img.src = img.dataset.full; };
     const del = document.createElement('button');
     del.className = 'photo-del'; del.setAttribute('aria-label', '写真を削除'); del.textContent = '×';
     fig.appendChild(img); fig.appendChild(del);
@@ -201,7 +204,7 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     if (lbCount === 0) { lbClose(); return; }
     lbIndex = (i + lbCount) % lbCount;
     const img = figs[lbIndex].querySelector('img');
-    lbImg.src = img ? img.src : '';
+    lbImg.src = img ? (img.dataset.full || img.src) : '';
     lbCounter.textContent = `${lbIndex + 1} / ${lbCount}`;
   }
   function lbOpen(i) {

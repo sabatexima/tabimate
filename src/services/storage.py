@@ -75,6 +75,36 @@ def _make_key(user_id: str, trip_id: int, filename: str) -> str:
     return f"trips/{trip_id}/{user_id}/{uuid.uuid4().hex}{ext}"
 
 
+def _thumb_key(key: str) -> str:
+    """オリジナルのキーから対応するサムネイルのキーを導出する（同じ所有者配下）。"""
+    if "/" in key:
+        head, name = key.rsplit("/", 1)
+        base = name.rsplit(".", 1)[0]
+        return f"{head}/thumb/{base}.jpg"
+    return f"thumb/{key}.jpg"
+
+
+def _within_local(path: Path) -> bool:
+    """resolve 後のパスがアップロードディレクトリ配下かを安全に判定する。"""
+    base = _LOCAL_DIR.resolve()
+    try:
+        return path.resolve().is_relative_to(base)
+    except AttributeError:  # Python < 3.9 フォールバック
+        return str(path.resolve()).startswith(str(base) + os.sep)
+
+
+def save_at(key: str, data: bytes, content_type: str = "image/jpeg") -> str:
+    """キーを指定してバイト列を保存する（サムネイル等、キーを自前で決めたい用途）。"""
+    if using_gcs():
+        bucket = _get_gcs_client().bucket(_GCS_BUCKET)
+        bucket.blob(key).upload_from_string(data, content_type=content_type)
+        return key
+    dest = _LOCAL_DIR / key
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return key
+
+
 def save(user_id: str, trip_id: int, filename: str, data: bytes,
          content_type: str = "application/octet-stream") -> str:
     """写真バイト列を保存し、storage_path（識別子）を返す。"""
@@ -172,6 +202,19 @@ def get_urls(storage_paths) -> dict:
     return result
 
 
+def get_thumb_url(storage_path: str) -> str:
+    """サムネイルの配信URLを返す（オリジナルのキーから導出）。"""
+    return get_url(_thumb_key(storage_path))
+
+
+def get_thumb_urls(storage_paths) -> dict:
+    """オリジナルpath -> サムネイルURL のマップを返す（署名はキャッシュ＋並列）。"""
+    paths = list(dict.fromkeys(storage_paths))
+    thumb_for = {p: _thumb_key(p) for p in paths}
+    thumb_urls = get_urls(thumb_for.values())
+    return {p: thumb_urls.get(tk) for p, tk in thumb_for.items()}
+
+
 def read_bytes(storage_path: str) -> bytes | None:
     """保存実体のバイト列を返す（GCS/ローカルどちらでも）。取得不可は None。
 
@@ -192,47 +235,49 @@ def read_local(storage_path: str) -> bytes | None:
     """ローカルFS保存の写真を読み出す（GCS時は使わない）。"""
     if using_gcs():
         return None
-    path = (_LOCAL_DIR / storage_path).resolve()
-    # ディレクトリトラバーサル防止
-    if not str(path).startswith(str(_LOCAL_DIR.resolve())):
+    path = _LOCAL_DIR / storage_path
+    # ディレクトリトラバーサル防止（前方一致ではなくパス包含で判定）
+    if not _within_local(path):
         logger.warning("不正なパスアクセスを拒否: %s", storage_path)
         return None
+    path = path.resolve()
     if not path.is_file():
         return None
     return path.read_bytes()
 
 
+def _delete_key(key: str) -> bool:
+    """単一キーの実体を削除する（存在しなくても True／失敗時のみ False）。"""
+    if using_gcs():
+        try:
+            _get_gcs_client().bucket(_GCS_BUCKET).blob(key).delete(if_generation_match=None)
+            return True
+        except Exception as e:
+            if e.__class__.__name__ == "NotFound":
+                return True  # 既に無い場合は許容
+            logger.warning("GCSからの削除に失敗: %s", key, exc_info=True)
+            return False
+
+    path = _LOCAL_DIR / key
+    if not _within_local(path):
+        logger.warning("不正なパスの削除を拒否: %s", key)
+        return False
+    try:
+        rp = path.resolve()
+        if rp.is_file():
+            rp.unlink()
+        return True
+    except Exception:
+        logger.warning("ローカルからの削除に失敗: %s", key, exc_info=True)
+        return False
+
+
 def delete(storage_path: str) -> bool:
-    """保存実体を削除する（GCS/ローカルどちらでも）。
+    """保存実体を削除する（GCS/ローカルどちらでも）。サムネイルも併せて掃除する。
 
     旅や写真の削除時に呼び、ストレージ上の孤立ファイル（＝無駄なコスト）を防ぐ。
     対象が存在しなくても True を返す（冪等）。失敗時のみ False。
     """
-    if using_gcs():
-        try:
-            bucket = _get_gcs_client().bucket(_GCS_BUCKET)
-            # 既に無い場合でもエラーにしない
-            bucket.blob(storage_path).delete(if_generation_match=None)
-            logger.info("GCSから削除: bucket=%s key=%s", _GCS_BUCKET, storage_path)
-            return True
-        except Exception as e:
-            # NotFound は許容（既に消えている）
-            if e.__class__.__name__ == "NotFound":
-                return True
-            logger.warning("GCSからの削除に失敗: %s", storage_path, exc_info=True)
-            return False
-
-    # ローカルFS
-    path = (_LOCAL_DIR / storage_path).resolve()
-    # ディレクトリトラバーサル防止
-    if not str(path).startswith(str(_LOCAL_DIR.resolve())):
-        logger.warning("不正なパスの削除を拒否: %s", storage_path)
-        return False
-    try:
-        if path.is_file():
-            path.unlink()
-            logger.info("ローカルから削除: path=%s", path)
-        return True
-    except Exception:
-        logger.warning("ローカルからの削除に失敗: %s", storage_path, exc_info=True)
-        return False
+    ok = _delete_key(storage_path)
+    _delete_key(_thumb_key(storage_path))  # サムネイルも削除（無ければ無視）
+    return ok

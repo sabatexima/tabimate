@@ -41,31 +41,6 @@ CREATE TABLE IF NOT EXISTS photos (
 ) CHARACTER SET utf8mb4
 """
 
-_CREATE_ACHIEVEMENTS_TABLE = """
-CREATE TABLE IF NOT EXISTS achievements (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    trip_id     INT NOT NULL,
-    title       VARCHAR(255) NOT NULL,
-    flavor_text TEXT,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_ach_trip (trip_id)
-) CHARACTER SET utf8mb4
-"""
-
-_CREATE_REPORTS_TABLE = """
-CREATE TABLE IF NOT EXISTS trip_reports (
-    id                 INT AUTO_INCREMENT PRIMARY KEY,
-    trip_id            INT NOT NULL,
-    area               VARCHAR(255) NULL,
-    tone               VARCHAR(50),
-    body               TEXT,
-    token_usage_input  INT DEFAULT 0,
-    token_usage_output INT DEFAULT 0,
-    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_report_trip (trip_id)
-) CHARACTER SET utf8mb4
-"""
-
 # 付箋（sticker）: 旅の写真から生成する短い言葉。アプリの主役。
 # text   = ユーザーに見せる短い付箋の言葉（例:「曇り空が同行者」）
 # basis  = 生成根拠（写真の何から来たか）。内部用でユーザーには返さない。
@@ -156,8 +131,6 @@ def _migrate_favorites_once(conn) -> None:
 def _ensure_all(conn) -> None:
     conn.execute(text(_CREATE_TRIPS_TABLE))
     conn.execute(text(_CREATE_PHOTOS_TABLE))
-    conn.execute(text(_CREATE_ACHIEVEMENTS_TABLE))
-    conn.execute(text(_CREATE_REPORTS_TABLE))
     conn.execute(text(_CREATE_STICKERS_TABLE))
     conn.execute(text(_CREATE_TRIP_FAVORITES_TABLE))
     # 既存DB向け: お気に入り列が無ければ追加（移行元として保持）
@@ -379,8 +352,6 @@ def delete_trip(trip_id: int, user_id: str) -> bool:
         _ensure_all(conn)
         # 関連データも掃除
         conn.execute(text("DELETE FROM photos WHERE trip_id = :id"), {"id": trip_id})
-        conn.execute(text("DELETE FROM achievements WHERE trip_id = :id"), {"id": trip_id})
-        conn.execute(text("DELETE FROM trip_reports WHERE trip_id = :id"), {"id": trip_id})
         conn.execute(text("DELETE FROM stickers WHERE trip_id = :id"), {"id": trip_id})
         conn.execute(text("DELETE FROM trip_favorites WHERE trip_id = :id"), {"id": trip_id})
         result = conn.execute(
@@ -450,41 +421,6 @@ def get_photos(trip_id: int) -> list:
 
 
 # ----------------------------------------------------------------------
-# achievements
-# ----------------------------------------------------------------------
-def replace_achievements(trip_id: int, items: list) -> None:
-    """既存の称号を消して付け直す（再生成時の重複防止）。items=[{title, flavor_text}]"""
-    with get_engine().begin() as conn:
-        _ensure_all(conn)
-        conn.execute(text("DELETE FROM achievements WHERE trip_id = :tid"), {"tid": trip_id})
-        for it in items:
-            conn.execute(
-                text(
-                    "INSERT INTO achievements (trip_id, title, flavor_text) "
-                    "VALUES (:tid, :title, :flavor)"
-                ),
-                {"tid": trip_id, "title": it.get("title", ""), "flavor": it.get("flavor_text", "")},
-            )
-
-
-def get_achievements(trip_id: int) -> list:
-    with get_engine().connect() as conn:
-        _ensure_all(conn)
-        rows = conn.execute(
-            text("SELECT id, title, flavor_text, created_at FROM achievements "
-                 "WHERE trip_id = :tid ORDER BY id ASC"),
-            {"tid": trip_id},
-        ).fetchall()
-    result = []
-    for row in rows:
-        d = _row_to_dict(row)
-        if d.get("created_at") is not None:
-            d["created_at"] = str(d["created_at"])
-        result.append(d)
-    return result
-
-
-# ----------------------------------------------------------------------
 # stickers（付箋）: アプリの主役。再生成時は付け直す。
 # ----------------------------------------------------------------------
 def replace_stickers(trip_id: int, items: list) -> None:
@@ -529,37 +465,3 @@ def delete_sticker(sticker_id: int, trip_id: int) -> bool:
             {"sid": sticker_id, "tid": trip_id},
         )
         return result.rowcount > 0
-
-
-# ----------------------------------------------------------------------
-# trip_reports
-# ----------------------------------------------------------------------
-def save_report(trip_id: int, body: str, tone: str, area=None,
-                token_in: int = 0, token_out: int = 0) -> int:
-    with get_engine().begin() as conn:
-        _ensure_all(conn)
-        result = conn.execute(
-            text(
-                "INSERT INTO trip_reports (trip_id, area, tone, body, token_usage_input, token_usage_output) "
-                "VALUES (:tid, :area, :tone, :body, :ti, :to)"
-            ),
-            {"tid": trip_id, "area": area, "tone": tone, "body": body, "ti": token_in, "to": token_out},
-        )
-        return result.lastrowid
-
-
-def get_reports(trip_id: int) -> list:
-    with get_engine().connect() as conn:
-        _ensure_all(conn)
-        rows = conn.execute(
-            text("SELECT id, area, tone, body, token_usage_input, token_usage_output, created_at "
-                 "FROM trip_reports WHERE trip_id = :tid ORDER BY created_at DESC"),
-            {"tid": trip_id},
-        ).fetchall()
-    result = []
-    for row in rows:
-        d = _row_to_dict(row)
-        if d.get("created_at") is not None:
-            d["created_at"] = str(d["created_at"])
-        result.append(d)
-    return result

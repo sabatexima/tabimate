@@ -29,14 +29,6 @@
     font-weight: 700;
     font-size: 0.85em;
   }
-  .open-link {
-    color: var(--primary-color);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.88em;
-  }
-  .open-link:hover { text-decoration: underline; }
-
   .plan-card {
     background: #fff;
     border-radius: 16px;
@@ -114,6 +106,7 @@
     border-top: 1px solid rgba(79,168,58,0.1);
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 8px;
   }
   .share-btn {

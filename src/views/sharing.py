@@ -235,8 +235,9 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
         if not trip:
             abort(404)
         photos = repo.get_photos(resource_id)
+        url_map = storage.get_urls([p["storage_path"] for p in photos])
         for p in photos:
-            p["url"] = storage.get_url(p["storage_path"])
+            p["url"] = url_map.get(p["storage_path"])
         stickers = repo.get_stickers(resource_id)
         return render_template(
             "shared/trip.html",

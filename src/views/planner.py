@@ -256,11 +256,50 @@ def delete_plan(plan_id):
         return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}
 
 
+def _can_edit_plan(plan: dict, plan_id: int) -> bool:
+    """ログイン中のユーザーがこのプランを編集できるか（所有者 or 編集権限の共有相手）。"""
+    if not plan:
+        return False
+    if plan.get('google_user_id') == session.get('user_id'):
+        return True
+    import db_sharing
+    grant = db_sharing.get_grant_for_email('plan', plan_id, session.get('user_email'))
+    return bool(grant and grant.get('permission') == 'edit')
+
+
+def _plan_to_view_dict(state: dict, plan_id: int, created_at) -> dict:
+    """生成結果(TravelPlanState)を、一覧描画と同じ形のプラン辞書に整える（プレビュー用）。"""
+    return {
+        'id': plan_id,
+        'destination': state.get('destination'),
+        'travel_date': state.get('travel_date'),
+        'duration': state.get('duration'),
+        'num_people': state.get('num_people'),
+        'budget_limit': state.get('budget_limit'),
+        'departure_location': state.get('departure_location'),
+        'transport_cost': state.get('transport_cost'),
+        'remaining_budget': state.get('remaining_budget'),
+        'status': state.get('status'),
+        'feedback': state.get('feedback'),
+        'themes': state.get('themes', []),
+        'special_requirements': state.get('special_requirements', []),
+        'spots': state.get('spots', []),
+        'restaurants': state.get('restaurants', []),
+        'schedule': state.get('schedule', []),
+        'accommodation': state.get('accommodation', []),
+        'budget_estimate': state.get('budget_estimate', []),
+        'created_at': created_at,
+    }
+
+
 @planner.route('/edit_saved_plan/<int:plan_id>', methods=['POST'])
 @login_required
 def edit_saved_plan(plan_id):
-    """保存済みプランをチャット指示で修正し、上書き保存して更新後のプランを返す。"""
-    from db import get_travel_plan_by_id, update_travel_plan
+    """保存済みプランをチャット指示で修正し、修正案（プレビュー）を返す。
+
+    この時点では保存しない。確定は /apply_saved_plan で行う。
+    """
+    from db import get_travel_plan_by_id
     from chat.chat import edit_saved_plan as run_plan_edit
 
     user_id = session['user_id']
@@ -277,15 +316,7 @@ def edit_saved_plan(plan_id):
     plan = get_travel_plan_by_id(plan_id)
     if not plan:
         return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
-
-    # 編集できるのは「所有者本人」または「編集権限で共有された本人」。
-    owner_id = plan.get('google_user_id')
-    can_edit = (owner_id == user_id)
-    if not can_edit:
-        import db_sharing
-        grant = db_sharing.get_grant_for_email('plan', plan_id, session.get('user_email'))
-        can_edit = bool(grant and grant.get('permission') == 'edit')
-    if not can_edit:
+    if not _can_edit_plan(plan, plan_id):
         return json.dumps({'status': 'ERROR', 'message': 'このプランを編集する権限がありません'}), 403, {'Content-Type': 'application/json'}
 
     # 生成に時間がかかるため、本体チャットと同様に SSE でストリーミングする
@@ -296,9 +327,8 @@ def edit_saved_plan(plan_id):
     def run_edit():
         try:
             final_state = run_plan_edit(plan, message)
-            # 共有編集でも書き換える対象は所有者の行（共同編集＝上書き）
-            update_travel_plan(plan_id, owner_id, final_state)
-            result['plan'] = get_travel_plan_by_id(plan_id)
+            # まだ保存しない。修正案（プレビュー）として返す
+            result['plan'] = _plan_to_view_dict(final_state, plan_id, plan.get('created_at'))
         except ValueError as e:
             result['error_message'] = str(e)  # 予算超過などユーザーに伝える値域エラー
         except Exception:
@@ -325,6 +355,29 @@ def edit_saved_plan(plan_id):
         content_type='text/event-stream',
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
     )
+
+
+@planner.route('/apply_saved_plan/<int:plan_id>', methods=['POST'])
+@login_required
+def apply_saved_plan(plan_id):
+    """プレビューした修正案を確定して保存（上書き）する。生成は走らない。"""
+    from db import get_travel_plan_by_id, update_travel_plan
+
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+    if not _can_edit_plan(plan, plan_id):
+        return json.dumps({'status': 'ERROR', 'message': 'このプランを編集する権限がありません'}), 403, {'Content-Type': 'application/json'}
+
+    data = request.get_json(silent=True) or {}
+    new_plan = data.get('plan')
+    if not isinstance(new_plan, dict):
+        return json.dumps({'status': 'ERROR', 'message': '更新内容が不正です'}), 400, {'Content-Type': 'application/json'}
+
+    # 共有編集でも書き換える対象は所有者の行（共同編集＝上書き）
+    update_travel_plan(plan_id, plan.get('google_user_id'), new_plan)
+    logger.info("保存プランの修正を確定: plan_id=%s", plan_id)
+    return json.dumps({'status': 'OK', 'plan': get_travel_plan_by_id(plan_id)}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_my_plans')

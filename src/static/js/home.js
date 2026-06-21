@@ -19,6 +19,12 @@ const chatBox = document.getElementById('chat-box');
     chatBox.appendChild(el);
   }
 
+  // エラーや接続断をユーザーに知らせる（無反応で止まったように見せない）
+  function showSystemMessage(text) {
+    chatBox.appendChild(createMessageElement('ai', text));
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
@@ -122,6 +128,7 @@ const chatBox = document.getElementById('chat-box');
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let settled = false; // OK/ABORTED/ERROR のいずれかを受け取ったか
 
       while (true) {
         const { done, value } = await reader.read();
@@ -133,15 +140,30 @@ const chatBox = document.getElementById('chat-box');
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
-          const data = JSON.parse(line.slice(6));
+          let data;
+          try {
+            data = JSON.parse(line.slice(6));
+          } catch (e) {
+            continue; // 不完全な行はスキップ
+          }
           if (data.status === 'OK' || data.status === 'ABORTED') {
+            settled = true;
             await loadMessages(true);
+          } else if (data.status === 'ERROR') {
+            settled = true;
+            showSystemMessage(data.message || 'エラーが発生しました。もう一度お試しください。');
           }
         }
+      }
+
+      // OK/ABORTED/ERROR を一度も受け取らずに切れた場合（接続断・タイムアウト等）
+      if (!settled) {
+        showSystemMessage('通信が途切れたか、時間がかかりすぎたため完了できませんでした。もう一度お試しください🍀');
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Error:', error);
+        showSystemMessage('通信エラーが発生しました。電波の良い場所で、もう一度お試しください🍀');
       }
     } finally {
       messageInput.disabled = false;

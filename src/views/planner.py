@@ -80,12 +80,22 @@ _rate_log: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT = 5   # リクエスト数
 _RATE_WINDOW = 60 # 秒
 _MAX_MESSAGE_LEN = 2000  # 1発話あたりの最大文字数（過大入力によるコスト増を抑制）
+_last_rate_sweep = 0.0   # 最後に古いエントリを掃除した時刻
 
 
 def _is_rate_limited(user_id: str) -> bool:
     """直近 _RATE_WINDOW 秒で _RATE_LIMIT 回を超えていれば True を返す。"""
     now = time.time()
     with _rate_lock:
+        # 定期的に古いユーザーのエントリを掃除し、_rate_log の無制限な増加を防ぐ
+        global _last_rate_sweep
+        if now - _last_rate_sweep > _RATE_WINDOW:
+            for uid in list(_rate_log.keys()):
+                _rate_log[uid][:] = [t for t in _rate_log[uid] if now - t < _RATE_WINDOW]
+                if not _rate_log[uid]:
+                    del _rate_log[uid]
+            _last_rate_sweep = now
+
         timestamps = _rate_log[user_id]
         timestamps[:] = [t for t in timestamps if now - t < _RATE_WINDOW]
         if len(timestamps) >= _RATE_LIMIT:

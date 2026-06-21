@@ -275,8 +275,18 @@ def edit_saved_plan(plan_id):
         message = message[:_MAX_MESSAGE_LEN]
 
     plan = get_travel_plan_by_id(plan_id)
-    if not plan or plan.get('google_user_id') != user_id:
+    if not plan:
         return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+
+    # 編集できるのは「所有者本人」または「編集権限で共有された本人」。
+    owner_id = plan.get('google_user_id')
+    can_edit = (owner_id == user_id)
+    if not can_edit:
+        import db_sharing
+        grant = db_sharing.get_grant_for_email('plan', plan_id, session.get('user_email'))
+        can_edit = bool(grant and grant.get('permission') == 'edit')
+    if not can_edit:
+        return json.dumps({'status': 'ERROR', 'message': 'このプランを編集する権限がありません'}), 403, {'Content-Type': 'application/json'}
 
     # 生成に時間がかかるため、本体チャットと同様に SSE でストリーミングする
     # （生成中は thinking を送り続け、接続のアイドル切断を防ぐ）。
@@ -286,7 +296,8 @@ def edit_saved_plan(plan_id):
     def run_edit():
         try:
             final_state = run_plan_edit(plan, message)
-            update_travel_plan(plan_id, user_id, final_state)
+            # 共有編集でも書き換える対象は所有者の行（共同編集＝上書き）
+            update_travel_plan(plan_id, owner_id, final_state)
             result['plan'] = get_travel_plan_by_id(plan_id)
         except ValueError as e:
             result['error_message'] = str(e)  # 予算超過などユーザーに伝える値域エラー
@@ -343,6 +354,7 @@ def get_shared_plans():
             p = get_travel_plan_by_id(g['resource_id'])
             if p:
                 p['grant_id'] = g['id']
+                p['permission'] = g['permission']
                 plans.append(p)
         return json.dumps({'status': 'OK', 'plans': plans}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
     except Exception as e:

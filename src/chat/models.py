@@ -24,6 +24,7 @@ class TravelPlanState(TypedDict):
     budget_limit: int
     departure_location: str
     transport_mode: str
+    no_car: bool  # 運転免許なし/運転不可。Trueなら車を使わず公共交通機関で組む
     special_requirements: List[str]
     transport_cost: int
     remaining_budget: int

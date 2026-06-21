@@ -185,6 +185,68 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     } catch (e) { alert('削除に失敗しました'); del.disabled = false; }
   });
 
+  // --- 写真の拡大表示（ライトボックス）---
+  const lightbox = document.getElementById('lightbox');
+  const lbImg = lightbox.querySelector('.lb-img');
+  const lbCounter = lightbox.querySelector('.lb-counter');
+  let lbIndex = 0;
+  let lbCount = 0;
+
+  function lbFigures() {
+    return Array.from(photoGrid.querySelectorAll('.photo'));
+  }
+  function lbShow(i) {
+    const figs = lbFigures();
+    lbCount = figs.length;
+    if (lbCount === 0) { lbClose(); return; }
+    lbIndex = (i + lbCount) % lbCount;
+    const img = figs[lbIndex].querySelector('img');
+    lbImg.src = img ? img.src : '';
+    lbCounter.textContent = `${lbIndex + 1} / ${lbCount}`;
+  }
+  function lbOpen(i) {
+    lbShow(i);
+    lightbox.hidden = false;
+    lightbox.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function lbClose() {
+    lightbox.hidden = true;
+    lightbox.setAttribute('aria-hidden', 'true');
+    lbImg.src = '';
+    document.body.style.overflow = '';
+  }
+
+  // 写真をタップで拡大（削除ボタンのクリックは除外）
+  photoGrid.addEventListener('click', (ev) => {
+    if (ev.target.closest('.photo-del')) return;
+    const fig = ev.target.closest('.photo');
+    if (!fig || !fig.querySelector('img')) return;
+    lbOpen(lbFigures().indexOf(fig));
+  });
+
+  lightbox.querySelector('.lb-close').addEventListener('click', lbClose);
+  lightbox.querySelector('.lb-prev').addEventListener('click', (e) => { e.stopPropagation(); lbShow(lbIndex - 1); });
+  lightbox.querySelector('.lb-next').addEventListener('click', (e) => { e.stopPropagation(); lbShow(lbIndex + 1); });
+  // 背景（画像以外）クリックで閉じる
+  lightbox.addEventListener('click', (ev) => { if (ev.target === lightbox) lbClose(); });
+  // キーボード操作（Esc=閉じる / ←→=前後）
+  document.addEventListener('keydown', (ev) => {
+    if (lightbox.hidden) return;
+    if (ev.key === 'Escape') lbClose();
+    else if (ev.key === 'ArrowLeft') lbShow(lbIndex - 1);
+    else if (ev.key === 'ArrowRight') lbShow(lbIndex + 1);
+  });
+  // スワイプ（スマホ）で前後切り替え
+  let lbTouchX = null;
+  lightbox.addEventListener('touchstart', (e) => { lbTouchX = e.changedTouches[0].clientX; }, { passive: true });
+  lightbox.addEventListener('touchend', (e) => {
+    if (lbTouchX === null) return;
+    const dx = e.changedTouches[0].clientX - lbTouchX;
+    if (Math.abs(dx) > 40) lbShow(lbIndex + (dx < 0 ? 1 : -1));
+    lbTouchX = null;
+  });
+
   // --- 付箋生成 ---
   const board = document.getElementById('sticker-board');
   function renderStickers(items) {

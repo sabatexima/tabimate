@@ -76,6 +76,15 @@
 </div>
 </div>
 
+<!-- 写真の拡大表示（ライトボックス）-->
+<div id="lightbox" class="lightbox" hidden aria-hidden="true">
+  <button class="lb-close" type="button" aria-label="閉じる">×</button>
+  <button class="lb-prev" type="button" aria-label="前の写真">‹</button>
+  <img class="lb-img" src="" alt="拡大写真">
+  <button class="lb-next" type="button" aria-label="次の写真">›</button>
+  <div class="lb-counter"></div>
+</div>
+
 <script type="application/json" id="page-config">{{ {"tripId": trip.id, "indexUrl": url_for('reflection.index')}|tojson }}</script>
 <script src="{{ url_for('static', filename='js/reflection-trip.js') }}"></script>
 {% endblock %}

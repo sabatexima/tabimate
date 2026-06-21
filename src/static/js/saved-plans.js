@@ -74,6 +74,12 @@ function esc(str) {
         if (!editBox.hidden) editInput.focus();
       });
 
+      function resetEdit() {
+        editInput.disabled = false;
+        editSend.disabled = false;
+        editSend.textContent = '修正する';
+      }
+
       async function submitEdit() {
         const message = editInput.value.trim();
         if (!message) return;
@@ -86,24 +92,45 @@ function esc(str) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message }),
           });
-          const result = await res.json();
-          if (result.status === 'OK' && result.plan) {
-            card.replaceWith(renderPlan(result.plan));  // 更新後のプランで差し替え
-            // 予算超過などの警告（balancerが付けた⚠️付きフィードバック）があれば知らせる
-            if (result.plan.feedback && result.plan.feedback.includes('⚠️')) {
-              alert(result.plan.feedback);
+          // 事前バリデーションのエラー（429/400/404）は通常のJSONで返る
+          if (!res.ok) {
+            let m = '修正に失敗しました';
+            try { const j = await res.json(); m = j.message || m; } catch (e) { /* noop */ }
+            alert(m); resetEdit(); return;
+          }
+          // 本処理は SSE ストリーム（thinking → OK/ERROR）
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let settled = false;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              let d;
+              try { d = JSON.parse(line.slice(6)); } catch (e) { continue; }
+              if (d.status === 'OK' && d.plan) {
+                settled = true;
+                card.replaceWith(renderPlan(d.plan));  // 更新後のプランで差し替え
+                if (d.plan.feedback && d.plan.feedback.includes('⚠️')) alert(d.plan.feedback);
+              } else if (d.status === 'ERROR') {
+                settled = true;
+                alert(d.message || '修正に失敗しました');
+                resetEdit();
+              }
             }
-          } else {
-            alert(result.message || '修正に失敗しました');
-            editInput.disabled = false;
-            editSend.disabled = false;
-            editSend.textContent = '修正する';
+          }
+          if (!settled) {
+            alert('完了までに時間がかかりすぎたか、通信が途切れたようです。もう一度お試しください。');
+            resetEdit();
           }
         } catch (e) {
           alert('通信エラーが発生しました。もう一度お試しください。');
-          editInput.disabled = false;
-          editSend.disabled = false;
-          editSend.textContent = '修正する';
+          resetEdit();
         }
       }
       editSend.addEventListener('click', submitEdit);

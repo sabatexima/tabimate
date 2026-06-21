@@ -278,19 +278,42 @@ def edit_saved_plan(plan_id):
     if not plan or plan.get('google_user_id') != user_id:
         return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
 
-    try:
-        final_state = run_plan_edit(plan, message)
-    except ValueError as e:
-        # 予算超過などユーザーに伝えるべき値域エラー
-        return json.dumps({'status': 'ERROR', 'message': str(e)}), 200, {'Content-Type': 'application/json'}
-    except Exception:
-        logger.exception("保存プランのチャット修正に失敗: plan_id=%s", plan_id)
-        return json.dumps({'status': 'ERROR', 'message': '修正中にエラーが発生しました。もう一度お試しください。'}), 500, {'Content-Type': 'application/json'}
+    # 生成に時間がかかるため、本体チャットと同様に SSE でストリーミングする
+    # （生成中は thinking を送り続け、接続のアイドル切断を防ぐ）。
+    result: dict = {}
+    done_event = threading.Event()
 
-    update_travel_plan(plan_id, user_id, final_state)
-    updated = get_travel_plan_by_id(plan_id)
-    logger.info("保存プランをチャット修正: plan_id=%s", plan_id)
-    return json.dumps({'status': 'OK', 'plan': updated}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
+    def run_edit():
+        try:
+            final_state = run_plan_edit(plan, message)
+            update_travel_plan(plan_id, user_id, final_state)
+            result['plan'] = get_travel_plan_by_id(plan_id)
+        except ValueError as e:
+            result['error_message'] = str(e)  # 予算超過などユーザーに伝える値域エラー
+        except Exception:
+            logger.exception("保存プランのチャット修正に失敗: plan_id=%s", plan_id)
+            result['error'] = True
+        finally:
+            done_event.set()
+
+    threading.Thread(target=run_edit, daemon=True).start()
+
+    def generate():
+        while not done_event.wait(timeout=3):
+            yield 'data: {"status": "thinking"}\n\n'
+        if result.get('plan') is not None:
+            logger.info("保存プランをチャット修正: plan_id=%s", plan_id)
+            yield f"data: {json.dumps({'status': 'OK', 'plan': result['plan']}, ensure_ascii=False, default=str)}\n\n"
+        elif result.get('error_message'):
+            yield f"data: {json.dumps({'status': 'ERROR', 'message': result['error_message']}, ensure_ascii=False)}\n\n"
+        else:
+            yield 'data: {"status": "ERROR", "message": "修正中にエラーが発生しました。もう一度お試しください。"}\n\n'
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
 
 
 @planner.route('/get_my_plans')

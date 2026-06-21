@@ -89,6 +89,10 @@ function esc(str) {
           const result = await res.json();
           if (result.status === 'OK' && result.plan) {
             card.replaceWith(renderPlan(result.plan));  // 更新後のプランで差し替え
+            // 予算超過などの警告（balancerが付けた⚠️付きフィードバック）があれば知らせる
+            if (result.plan.feedback && result.plan.feedback.includes('⚠️')) {
+              alert(result.plan.feedback);
+            }
           } else {
             alert(result.message || '修正に失敗しました');
             editInput.disabled = false;

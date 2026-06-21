@@ -79,6 +79,7 @@ _rate_lock = threading.Lock()
 _rate_log: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT = 5   # リクエスト数
 _RATE_WINDOW = 60 # 秒
+_MAX_MESSAGE_LEN = 2000  # 1発話あたりの最大文字数（過大入力によるコスト増を抑制）
 
 
 def _is_rate_limited(user_id: str) -> bool:
@@ -121,7 +122,11 @@ def send_message():
         logger.warning("レートリミット超過: user_id=%s", user_id)
         return json.dumps({'status': 'ERROR', 'message': 'リクエストが多すぎます。しばらくお待ちください。'}), 429, {'Content-Type': 'application/json'}
 
-    user_message = request.form['message']
+    user_message = (request.form.get('message') or '').strip()
+    if not user_message:
+        return json.dumps({'status': 'ERROR', 'message': 'メッセージが空です'}), 400, {'Content-Type': 'application/json'}
+    if len(user_message) > _MAX_MESSAGE_LEN:
+        user_message = user_message[:_MAX_MESSAGE_LEN]
     request_id = request.form.get('request_id') or str(uuid.uuid4())
 
     active_requests.add(request_id)
@@ -222,7 +227,7 @@ def save_plan():
         return json.dumps({'status': 'OK', 'id': plan_id}), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         logger.exception("プラン保存失敗: %s", e)
-        return json.dumps({'status': 'ERROR', 'message': str(e)}), 500, {'Content-Type': 'application/json'}
+        return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}
 
 
 @planner.route('/delete_plan/<int:plan_id>', methods=['DELETE'])
@@ -238,7 +243,7 @@ def delete_plan(plan_id):
         return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
     except Exception as e:
         logger.exception("プラン削除失敗: plan_id=%s, error=%s", plan_id, e)
-        return json.dumps({'status': 'ERROR', 'message': str(e)}), 500, {'Content-Type': 'application/json'}
+        return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_my_plans')
@@ -250,7 +255,7 @@ def get_my_plans():
         return json.dumps({'status': 'OK', 'plans': plans}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         logger.exception("プラン一覧取得失敗: %s", e)
-        return json.dumps({'status': 'ERROR', 'message': str(e)}), 500, {'Content-Type': 'application/json'}
+        return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_shared_plans')
@@ -272,4 +277,4 @@ def get_shared_plans():
         return json.dumps({'status': 'OK', 'plans': plans}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         logger.exception("共有プラン一覧取得失敗: %s", e)
-        return json.dumps({'status': 'ERROR', 'message': str(e)}), 500, {'Content-Type': 'application/json'}
+        return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}

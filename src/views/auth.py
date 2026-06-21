@@ -53,11 +53,17 @@ def callback():
     try:
         token = oauth.google.authorize_access_token()
         user = token.get('userinfo')
-        if user:
+        # email_verified は通常 bool だが、文字列で返す実装もあるため両対応で判定
+        ev = user.get('email_verified') if user else None
+        email_verified = (ev is True) or (str(ev).lower() == 'true')
+        if user and user.get('email') and email_verified:
             session['user_id']    = user['sub']
             session['user_email'] = user['email']
             session['user_name']  = user.get('name', user['email'])
             logger.info("ログイン成功: email=%s", user['email'])
+        elif user and not email_verified:
+            logger.warning("未検証メールのためログインを拒否: email=%s", user.get('email'))
+            session['login_error'] = 'メールアドレスが未検証のためログインできません。'
         else:
             logger.warning("Google callback で userinfo が取得できませんでした")
             session['login_error'] = 'ログインに失敗しました。もう一度お試しください。'

@@ -67,9 +67,6 @@ def _collect_images_for_stickers(photos: list, sample_n: int = 8) -> list:
 @login_required
 def index():
     trips = repo.get_trips(_uid())
-    # 一覧カードのサムネイル用に、代表写真の配信URLを付与（無ければ None）
-    for t in trips:
-        t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
 
     # 自分宛に共有された旅も同じ画面にまとめて表示する
     import db_sharing
@@ -79,9 +76,14 @@ def index():
     grant_by_id = {g["resource_id"]: g["id"] for g in grants if g["resource_type"] == "trip"}
     shared_trips = repo.get_trip_cards(shared_ids, viewer_id=_uid()) if shared_ids else []
     for t in shared_trips:
-        t["cover_url"] = storage.get_url(t["cover_path"]) if t.get("cover_path") else None
         t["permission"] = perm_by_id.get(t["id"], "view")
         t["grant_id"] = grant_by_id.get(t["id"])
+
+    # 一覧カードのサムネイル用に、代表写真の配信URLをまとめて取得（キャッシュ＋並列）
+    cover_paths = [t["cover_path"] for t in trips + shared_trips if t.get("cover_path")]
+    cover_urls = storage.get_urls(cover_paths)
+    for t in trips + shared_trips:
+        t["cover_url"] = cover_urls.get(t["cover_path"]) if t.get("cover_path") else None
 
     return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 
@@ -91,9 +93,10 @@ def index():
 def trip_detail(trip_id: int):
     trip = _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
-    # 配信URLを付与（GCS署名付き or ローカル配信ルート）
+    # 配信URLを付与（GCS署名付きURLはキャッシュ＋並列生成でまとめて取得）
+    url_map = storage.get_urls([p["storage_path"] for p in photos])
     for p in photos:
-        p["url"] = storage.get_url(p["storage_path"])
+        p["url"] = url_map.get(p["storage_path"])
     stickers = repo.get_stickers(trip_id)
     return render_template(
         "reflection/trip.html",

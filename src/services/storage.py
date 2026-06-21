@@ -7,7 +7,10 @@
 配信は get_url() が返す URL（GCSは署名付きURL、ローカルは内部配信ルート）を使う。
 """
 import os
+import threading
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 
@@ -23,6 +26,13 @@ _SIGNER_SA = os.getenv("GCS_SIGNER_SA")
 
 _gcs_client = None
 _signer_credentials = None
+
+# 署名付きURLのキャッシュ（storage_path -> (url, 失効エポック秒）。
+# 署名はIAM signBlobへのリモート呼び出しでコストがあるため、URL有効期限の少し手前まで使い回す。
+_url_cache: dict[str, tuple[str, float]] = {}
+_url_cache_lock = threading.Lock()
+_URL_CACHE_MARGIN = 300  # 失効の5分前には作り直す
+_SIGN_MAX_WORKERS = 8    # 並列署名のワーカー上限
 
 
 def _get_gcs_client():
@@ -85,22 +95,81 @@ def save(user_id: str, trip_id: int, filename: str, data: bytes,
     return key
 
 
+def _cached_url(storage_path: str) -> str | None:
+    """有効期限内のキャッシュ済み署名URLがあれば返す。"""
+    now = time.time()
+    with _url_cache_lock:
+        hit = _url_cache.get(storage_path)
+        if hit and hit[1] > now:
+            return hit[0]
+    return None
+
+
+def _store_url(storage_path: str, url: str) -> None:
+    with _url_cache_lock:
+        _url_cache[storage_path] = (url, time.time() + max(_SIGNED_URL_TTL - _URL_CACHE_MARGIN, 60))
+
+
+def _sign_url(storage_path: str) -> str:
+    """GCSの署名付きURLを1件生成する（IAM signBlob方式）。"""
+    bucket = _get_gcs_client().bucket(_GCS_BUCKET)
+    blob = bucket.blob(storage_path)
+    sa_email, token = _get_signing_info()
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(seconds=_SIGNED_URL_TTL),
+        method="GET",
+        # Cloud Run のデフォルトSAでも署名できるよう IAM signBlob 方式を使う
+        service_account_email=sa_email,
+        access_token=token,
+    )
+
+
 def get_url(storage_path: str) -> str:
-    """配信用URLを返す。GCSは署名付きURL、ローカルは内部配信ルート。"""
+    """配信用URLを返す。GCSは署名付きURL（キャッシュ利用）、ローカルは内部配信ルート。"""
     if using_gcs():
-        bucket = _get_gcs_client().bucket(_GCS_BUCKET)
-        blob = bucket.blob(storage_path)
-        sa_email, token = _get_signing_info()
-        return blob.generate_signed_url(
-            version="v4",
-            expiration=timedelta(seconds=_SIGNED_URL_TTL),
-            method="GET",
-            # Cloud Run のデフォルトSAでも署名できるよう IAM signBlob 方式を使う
-            service_account_email=sa_email,
-            access_token=token,
-        )
+        cached = _cached_url(storage_path)
+        if cached:
+            return cached
+        url = _sign_url(storage_path)
+        _store_url(storage_path, url)
+        return url
     # ローカル: Flask の配信ルート経由（views/reflection.py の serve_local_photo）
     return f"/reflection/photo/{storage_path}"
+
+
+def get_urls(storage_paths) -> dict:
+    """複数の storage_path の配信URLをまとめて返す（storage_path -> url）。
+
+    GCSでは未キャッシュ分の署名を並列生成して、写真の多いページの待ち時間を短縮する
+    （従来は枚数ぶん直列にIAM signBlobを呼んでいた）。
+    """
+    paths = list(dict.fromkeys(storage_paths))  # 重複除去・順序維持
+    if not using_gcs():
+        return {p: f"/reflection/photo/{p}" for p in paths}
+
+    result: dict[str, str] = {}
+    missing = []
+    for p in paths:
+        cached = _cached_url(p)
+        if cached:
+            result[p] = cached
+        else:
+            missing.append(p)
+
+    if missing:
+        _get_signing_info()  # 認証情報を先に初期化し、並列時のトークン更新競合を避ける
+
+        def _work(p):
+            url = _sign_url(p)
+            _store_url(p, url)
+            return p, url
+
+        with ThreadPoolExecutor(max_workers=min(_SIGN_MAX_WORKERS, len(missing))) as ex:
+            for p, url in ex.map(_work, missing):
+                result[p] = url
+
+    return result
 
 
 def read_bytes(storage_path: str) -> bytes | None:

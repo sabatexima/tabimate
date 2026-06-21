@@ -17,6 +17,8 @@ function esc(str) {
 
   function renderPlan(plan, opts = {}) {
     const shared = !!opts.shared;
+    // 自分のプラン、または「編集可」で共有されたプランはチャット修正できる
+    const editable = !shared || plan.permission === 'edit';
     const card = document.createElement('div');
     card.className = 'plan-card';
 
@@ -24,23 +26,27 @@ function esc(str) {
       ? new Date(plan.created_at).toLocaleDateString('ja-JP')
       : '';
 
+    const editBtnHtml = editable
+      ? `<button class="edit-btn" data-id="${esc(plan.id)}">✏️ チャットで修正</button>`
+      : '';
     const footer = shared
       ? `<div class="plan-footer">
-           <span class="shared-flag">🤝 共有された</span>
+           <span class="shared-flag">🤝 共有された${plan.permission === 'edit' ? '（編集可）' : ''}</span>
+           ${editBtnHtml}
            <button class="unshare-btn" data-grant="${esc(plan.grant_id)}">共有解除</button>
          </div>`
       : `<div class="plan-footer">
-           <button class="edit-btn" data-id="${esc(plan.id)}">✏️ チャットで修正</button>
+           ${editBtnHtml}
            <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
            <button class="delete-btn" data-id="${esc(plan.id)}">削除</button>
          </div>`;
 
-    const editArea = shared ? '' : `
+    const editArea = editable ? `
       <div class="plan-edit" hidden>
         <input type="text" class="plan-edit-input" autocomplete="off"
                placeholder="例: 2日目をゆっくりに / 宿を変えて / 予算を抑えて">
         <button class="plan-edit-send" type="button">修正する</button>
-      </div>`;
+      </div>` : '';
 
     card.innerHTML = `
       <div class="plan-summary-block">
@@ -64,8 +70,8 @@ function esc(str) {
       ${editArea}
     `;
 
-    if (!shared) {
-      // チャットで修正：入力欄の開閉
+    if (editable) {
+      // チャットで修正：入力欄の開閉（自分のプラン or 編集可で共有されたプラン）
       const editBox = card.querySelector('.plan-edit');
       const editInput = card.querySelector('.plan-edit-input');
       const editSend = card.querySelector('.plan-edit-send');
@@ -74,13 +80,13 @@ function esc(str) {
         if (!editBox.hidden) editInput.focus();
       });
 
-      function resetEdit() {
+      const resetEdit = () => {
         editInput.disabled = false;
         editSend.disabled = false;
         editSend.textContent = '修正する';
-      }
+      };
 
-      async function submitEdit() {
+      const submitEdit = async () => {
         const message = editInput.value.trim();
         if (!message) return;
         editInput.disabled = true;
@@ -92,7 +98,7 @@ function esc(str) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message }),
           });
-          // 事前バリデーションのエラー（429/400/404）は通常のJSONで返る
+          // 事前バリデーションのエラー（429/400/403）は通常のJSONで返る
           if (!res.ok) {
             let m = '修正に失敗しました';
             try { const j = await res.json(); m = j.message || m; } catch (e) { /* noop */ }
@@ -115,7 +121,11 @@ function esc(str) {
               try { d = JSON.parse(line.slice(6)); } catch (e) { continue; }
               if (d.status === 'OK' && d.plan) {
                 settled = true;
-                card.replaceWith(renderPlan(d.plan));  // 更新後のプランで差し替え
+                // 共有編集時は共有コンテキスト（共有バッジ/編集権/解除）を維持して差し替え
+                const merged = Object.assign({}, d.plan, {
+                  permission: plan.permission, grant_id: plan.grant_id,
+                });
+                card.replaceWith(renderPlan(merged, { shared }));
                 if (d.plan.feedback && d.plan.feedback.includes('⚠️')) alert(d.plan.feedback);
               } else if (d.status === 'ERROR') {
                 settled = true;
@@ -132,10 +142,12 @@ function esc(str) {
           alert('通信エラーが発生しました。もう一度お試しください。');
           resetEdit();
         }
-      }
+      };
       editSend.addEventListener('click', submitEdit);
       editInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitEdit(); });
+    }
 
+    if (!shared) {
       card.querySelector('.share-btn').addEventListener('click', () => {
         window.openShareModal('plan', plan.id);
       });
@@ -156,7 +168,9 @@ function esc(str) {
           alert('削除に失敗しました');
         }
       });
-    } else {
+    }
+
+    if (shared) {
       // 共有された側が自分の保存プラン一覧から共有を解除する
       const ub = card.querySelector('.unshare-btn');
       if (ub) ub.addEventListener('click', async () => {

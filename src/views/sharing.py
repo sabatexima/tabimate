@@ -104,8 +104,8 @@ def list_shares(resource_type: str, resource_id: int):
     return jsonify({
         "resource_type": resource_type,
         "resource_id": resource_id,
-        # プランは編集共有不可（UIで編集トグルを隠す判断に使う）
-        "editable_supported": resource_type == "trip",
+        # 旅・プランともメール共有で編集権限を付与できる（UIの編集トグル表示判断に使う）
+        "editable_supported": resource_type in ("trip", "plan"),
         "links": links,
         "grants": grants,
     })
@@ -149,8 +149,7 @@ def add_grant(resource_type: str, resource_id: int):
     permission = (data.get("permission") or "view").strip()
     if permission not in sharing.PERMISSIONS:
         permission = "view"
-    if resource_type != "trip":
-        permission = "view"
+    # 旅・プランともメール共有では view/edit を選べる（編集はログイン本人に限定される）
     # 自分自身への共有は意味が無いので弾く
     if email.lower() == (session.get("user_email") or "").lower():
         return jsonify({"error": "自分以外のメールアドレスを指定してください"}), 400

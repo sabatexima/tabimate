@@ -25,6 +25,11 @@ const chatBox = document.getElementById('chat-box');
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
+  // 失敗時に入力内容を送信欄へ戻す（そのまま再送信できるようにする）
+  function restoreInput(message) {
+    if (!messageInput.value) messageInput.value = message;
+  }
+
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
@@ -151,19 +156,34 @@ const chatBox = document.getElementById('chat-box');
             await loadMessages(true);
           } else if (data.status === 'ERROR') {
             settled = true;
-            showSystemMessage(data.message || 'エラーが発生しました。もう一度お試しください。');
+            showSystemMessage(
+              'うまくプランを作れませんでした。\n\n'
+              + 'お手数ですが、もう一度「送信」ボタンを押してやり直してください（入力した内容はそのまま残してあります）。\n\n'
+              + '繰り返し失敗するときは、行き先・日程・人数などをもう少し具体的に書き換えると通りやすくなります🍀'
+            );
+            restoreInput(message);
           }
         }
       }
 
       // OK/ABORTED/ERROR を一度も受け取らずに切れた場合（接続断・タイムアウト等）
       if (!settled) {
-        showSystemMessage('通信が途切れたか、時間がかかりすぎたため完了できませんでした。もう一度お試しください🍀');
+        showSystemMessage(
+          '完了までに時間がかかりすぎたか、通信が途切れたようです。\n\n'
+          + 'もう一度「送信」ボタンを押してお試しください（入力した内容はそのまま残してあります）。電波の良い場所だと安定します。\n\n'
+          + 'それでも続くときは、少し時間をおいてからお試しください🍀'
+        );
+        restoreInput(message);
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Error:', error);
-        showSystemMessage('通信エラーが発生しました。電波の良い場所で、もう一度お試しください🍀');
+        showSystemMessage(
+          '通信エラーが発生しました。\n\n'
+          + 'ネットワーク接続を確認して、もう一度「送信」ボタンを押してください（入力した内容はそのまま残してあります）。\n\n'
+          + 'Wi-Fiやモバイル回線が安定した場所だと成功しやすいです🍀'
+        );
+        restoreInput(message);
       }
     } finally {
       messageInput.disabled = false;

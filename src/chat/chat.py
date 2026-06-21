@@ -143,6 +143,22 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     if not state.is_complete:
         return state.next_question
 
+    # is_complete=true でも必須項目が欠けている場合（LLMの取りこぼし）は、生成に進まず聞き直す。
+    # 欠けたまま生成するとエージェント側で None 参照のエラーになるため、ここで防ぐ。
+    _required = {
+        "旅行先": state.destination,
+        "旅行日程": state.travel_date,
+        "期間": state.duration,
+        "参加人数": state.num_people,
+        "1人あたりの予算上限": state.budget_limit,
+        "出発地": state.departure_location,
+        "旅行テーマ": state.themes,
+    }
+    _missing = [label for label, val in _required.items() if val in (None, "", [])]
+    if _missing:
+        logger.warning("is_complete=trueだが必須項目が不足のため聞き直し: %s", _missing)
+        return f"恐れ入りますが、{_missing[0]}を教えていただけますか？"
+
     if request_id and active_requests and request_id not in active_requests:
         logger.info("リクエストがキャンセルされました: request_id=%s", request_id)
         return None
@@ -163,7 +179,8 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
 
     # 部分編集: 変更要望があり、前回プランが復元でき、対象領域が限定されている場合は、
     # 前回の成果物を引き継いで対象領域だけを再生成する（指定外はそのまま保持）。
-    targets = state.edit_targets or []
+    # 変更要望はあるが対象が空の場合は、全体作り直し(["all"])として扱う。
+    targets = state.edit_targets or (["all"] if state.plan_change_request else [])
     prev = _extract_prev_plan(messages_history) if state.plan_change_request else None
     if state.plan_change_request and prev and targets and "all" not in targets:
         for key in ("spots", "restaurants", "accommodation", "schedule", "budget_estimate"):

@@ -549,12 +549,19 @@ def balancer(state: TravelPlanState):
 
     判定結果(status)・理由(feedback)を返し、retry_count を加算する。
     """
-    # 部分編集は、ユーザー要望を反映した結果をそのまま採用する（全体審査の差し戻しで
-    # 指定外の部分まで作り直されるのを防ぐ）。即 approved にして終了する。
-    if state.get("edit_targets") and "all" not in (state.get("edit_targets") or []):
-        log.info("[⚖️ バランサー]: 部分編集のため審査をスキップしご要望を採用")
-        return {"status": "approved", "feedback": "ご要望を反映してプランを調整しました🍀"}
-    log.info("[⚖️ バランサー]: プランを審査中... destination=%s", state["destination"])
+    _edit_targets = state.get("edit_targets") or []
+    _is_edit = bool(_edit_targets) and "all" not in _edit_targets
+    # 予算に影響しない部分編集（観光地の入れ替え等）は審査不要でご要望を採用する。
+    # 予算に影響する編集（宿・グルメ・交通・費用）は、差し戻しはせず予算/実現性だけ確認し、
+    # 懸念があれば警告として伝える（指定外の部分まで作り直されるのを防ぐ）。
+    _budget_areas = {"accommodation", "gourmet", "budget", "transport"}
+    if _is_edit and not (set(_edit_targets) & _budget_areas):
+        log.info("[⚖️ バランサー]: 予算に影響しない部分編集のため審査をスキップ")
+        return {"status": "approved", "feedback": "ご要望を反映して調整しました🍀"}
+    if _is_edit:
+        log.info("[⚖️ バランサー]: 部分編集の予算・実現性を確認中...")
+    else:
+        log.info("[⚖️ バランサー]: プランを審査中... destination=%s", state["destination"])
     prompt = f"""あなたは旅行代理店のシニアマネージャーです。以下のプランを審査してください。
 
 ■ 基本条件: {state['destination']}（{state['duration']}）
@@ -594,6 +601,23 @@ def balancer(state: TravelPlanState):
     response = invoke_with_retry(structured_llm, prompt)
     log.info("👉 審査結果: [%s]", response.status.upper())
     log.info("💬 フィードバック: %s", response.feedback)
+
+    # 部分編集（予算影響あり）は差し戻さず、ご要望を反映したうえで懸念のみ警告する。
+    if _is_edit:
+        if response.status == "approved":
+            feedback = response.feedback
+        else:
+            feedback = (
+                "⚠️ ご要望は反映しましたが、" + response.feedback
+                + "（必要なら『もっと安い宿に』『予算をもう少し上げる』などで再調整できます）"
+            )
+        return {
+            "status": "approved",
+            "prev_status": state.get("status", ""),
+            "feedback": feedback,
+            "retry_count": state.get("retry_count", 0) + 1,
+        }
+
     return {
         "status": response.status,
         "prev_status": state.get("status", ""),

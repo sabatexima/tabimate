@@ -23,19 +23,36 @@ from chat.logger import get_logger
 logger = get_logger("chat")
 
 _SYSTEM_PROMPT = SystemMessage(content="""あなたは旅行プランナーのアシスタントです。
-会話履歴から旅行の条件を読み取ってください。
+会話履歴から旅行の条件を読み取り、状況に応じて次のいずれかを行ってください。
 
 【必須項目（7つ）】: 旅行先、旅行日程（いつ）、期間（何泊何日）、参加人数、1人あたりの予算上限、出発地、旅行テーマ
 【任意項目】: 交通手段の希望（新幹線・飛行機・車・高速バス・おまかせ）、特別条件（アレルギー・バリアフリー等）
 
-ルール:
-・必須7項目がすべて揃っている場合のみ is_complete=true にしてください
-・揃っていない場合は is_complete=false にして、まだ聞いていない必須項目を1つだけ next_question に設定してください
-・質問は自然な日本語で、丁寧かつ簡潔に（1文）
-・すでにアシスタントが聞いた項目は再度聞かないこと
-・会話が始まったばかり or 旅行と無関係な発言には「どちらへのご旅行をお考えですか？」と聞いてください
-・任意項目（交通手段の希望・特別条件）は、他の必須項目が揃ってから最後に確認すること
-・交通手段は会話から読み取り、ユーザーが「車で」「高速バスで」等と希望すればその手段を、こだわりがなければ「おまかせ」を transport_mode に設定すること
+※会話履歴に「[旅行プランを生成しました]」がある場合、すでにプランを提示済みです。
+
+判定ルール:
+A) 必須7項目がまだ揃っていない
+   → is_complete=false。まだ聞いていない必須項目を1つだけ next_question に質問として設定。
+
+B) 必須7項目が揃っていて、まだプラン未提示、またはユーザーが新しいプランの作成を求めている
+   → is_complete=true、plan_change_request=null（新規プランを生成する）。
+
+C) すでにプラン提示済みで、ユーザーがそのプランの【変更・調整】を求めている
+   （例:「2日目をもっとゆっくり」「予算を抑えて」「宿を変えて」「観光をもう1つ増やして」「車で行きたい」など）
+   → is_complete=true、plan_change_request にその具体的な変更指示を設定（プランを作り直す）。
+     人数・予算・日程・交通手段など条件自体が変わる要望なら、該当フィールドも更新すること。
+
+D) すでにプラン提示済みで、変更要望ではない雑談・お礼・質問
+   （例:「ありがとう」「いい感じ」「このお店は何時から？」など）
+   → is_complete=false。next_question に、プランを作り直さずに返す自然な返答文を設定。
+     必要に応じて「プランのどこを変えたいか教えてください」と案内してよい。
+
+その他ルール:
+・質問・返答は自然な日本語で、丁寧かつ簡潔に。
+・すでにアシスタントが聞いた必須項目は再度聞かないこと。
+・会話が始まったばかり or 旅行と無関係な発言には「どちらへのご旅行をお考えですか？」と聞くこと。
+・任意項目（交通手段の希望・特別条件）は、必須7項目が揃ってから最後に確認すること。
+・交通手段は会話から読み取り、希望があればその手段を、こだわりがなければ「おまかせ」を transport_mode に設定すること。
 """)
 
 _PLAN_PLACEHOLDER = "[旅行プランを生成しました]"
@@ -51,8 +68,9 @@ class ConversationState(BaseModel):
     departure_location: Optional[str] = Field(None, description="出発地。読み取れない場合はNull")
     transport_mode: Optional[str] = Field(None, description="交通手段の希望（新幹線・飛行機・車・高速バス など）。こだわりがなければ「おまかせ」。確認済みでなければNull")
     special_requirements: Optional[List[str]] = Field(None, description="特別条件（アレルギー・バリアフリー等）。確認済みでなければNull")
-    is_complete: bool = Field(False, description="必須7項目がすべて揃っていればTrue")
-    next_question: str = Field("", description="次にユーザーへ聞くべき質問文。is_complete=Trueなら空文字")
+    is_complete: bool = Field(False, description="プランを生成/再生成すべきならTrue（新規作成 or 既存プランの変更要望）。雑談や条件不足ならFalse")
+    plan_change_request: Optional[str] = Field(None, description="既にプラン提示済みで、ユーザーがそのプランの変更を求めている場合の具体的な変更指示。新規作成や雑談の場合はNull")
+    next_question: str = Field("", description="is_complete=Falseのときにユーザーへ返す文（次に聞く質問、または雑談への自然な返答）。is_complete=Trueなら空文字")
 
 
 def _build_lc_messages(messages_history: list) -> list:
@@ -112,6 +130,8 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         "departure_location":   state.departure_location,
         "transport_mode":       state.transport_mode or "おまかせ",
         "special_requirements": state.special_requirements or [],
+        # 既存プランへの変更要望は user_feedback として各エージェントに最優先で反映させる
+        "user_feedback":        state.plan_change_request or "",
     }
 
     try:

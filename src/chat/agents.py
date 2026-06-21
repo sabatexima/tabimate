@@ -123,6 +123,8 @@ def sightseeing_candidates(state: TravelPlanState):
 【出力】
 厳密に5個以上8個以下の候補を名称のみで返してください。
 """
+    if state.get("user_feedback"):
+        prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して候補を選ぶこと。"
     structured_llm = llm.with_structured_output(SightseeingCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.candidates, "✨ 候補スポット:")
@@ -152,6 +154,8 @@ def sightseeing_expert(state: TravelPlanState):
 ・特別条件がある場合（車椅子利用・アレルギー等）は、施設のバリアフリー対応状況を具体的に確認したうえで条件を満たすスポットのみ選ぶこと
 ・{state['num_people']}人の大人数でも対応できる収容人数・予約の可否・広さを確認すること
 """
+    if state.get("user_feedback"):
+        prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映してスポットを選ぶこと。"
     structured_llm = llm.with_structured_output(SightseeingOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.spots, "✨ 選定スポット:")
@@ -493,6 +497,8 @@ def cost_manager(state: TravelPlanState):
 ・予算上限（{state['budget_limit']:,}円）との差額: +X,XXX円の余裕 or -X,XXX円の超過
 ・予備費の推奨額（総費用の10%）: X,XXX円/人
 """
+    if state.get("user_feedback"):
+        prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望（予算配分など）を必ず最優先で反映して見積もること。"
     structured_llm = llm.with_structured_output(CostOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.budget_estimate, "💰 費用見積もり:")

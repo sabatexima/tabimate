@@ -73,6 +73,16 @@ def _format_plan(state: dict) -> str:
 
     save_button = f'<div class="plan-save-area"><button class="plan-save-btn" data-plan="{plan_json}">このプランを保存する</button></div>'
 
+    # プランは「出して終わり」ではなく、チャットで調整できることを案内する
+    edit_hint = ""
+    if status == "approved":
+        edit_hint = (
+            '<div class="plan-edit-hint">'
+            'このプランは<strong>チャットで調整</strong>できます。'
+            '「2日目をゆっくりに」「もう少し予算を抑えて」「宿を変えて」のように送ってくださいね🍀'
+            '</div>'
+        )
+
     footer = ""
     if status == "approved":
         footer = f'<div class="plan-review"><strong>💬 総評</strong><br>{esc(state.get("feedback", ""))}</div>'
@@ -89,5 +99,6 @@ def _format_plan(state: dict) -> str:
     {accordion("💰", "費用見積もり", state.get("budget_estimate", []))}
   </div>
   {footer}
+  {edit_hint}
   {save_button}
 </div>"""

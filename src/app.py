@@ -27,8 +27,28 @@ app = Flask(__name__)
 # Cloud Run のプロキシが付与する X-Forwarded-Proto / Host を信頼し、
 # 生成するURL（OAuthコールバック等）を正しいスキーム・ホストにする
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-# セッション署名鍵。本番は環境変数 SECRET_KEY を必ず設定する
-app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-change-in-production')
+
+# Cloud Run 上では K_SERVICE が自動設定される。これを本番判定に使う。
+_IS_PROD = bool(os.getenv('K_SERVICE'))
+
+# セッション署名鍵。本番(Cloud Run)で未設定なら、既知の鍵での署名（セッション偽造）を
+# 防ぐため起動を失敗させる。ローカルのみ開発用フォールバックを使う。
+_secret_key = os.getenv('SECRET_KEY')
+if not _secret_key:
+    if _IS_PROD:
+        raise RuntimeError(
+            'SECRET_KEY が未設定です。本番では必ず環境変数 / Secret Manager で設定してください。'
+        )
+    _secret_key = 'dev-secret-change-in-production'
+app.secret_key = _secret_key
+
+# セッションCookieの堅牢化（本番はHTTPSのみ送信）。
+# SameSite=Lax は OAuth のトップレベルGETリダイレクトでもCookieが送られる。
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=_IS_PROD,
+)
 
 app.register_blueprint(planner, url_prefix='/')
 app.register_blueprint(auth)

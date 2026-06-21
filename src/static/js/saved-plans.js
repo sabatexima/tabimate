@@ -27,7 +27,6 @@ function esc(str) {
     const footer = shared
       ? `<div class="plan-footer">
            <span class="shared-flag">🤝 共有された</span>
-           <a class="open-link" href="/shared/plan/${esc(plan.id)}">詳細を開く ›</a>
            <button class="unshare-btn" data-grant="${esc(plan.grant_id)}">共有解除</button>
          </div>`
       : `<div class="plan-footer">

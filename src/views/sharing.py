@@ -20,7 +20,7 @@ import db
 import db_reflection as repo
 import db_sharing as sharing
 from chat.logger import get_logger
-from services import exif, features, storage, trip_interpreter
+from services import exif, features, images, storage, trip_interpreter
 from views.auth import login_required
 from views.reflection import _collect_images_for_stickers
 
@@ -235,9 +235,12 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
         if not trip:
             abort(404)
         photos = repo.get_photos(resource_id)
-        url_map = storage.get_urls([p["storage_path"] for p in photos])
+        paths = [p["storage_path"] for p in photos]
+        url_map = storage.get_urls(paths)
+        thumb_map = storage.get_thumb_urls(paths)
         for p in photos:
             p["url"] = url_map.get(p["storage_path"])
+            p["thumb_url"] = thumb_map.get(p["storage_path"])
         stickers = repo.get_stickers(resource_id)
         return render_template(
             "shared/trip.html",
@@ -291,19 +294,29 @@ def shared_upload_photos(trip_id: int):
         if not data:
             continue
         meta = exif.extract(data)
+        # HEIC等はJPEGへ正規化
+        data, ctype, _ext = images.normalize(data, f.filename)
+        filename = f.filename
+        if ctype == "image/jpeg":
+            filename = os.path.splitext(f.filename)[0] + ".jpg"
         # 写真は旅の所有者に紐づけて保存（パス・配信の一貫性のため）
         storage_path = storage.save(
-            owner_id, trip_id, f.filename, data,
-            content_type=f.mimetype or "application/octet-stream",
+            owner_id, trip_id, filename, data,
+            content_type=ctype or f.mimetype or "application/octet-stream",
         )
+        thumb = images.thumbnail(data)
+        if thumb:
+            storage.save_at(storage._thumb_key(storage_path), thumb, "image/jpeg")
         photo_id = repo.add_photo(
             trip_id, owner_id, storage_path,
             taken_at=meta.get("taken_at"),
             lat=meta.get("lat"), lng=meta.get("lng"),
         )
+        original_url = storage.get_url(storage_path)
         saved.append({
             "id": photo_id,
-            "url": storage.get_url(storage_path),
+            "url": original_url,
+            "thumb_url": storage.get_thumb_url(storage_path) if thumb else original_url,
             "taken_at": str(meta["taken_at"]) if meta.get("taken_at") else None,
         })
     logger.info("共有編集で写真アップロード: trip_id=%s count=%d", trip_id, len(saved))

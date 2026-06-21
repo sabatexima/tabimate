@@ -15,7 +15,7 @@ from flask import (Blueprint, Response, abort, jsonify, render_template,
 
 import db_reflection as repo
 from chat.logger import get_logger
-from services import exif, features, storage, trip_interpreter
+from services import exif, features, images, storage, trip_interpreter
 from views.auth import login_required
 
 reflection = Blueprint("reflection", __name__, url_prefix="/reflection")
@@ -79,11 +79,14 @@ def index():
         t["permission"] = perm_by_id.get(t["id"], "view")
         t["grant_id"] = grant_by_id.get(t["id"])
 
-    # 一覧カードのサムネイル用に、代表写真の配信URLをまとめて取得（キャッシュ＋並列）
+    # 一覧カードの表紙は、サムネイル＋（フォールバック用に）原寸URLをまとめて取得
     cover_paths = [t["cover_path"] for t in trips + shared_trips if t.get("cover_path")]
-    cover_urls = storage.get_urls(cover_paths)
+    cover_thumbs = storage.get_thumb_urls(cover_paths)
+    cover_fulls = storage.get_urls(cover_paths)
     for t in trips + shared_trips:
-        t["cover_url"] = cover_urls.get(t["cover_path"]) if t.get("cover_path") else None
+        cp = t.get("cover_path")
+        t["cover_url"] = cover_thumbs.get(cp) if cp else None
+        t["cover_url_full"] = cover_fulls.get(cp) if cp else None
 
     return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 
@@ -93,10 +96,13 @@ def index():
 def trip_detail(trip_id: int):
     trip = _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
-    # 配信URLを付与（GCS署名付きURLはキャッシュ＋並列生成でまとめて取得）
-    url_map = storage.get_urls([p["storage_path"] for p in photos])
+    # 配信URLを付与（一覧はサムネイル、拡大は原寸。署名はキャッシュ＋並列でまとめて取得）
+    paths = [p["storage_path"] for p in photos]
+    url_map = storage.get_urls(paths)
+    thumb_map = storage.get_thumb_urls(paths)
     for p in photos:
         p["url"] = url_map.get(p["storage_path"])
+        p["thumb_url"] = thumb_map.get(p["storage_path"])
     stickers = repo.get_stickers(trip_id)
     return render_template(
         "reflection/trip.html",
@@ -220,19 +226,30 @@ def upload_photos(trip_id: int):
         data = f.read()
         if not data:
             continue
-        meta = exif.extract(data)
+        meta = exif.extract(data)  # EXIFは元データから取得（HEICもpillow-heifで開ければ取れる）
+        # HEIC等はJPEGへ正規化（ブラウザ表示できない問題を防ぐ）
+        data, ctype, _ext = images.normalize(data, f.filename)
+        filename = f.filename
+        if ctype == "image/jpeg":
+            filename = os.path.splitext(f.filename)[0] + ".jpg"
         storage_path = storage.save(
-            _uid(), trip_id, f.filename, data,
-            content_type=f.mimetype or "application/octet-stream",
+            _uid(), trip_id, filename, data,
+            content_type=ctype or f.mimetype or "application/octet-stream",
         )
+        # 一覧表示用のサムネイルを生成・保存（失敗時は原寸へフォールバック）
+        thumb = images.thumbnail(data)
+        if thumb:
+            storage.save_at(storage._thumb_key(storage_path), thumb, "image/jpeg")
         photo_id = repo.add_photo(
             trip_id, _uid(), storage_path,
             taken_at=meta.get("taken_at"),
             lat=meta.get("lat"), lng=meta.get("lng"),
         )
+        original_url = storage.get_url(storage_path)
         saved.append({
             "id": photo_id,
-            "url": storage.get_url(storage_path),
+            "url": original_url,
+            "thumb_url": storage.get_thumb_url(storage_path) if thumb else original_url,
             "taken_at": str(meta["taken_at"]) if meta.get("taken_at") else None,
             "lat": meta.get("lat"), "lng": meta.get("lng"),
         })

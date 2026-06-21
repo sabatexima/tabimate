@@ -47,11 +47,13 @@
       {% for p in photos %}
         {% if can_edit %}
           <figure class="photo" data-id="{{ p.id }}">
-            <img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">
+            <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
+                 onerror="this.onerror=null;this.src=this.dataset.full;">
             <button class="photo-del" aria-label="写真を削除">×</button>
           </figure>
         {% else %}
-          <img src="{{ p.url }}" alt="photo" loading="lazy" decoding="async">
+          <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
+               onerror="this.onerror=null;this.src=this.dataset.full;">
         {% endif %}
       {% endfor %}
     </div>

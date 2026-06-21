@@ -71,7 +71,8 @@
         <a class="card-link" href="{{ url_for('reflection.trip_detail', trip_id=trip.id) }}">
           <div class="cover">
             {% if trip.cover_url %}
-              <img src="{{ trip.cover_url }}" alt="" loading="lazy" decoding="async">
+              <img src="{{ trip.cover_url }}" data-full="{{ trip.cover_url_full }}" alt="" loading="lazy" decoding="async"
+                   onerror="this.onerror=null;this.src=this.dataset.full;">
             {% else %}
               <span class="cover-empty">🧳</span>
             {% endif %}
@@ -111,7 +112,8 @@
         <a class="card-link" href="{{ url_for('sharing.shared_view', resource_type='trip', resource_id=trip.id) }}">
           <div class="cover">
             {% if trip.cover_url %}
-              <img src="{{ trip.cover_url }}" alt="" loading="lazy" decoding="async">
+              <img src="{{ trip.cover_url }}" data-full="{{ trip.cover_url_full }}" alt="" loading="lazy" decoding="async"
+                   onerror="this.onerror=null;this.src=this.dataset.full;">
             {% else %}
               <span class="cover-empty">🧳</span>
             {% endif %}

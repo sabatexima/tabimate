@@ -77,9 +77,13 @@ def transport_agent(state: TravelPlanState):
     if _skip(state, "transport"):
         return {}  # 部分編集: 交通は対象外。前回の交通費・残予算を引き継ぐ
     transport_mode = state.get("transport_mode", "おまかせ")
+    no_car = state.get("no_car", False)
+    # 運転免許なしの場合は車・レンタカーを使わない（誤って車指定でも公共交通に切替）
+    if no_car and transport_mode in ("車", "レンタカー", "自家用車", "マイカー"):
+        transport_mode = "おまかせ"
     log.info(
-        "[🚄 交通エージェント]: 往復交通費を試算中... destination=%s, mode=%s",
-        state["destination"], transport_mode,
+        "[🚄 交通エージェント]: 往復交通費を試算中... destination=%s, mode=%s, no_car=%s",
+        state["destination"], transport_mode, no_car,
     )
 
     if transport_mode and transport_mode != "おまかせ":
@@ -89,6 +93,9 @@ def transport_agent(state: TravelPlanState):
 ・高速バス・夜行バスの場合: 往復の運賃を1人あたりで見積もること
 ・飛行機の場合: 往復の航空券代＋必要なら空港アクセス費を1人あたりで見積もること
 ・新幹線・特急など鉄道の場合: 往復の運賃＋特急/指定席料金を1人あたりで見積もること"""
+    elif no_car:
+        mode_instruction = """・運転免許がない/運転しない前提。車・レンタカーは選ばないこと。
+・新幹線・特急・飛行機・高速バス・在来線など公共交通機関のみで、所要時間と費用のバランスが最も良い手段を選ぶこと"""
     else:
         mode_instruction = """・新幹線・特急・飛行機・高速バス・車など、所要時間と費用のバランスが最も良い交通手段を選ぶこと"""
 
@@ -152,6 +159,8 @@ def sightseeing_candidates(state: TravelPlanState):
 """
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して候補を選ぶこと。"
+    if state.get("no_car"):
+        prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
     structured_llm = llm.with_structured_output(SightseeingCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.candidates, "✨ 候補スポット:")
@@ -185,6 +194,8 @@ def sightseeing_expert(state: TravelPlanState):
 """
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映してスポットを選ぶこと。"
+    if state.get("no_car"):
+        prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
     structured_llm = llm.with_structured_output(SightseeingOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.spots, "✨ 選定スポット:")
@@ -448,6 +459,20 @@ def timekeeper(state: TravelPlanState):
         prompt += f"\n【重要：バランサーからの前回の修正要求】:\n{state['feedback']}\n上記の指摘（特に開始時刻や移動時間）を完全にクリアし、【絶対に含めるべき項目】をすべて反映したスケジュールに修正してください。"
     if state.get("user_feedback"):
         prompt += f"\n\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映してスケジュールを組んでください。"
+
+    # 「散策」「自由時間」などの曖昧な予定で埋めない（具体的な行動で構成する）
+    prompt += (
+        "\n\n【予定の質（重要）】\n"
+        "・「散策」「自由時間」「周辺をぶらぶら」などの曖昧な時間で埋めないこと。各時間帯は具体的な"
+        "スポット名・体験・食事で構成すること。\n"
+        "・どうしても空き時間ができる場合のみ30分以内に留め、その時間も近くの具体的な店・スポットを示すこと。\n"
+        "・1日に詰め込みすぎず、移動と滞在のバランスを優先すること（無理に予定を増やして散策で埋めない）。"
+    )
+    if state.get("no_car"):
+        prompt += (
+            "\n\n【移動手段（重要）】運転免許がない/運転しない前提です。すべての移動を公共交通機関（電車・バス）"
+            "＋徒歩で組み、各移動に路線・所要時間を明記すること。レンタカー・自家用車の運転を前提にしないこと。"
+        )
 
     structured_llm = llm.with_structured_output(TimekeeperOutput)
     response = invoke_with_retry(structured_llm, prompt)

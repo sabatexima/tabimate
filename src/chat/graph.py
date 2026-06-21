@@ -70,6 +70,7 @@ def generate_travel_plan(inputs: dict):
     グラフを実行する。recursion_limit は差し戻しループの暴走を防ぐ上限。
     """
     inputs.setdefault("transport_mode", "おまかせ")
+    inputs.setdefault("no_car", False)
     inputs.setdefault("edit_targets", [])
     inputs.setdefault("retry_count", 0)
     inputs.setdefault("prev_status", "")
@@ -91,6 +92,7 @@ if __name__ == "__main__":
         "budget_limit": 70000,
         "departure_location": "東京（東京駅）",
         "transport_mode": "おまかせ",
+        "no_car": False,
         "special_requirements": ["同行者に車椅子利用者が1名いるためバリアフリー対応必須", "魚介類アレルギーの同行者が1名いるため食事の際は要確認"],
         "retry_count": 0,
         "prev_status": "",

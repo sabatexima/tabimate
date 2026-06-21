@@ -1,5 +1,6 @@
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_tavily import TavilySearch
@@ -39,11 +40,12 @@ def web_search(query: str, min_score: float = 0.3) -> str:
 
 
 def build_search_context(queries: list[str], min_score: float = 0.3) -> str:
-    sections = []
-    for query in queries:
-        result = web_search(query, min_score=min_score)
-        if result:
-            sections.append(f"[検索: {query}]\n{result}")
+    # 複数の検索クエリは互いに独立なので並列実行して待ち時間を短縮する（順序は維持）
+    if not queries:
+        return ""
+    with ThreadPoolExecutor(max_workers=min(4, len(queries))) as ex:
+        results = list(ex.map(lambda q: web_search(q, min_score=min_score), queries))
+    sections = [f"[検索: {q}]\n{r}" for q, r in zip(queries, results) if r]
     if not sections:
         log.debug("build_search_context empty for queries=%s", queries)
         return ""

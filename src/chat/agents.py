@@ -196,6 +196,11 @@ def sightseeing_expert(state: TravelPlanState):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映してスポットを選ぶこと。"
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
+    prompt += (
+        "\n【実在性・最新性】実在し、現在も営業しているスポットのみを選ぶこと。"
+        "閉業・移転・長期休業・期間限定の終了が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。"
+        "検索の参考情報がある場合はそれと矛盾しないこと。"
+    )
     structured_llm = llm.with_structured_output(SightseeingOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.spots, "✨ 選定スポット:")
@@ -289,6 +294,10 @@ def accommodation_agent(state: TravelPlanState):
         prompt += f"\n【バランサーからの修正要求】:\n{state['feedback']}\nこの指摘を反映して、施設を選び直してください。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して宿泊施設を選んでください。"
+    prompt += (
+        "\n【実在性・最新性】実在し、現在も営業している宿泊施設のみを選ぶこと。"
+        "閉業・休業・建て替え中が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。"
+    )
 
     structured_llm = llm.with_structured_output(AccommodationOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -369,6 +378,10 @@ def gourmet_hunter(state: TravelPlanState):
         prompt += f"\n【バランサーからの修正要求】:\n{state['feedback']}\nこの指摘を反映して、飲食店を選び直してください。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して飲食店を選んでください。"
+    prompt += (
+        "\n【実在性・最新性】実在し、現在も営業している飲食店のみを選ぶこと。"
+        "閉業・移転・長期休業が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。"
+    )
 
     structured_llm = llm.with_structured_output(GourmetOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -613,7 +626,7 @@ def balancer(state: TravelPlanState):
 {"【重要】これは日帰りプランです。fix_accommodation は絶対に使わないこと。" if is_day_trip(state["duration"]) else ""}
 
 【判定ルール】
-・上記5観点すべてをパスした場合のみ 'approved' を返すこと
+・上記の各観点すべてをパスした場合のみ 'approved' を返すこと
 ・問題がある場合は最も優先度の高い1つのstatusを選び、feedbackに「どの観点で・何が・どの程度問題か」を数値を交えて具体的に記載すること
 ・差し戻しは最大5回まで。問題が軽微な場合は approved にすること
 

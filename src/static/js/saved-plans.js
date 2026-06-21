@@ -30,9 +30,17 @@ function esc(str) {
            <button class="unshare-btn" data-grant="${esc(plan.grant_id)}">共有解除</button>
          </div>`
       : `<div class="plan-footer">
+           <button class="edit-btn" data-id="${esc(plan.id)}">✏️ チャットで修正</button>
            <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
            <button class="delete-btn" data-id="${esc(plan.id)}">削除</button>
          </div>`;
+
+    const editArea = shared ? '' : `
+      <div class="plan-edit" hidden>
+        <input type="text" class="plan-edit-input" autocomplete="off"
+               placeholder="例: 2日目をゆっくりに / 宿を変えて / 予算を抑えて">
+        <button class="plan-edit-send" type="button">修正する</button>
+      </div>`;
 
     card.innerHTML = `
       <div class="plan-summary-block">
@@ -53,9 +61,50 @@ function esc(str) {
         ${accordion('💰', '費用見積もり', plan.budget_estimate)}
       </div>
       ${footer}
+      ${editArea}
     `;
 
     if (!shared) {
+      // チャットで修正：入力欄の開閉
+      const editBox = card.querySelector('.plan-edit');
+      const editInput = card.querySelector('.plan-edit-input');
+      const editSend = card.querySelector('.plan-edit-send');
+      card.querySelector('.edit-btn').addEventListener('click', () => {
+        editBox.hidden = !editBox.hidden;
+        if (!editBox.hidden) editInput.focus();
+      });
+
+      async function submitEdit() {
+        const message = editInput.value.trim();
+        if (!message) return;
+        editInput.disabled = true;
+        editSend.disabled = true;
+        editSend.textContent = '修正中…';
+        try {
+          const res = await fetch(`/edit_saved_plan/${plan.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+          });
+          const result = await res.json();
+          if (result.status === 'OK' && result.plan) {
+            card.replaceWith(renderPlan(result.plan));  // 更新後のプランで差し替え
+          } else {
+            alert(result.message || '修正に失敗しました');
+            editInput.disabled = false;
+            editSend.disabled = false;
+            editSend.textContent = '修正する';
+          }
+        } catch (e) {
+          alert('通信エラーが発生しました。もう一度お試しください。');
+          editInput.disabled = false;
+          editSend.disabled = false;
+          editSend.textContent = '修正する';
+        }
+      }
+      editSend.addEventListener('click', submitEdit);
+      editInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitEdit(); });
+
       card.querySelector('.share-btn').addEventListener('click', () => {
         window.openShareModal('plan', plan.id);
       });

@@ -256,6 +256,43 @@ def delete_plan(plan_id):
         return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}
 
 
+@planner.route('/edit_saved_plan/<int:plan_id>', methods=['POST'])
+@login_required
+def edit_saved_plan(plan_id):
+    """保存済みプランをチャット指示で修正し、上書き保存して更新後のプランを返す。"""
+    from db import get_travel_plan_by_id, update_travel_plan
+    from chat.chat import edit_saved_plan as run_plan_edit
+
+    user_id = session['user_id']
+    if _is_rate_limited(user_id):
+        return json.dumps({'status': 'ERROR', 'message': 'リクエストが多すぎます。しばらくお待ちください。'}), 429, {'Content-Type': 'application/json'}
+
+    data = request.get_json(silent=True) or request.form
+    message = (data.get('message') or '').strip()
+    if not message:
+        return json.dumps({'status': 'ERROR', 'message': '修正したい内容を入力してください'}), 400, {'Content-Type': 'application/json'}
+    if len(message) > _MAX_MESSAGE_LEN:
+        message = message[:_MAX_MESSAGE_LEN]
+
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan or plan.get('google_user_id') != user_id:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+
+    try:
+        final_state = run_plan_edit(plan, message)
+    except ValueError as e:
+        # 予算超過などユーザーに伝えるべき値域エラー
+        return json.dumps({'status': 'ERROR', 'message': str(e)}), 200, {'Content-Type': 'application/json'}
+    except Exception:
+        logger.exception("保存プランのチャット修正に失敗: plan_id=%s", plan_id)
+        return json.dumps({'status': 'ERROR', 'message': '修正中にエラーが発生しました。もう一度お試しください。'}), 500, {'Content-Type': 'application/json'}
+
+    update_travel_plan(plan_id, user_id, final_state)
+    updated = get_travel_plan_by_id(plan_id)
+    logger.info("保存プランをチャット修正: plan_id=%s", plan_id)
+    return json.dumps({'status': 'OK', 'plan': updated}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
+
+
 @planner.route('/get_my_plans')
 @login_required
 def get_my_plans():

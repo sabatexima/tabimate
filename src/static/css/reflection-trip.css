@@ -92,7 +92,7 @@
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   }
   .photo { position: relative; margin: 0; }
-  .photo img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; }
+  .photo img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; cursor: zoom-in; }
   .photo-del {
     position: absolute; top: 4px; right: 4px;
     background: rgba(0,0,0,0.55); border: none; cursor: pointer; color: #fff;
@@ -109,3 +109,37 @@
   .danger-zone h2 { color: #e74c3c; }
   .btn.danger { background: #e74c3c; }
   .btn.danger:hover { background: #d63a2a; }
+
+  /* 写真の拡大表示（ライトボックス）*/
+  .lightbox {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox .lb-img {
+    max-width: 92vw; max-height: 88vh;
+    object-fit: contain; border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+  .lightbox .lb-close, .lightbox .lb-prev, .lightbox .lb-next {
+    position: absolute; background: rgba(255, 255, 255, 0.15); color: #fff;
+    border: none; cursor: pointer; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .lightbox .lb-close:hover, .lightbox .lb-prev:hover, .lightbox .lb-next:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .lightbox .lb-close { top: 16px; right: 16px; width: 44px; height: 44px; font-size: 1.6rem; line-height: 1; }
+  .lightbox .lb-prev, .lightbox .lb-next { top: 50%; transform: translateY(-50%); width: 48px; height: 48px; font-size: 2rem; line-height: 1; }
+  .lightbox .lb-prev { left: 12px; }
+  .lightbox .lb-next { right: 12px; }
+  .lightbox .lb-counter {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    color: #fff; font-size: 0.9rem; background: rgba(0, 0, 0, 0.4);
+    padding: 4px 12px; border-radius: 20px;
+  }
+  @media (max-width: 768px) {
+    .lightbox .lb-prev, .lightbox .lb-next { width: 40px; height: 40px; font-size: 1.6rem; }
+  }

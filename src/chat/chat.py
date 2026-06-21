@@ -252,6 +252,19 @@ def edit_saved_plan(plan: dict, message: str) -> dict:
         logger.warning("プラン編集の意図分類に失敗。全体作り直しにフォールバック", exc_info=True)
         targets = ["all"]
 
+    # 旧い/不完全な保存プランは再生成に必要な条件が欠けていることがあるため、事前に弾く
+    _required = {
+        "destination": plan.get("destination"),
+        "travel_date": plan.get("travel_date"),
+        "duration": plan.get("duration"),
+        "num_people": plan.get("num_people"),
+        "budget_limit": plan.get("budget_limit"),
+        "departure_location": plan.get("departure_location"),
+        "themes": _as_list(plan.get("themes")),
+    }
+    if any(v in (None, "", []) for v in _required.values()):
+        raise ValueError("このプランは保存情報が不足しているため、チャット修正に対応できません。お手数ですが新しく作り直してください。")
+
     inputs = {
         "destination":          plan.get("destination"),
         "travel_date":          plan.get("travel_date"),

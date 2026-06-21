@@ -46,11 +46,36 @@ def _pp(data, label):
         log.info("  - %s", item)
 
 
+def _run_set(state) -> set | None:
+    """部分編集時に再生成すべき領域の集合を返す。
+
+    edit_targets が空（＝フル生成）の場合は None を返し、全ノードを実行する。
+    観光/グルメ/宿泊/交通を変えるとスケジュールが、何かを変えると費用が
+    影響を受けるため、依存関係を加味して再計算対象を広げる。
+    """
+    targets = set(state.get("edit_targets") or [])
+    if not targets or "all" in targets:
+        return None
+    run = set(targets)
+    if run & {"sightseeing", "gourmet", "accommodation", "transport"}:
+        run.add("schedule")   # 構成要素が変わればスケジュールも組み直す
+    run.add("budget")         # 費用は常に再計算して整合を保つ
+    return run
+
+
+def _skip(state, area: str) -> bool:
+    """部分編集で、この領域を再生成せず前回の成果物を引き継ぐ場合 True。"""
+    run = _run_set(state)
+    return run is not None and area not in run
+
+
 def transport_agent(state: TravelPlanState):
     """往復交通費を概算し、予算上限から差し引いた残予算を返す。
 
     交通費が予算上限を超える場合は ValueError を送出して以降の処理を止める。
     """
+    if _skip(state, "transport"):
+        return {}  # 部分編集: 交通は対象外。前回の交通費・残予算を引き継ぐ
     transport_mode = state.get("transport_mode", "おまかせ")
     log.info(
         "[🚄 交通エージェント]: 往復交通費を試算中... destination=%s, mode=%s",
@@ -95,6 +120,8 @@ def transport_agent(state: TravelPlanState):
 
 def sightseeing_candidates(state: TravelPlanState):
     """Web検索を踏まえ、観光スポットの候補（5〜8件）を抽出する。"""
+    if _skip(state, "sightseeing"):
+        return {}  # 部分編集: 観光は対象外
     log.info("[🗺️ 観光エキスパート]: 候補スポットを抽出中... destination=%s", state["destination"])
     queries = [
         f"{state['destination']} {' '.join(state['themes'])} 観光 公式ガイド",
@@ -133,6 +160,8 @@ def sightseeing_candidates(state: TravelPlanState):
 
 def sightseeing_expert(state: TravelPlanState):
     """候補スポットから動線・条件を考慮して最終的なスポット（2〜3件）を選定する。"""
+    if _skip(state, "sightseeing"):
+        return {}  # 部分編集: 観光は対象外。前回のスポットを引き継ぐ
     log.info("[🗺️ 観光エキスパート]: スポットを選定中... destination=%s", state["destination"])
     candidates = state.get("spot_candidates", [])
     prompt = f"""あなたは旅行のプロです。以下の候補から最適な観光スポットを選定してください。
@@ -164,6 +193,8 @@ def sightseeing_expert(state: TravelPlanState):
 
 def accommodation_candidates(state: TravelPlanState):
     """宿泊施設の候補（3〜5件）を抽出する。日帰りなら空リストを返す。"""
+    if _skip(state, "accommodation"):
+        return {}  # 部分編集: 宿泊は対象外
     if is_day_trip(state["duration"]):
         log.info("[🏨 宿泊エージェント]: 日帰りのため宿泊施設なし")
         return {"accommodation_candidates": []}
@@ -206,6 +237,8 @@ def accommodation_agent(state: TravelPlanState):
     日帰りなら空リストを返す。バランサーの差し戻しやユーザー要望があれば
     プロンプトに反映して選び直す。
     """
+    if _skip(state, "accommodation"):
+        return {}  # 部分編集: 宿泊は対象外。前回の宿泊を引き継ぐ
     if is_day_trip(state["duration"]):
         log.info("[🏨 宿泊エージェント]: 日帰りのため宿泊施設なし")
         return {"accommodation": []}
@@ -254,6 +287,8 @@ def accommodation_agent(state: TravelPlanState):
 
 def gourmet_candidates(state: TravelPlanState):
     """選定済みスポット周辺の飲食店候補（4〜6件）を抽出する。"""
+    if _skip(state, "gourmet"):
+        return {}  # 部分編集: グルメは対象外
     log.info("[🍣 グルメハンター]: 飲食店候補を抽出中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     queries = [
@@ -288,6 +323,8 @@ def gourmet_candidates(state: TravelPlanState):
 
 def gourmet_hunter(state: TravelPlanState):
     """候補から食事回数分の飲食店を選定する（食費目安は残予算の25%）。"""
+    if _skip(state, "gourmet"):
+        return {}  # 部分編集: グルメは対象外。前回の飲食店を引き継ぐ
     log.info("[🍣 グルメハンター]: 飲食店を選定中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     accommodation = state.get("accommodation", [])
@@ -334,6 +371,8 @@ def timekeeper(state: TravelPlanState):
     営業時間や移動時間の整合を取り、日帰り/宿泊で出力形式を切り替える。
     バランサーが指摘した未反映項目は強制的に組み込む。
     """
+    if _skip(state, "schedule"):
+        return {}  # 部分編集: スケジュールは対象外。前回の行程を引き継ぐ
     log.info("[⏱️ タイムキーパー]: スケジュールを組み立て中... destination=%s", state["destination"])
     spots = state.get("spots", [])
     restaurants = state.get("restaurants", [])
@@ -510,6 +549,11 @@ def balancer(state: TravelPlanState):
 
     判定結果(status)・理由(feedback)を返し、retry_count を加算する。
     """
+    # 部分編集は、ユーザー要望を反映した結果をそのまま採用する（全体審査の差し戻しで
+    # 指定外の部分まで作り直されるのを防ぐ）。即 approved にして終了する。
+    if state.get("edit_targets") and "all" not in (state.get("edit_targets") or []):
+        log.info("[⚖️ バランサー]: 部分編集のため審査をスキップしご要望を採用")
+        return {"status": "approved", "feedback": "ご要望を反映してプランを調整しました🍀"}
     log.info("[⚖️ バランサー]: プランを審査中... destination=%s", state["destination"])
     prompt = f"""あなたは旅行代理店のシニアマネージャーです。以下のプランを審査してください。
 

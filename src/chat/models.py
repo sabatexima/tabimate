@@ -48,6 +48,9 @@ class TravelPlanState(TypedDict):
     prev_status: str
     retry_count: int
     user_feedback: str
+    # 部分編集の対象領域（sightseeing/gourmet/accommodation/schedule/budget/transport）。
+    # 空ならフル生成。対象外の領域は前回プランの成果物をそのまま引き継ぐ。
+    edit_targets: List[str]
     search_context: str
     spot_candidates: List[str]
     accommodation_candidates: List[str]

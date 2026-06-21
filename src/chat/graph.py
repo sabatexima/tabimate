@@ -70,6 +70,7 @@ def generate_travel_plan(inputs: dict):
     グラフを実行する。recursion_limit は差し戻しループの暴走を防ぐ上限。
     """
     inputs.setdefault("transport_mode", "おまかせ")
+    inputs.setdefault("edit_targets", [])
     inputs.setdefault("retry_count", 0)
     inputs.setdefault("prev_status", "")
     inputs.setdefault("user_feedback", "")

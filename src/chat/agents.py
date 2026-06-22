@@ -330,6 +330,18 @@ def accommodation_agent(state: TravelPlanState):
 """
     if state.get("feedback") and state.get("status") in ("fix_accommodation", "fix_budget", "fix_gourmet", "fix_sightseeing"):
         prompt += f"\n【バランサーからの修正要求】:\n{state['feedback']}\nこの指摘を反映して、施設を選び直してください。"
+    # 再ループ時のみ、前回の費用内訳（食事・観光・現地交通を含む）を参考として渡し、
+    # 宿の価格帯を「食費などを圧迫しない範囲」で調整できるようにする（初回は前回データ無し）。
+    if state.get("retry_count", 0) > 0:
+        _prev_estimate = state.get("budget_estimate") or []
+        _prev_total = state.get("total_per_person") or 0
+        if _prev_estimate or _prev_total:
+            prompt += "\n【前回の費用内訳（参考）】\n"
+            if _prev_total:
+                prompt += f"前回の1人あたり合計: 約{_prev_total:,}円（予算上限 {state['budget_limit']:,}円）\n"
+            if _prev_estimate:
+                prompt += chr(10).join(_prev_estimate) + "\n"
+            prompt += "上記の食事・観光・現地交通の費用も踏まえ、合計が予算内に収まるよう宿の価格帯を調整すること（安くしすぎて質を落とす必要はないが、食費等を圧迫しないこと）。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して宿泊施設を選んでください。"
     prompt += _pref(state)

@@ -677,9 +677,25 @@ def balancer(state: TravelPlanState):
     log.info("👉 審査結果: [%s]", status.upper())
     log.info("💬 フィードバック: %s", feedback)
 
-    # 部分編集（予算影響あり）は差し戻さず、ご要望を反映したうえで懸念のみ警告する。
+    # 部分編集（予算影響あり）は、問題があれば【1回だけ】差し戻して直す機会を与える。
+    # それでも収まらなければ、ご要望を反映したうえで懸念を警告として伝えて確定する。
     if _is_edit:
-        if response.status == "approved":
+        _new_retry = state.get("retry_count", 0) + 1
+        _over_budget = bool(_total and _budget and _total > _budget * 1.10)
+        _has_problem = (response.status != "approved") or _over_budget
+        _fix_set = {"fix_sightseeing", "fix_gourmet", "fix_accommodation", "fix_budget", "fix_time"}
+        if _has_problem and _new_retry < 2:  # 差し戻しは最大1回
+            fix_status = response.status if response.status in _fix_set else "fix_budget"
+            if _over_budget:
+                fix_status = "fix_budget"
+            log.info("⚖️ 部分編集を1回だけ差し戻し: %s", fix_status)
+            return {
+                "status": fix_status,
+                "prev_status": state.get("status", ""),
+                "feedback": response.feedback,
+                "retry_count": _new_retry,
+            }
+        if response.status == "approved" and not _over_budget:
             feedback = response.feedback
         else:
             feedback = (
@@ -690,7 +706,7 @@ def balancer(state: TravelPlanState):
             "status": "approved",
             "prev_status": state.get("status", ""),
             "feedback": feedback,
-            "retry_count": state.get("retry_count", 0) + 1,
+            "retry_count": _new_retry,
         }
 
     return {

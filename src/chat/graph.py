@@ -81,6 +81,7 @@ def generate_travel_plan(inputs: dict):
     """
     inputs.setdefault("transport_mode", "おまかせ")
     inputs.setdefault("no_car", False)
+    inputs.setdefault("schedule_pref", "")
     inputs.setdefault("edit_targets", [])
     inputs.setdefault("retry_count", 0)
     inputs.setdefault("prev_status", "")

@@ -4,8 +4,9 @@
   - 公開リンク : 推測困難なトークンURL（/s/<token>）を知る人が閲覧（ログイン不要）
   - メール指定 : 指定メールでログインした本人だけがアクセス（/shared/...）
 
-権限は view（閲覧のみ）/ edit（編集可）。編集は旅（写真追加・付箋生成）でのみ
-意味を持つ。プランはアプリ上に編集操作が無いため常に閲覧専用。
+権限は view（閲覧のみ）/ edit（編集可）。この Blueprint が扱う旅の編集（写真追加・
+付箋生成・削除）には edit 権限が必要。プランの共同編集も edit 権限で可能だが、その
+処理は planner 側の編集エンドポイントが担う。公開リンクは安全のため常に閲覧専用。
 
 アクセス制御方針:
   - 所有者本人は常にフル権限。
@@ -72,7 +73,10 @@ def _resolve_permission(resource_type: str, resource_id: int, token: str | None)
 
 
 def _can_edit(resource_type: str, permission: str | None) -> bool:
-    """編集可否。プランは編集操作が無いので常に不可。"""
+    """この Blueprint が扱う編集（旅の写真・付箋）の可否を返す。
+
+    プランの編集は planner 側の編集エンドポイントが担うため、ここでは常に不可。
+    """
     if resource_type != "trip":
         return False
     return permission in ("owner", "edit")
@@ -117,13 +121,10 @@ def create_link(resource_type: str, resource_id: int):
     if resource_type not in sharing.RESOURCE_TYPES:
         abort(404)
     _require_owner(resource_type, resource_id)
-    data = request.get_json(silent=True) or request.form
-    permission = (data.get("permission") or "view").strip()
-    if permission not in sharing.PERMISSIONS:
-        permission = "view"
-    # プランは編集共有を許可しない
-    if resource_type != "trip":
-        permission = "view"
+    # 公開リンク（URLを知れば誰でも・ログイン不要）は安全のため常に閲覧専用にする。
+    # 編集は「ログイン必須のメール共有（grant）」でのみ許可する（写真追加・削除や
+    # 旅の削除といった破壊的操作を、URLを知るだけの匿名者にさせないため）。
+    permission = "view"
     link = sharing.create_share_link(resource_type, resource_id, session["user_id"], permission)
     link["url"] = url_for("sharing.public_view", token=link["token"], _external=True)
     return jsonify(link), 201
@@ -187,8 +188,8 @@ def public_view(token: str):
         abort(404)
     rtype = link["resource_type"]
     rid = link["resource_id"]
-    can_edit = _can_edit(rtype, link["permission"])
-    return _render_shared(rtype, rid, can_edit=can_edit, share_token=token)
+    # 公開リンクは常に閲覧専用（過去に発行された edit リンクが残っていても編集させない）
+    return _render_shared(rtype, rid, can_edit=False, share_token=token)
 
 
 @share.route("/shared")
@@ -260,10 +261,10 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
 def _require_trip_edit(trip_id: int):
     """共有された旅への編集権限を確認し、(trip, owner_id) を返す。
 
-    トークン（公開リンク）またはログイン中のメールグラントを受け付ける。
+    編集は所有者本人、またはログイン中のメールグラント（edit）のみ許可する。
+    公開リンク（トークン）は閲覧専用なので、編集判定ではトークンを受理しない。
     """
-    token = request.values.get("token")
-    perm = _resolve_permission("trip", trip_id, token=token)
+    perm = _resolve_permission("trip", trip_id, token=None)
     if not _can_edit("trip", perm):
         abort(403)
     trip = repo.get_trip_by_id(trip_id)

@@ -242,14 +242,17 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
 
 
 def rate_travel_plan(plan_id: int, google_user_id: str, rating: int, comment: str = "") -> bool:
-    """保存プランに★評価とコメントを記録する（本人のプランのみ）。"""
+    """保存プランに★評価とコメントを記録する（本人のプランのみ・1プラン1回）。
+
+    既に評価済み（rating が設定済み）の場合は上書きせず False を返す。
+    """
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
         _ensure_plan_columns(conn)
         result = conn.execute(
             text(
                 "UPDATE travel_plans SET rating = :rating, rating_comment = :comment "
-                "WHERE id = :id AND google_user_id = :uid"
+                "WHERE id = :id AND google_user_id = :uid AND rating IS NULL"
             ),
             {"rating": rating, "comment": comment or "", "id": plan_id, "uid": google_user_id},
         )

@@ -30,6 +30,31 @@ llm_strong = ChatGoogleGenerativeAI(
 _search = TavilySearch(max_results=8)
 log = get_logger("llm")
 
+# モデル別の概算料金（USD / 100万トークン, 入力, 出力）。未知モデルは lite 相当で概算。
+MODEL_PRICING_USD_PER_M = {
+    "gemini-3.1-flash-lite": (0.25, 1.50),
+    "gemini-3.5-flash": (1.50, 9.00),
+}
+USD_TO_JPY = 150  # 概算用の固定レート
+
+
+def estimate_cost(usage_by_model: dict):
+    """モデル別トークン使用量から (入力tok合計, 出力tok合計, 推定USD) を返す。
+
+    usage_by_model は UsageMetadataCallbackHandler.usage_metadata の形式
+    （{モデル名: {"input_tokens":int, "output_tokens":int, ...}}）を想定。
+    """
+    in_tok = out_tok = 0
+    usd = 0.0
+    for model, u in (usage_by_model or {}).items():
+        i = int(u.get("input_tokens", 0) or 0)
+        o = int(u.get("output_tokens", 0) or 0)
+        in_tok += i
+        out_tok += o
+        p_in, p_out = MODEL_PRICING_USD_PER_M.get(model, (0.25, 1.50))
+        usd += i / 1_000_000 * p_in + o / 1_000_000 * p_out
+    return in_tok, out_tok, usd
+
 
 
 def web_search(query: str, min_score: float = 0.3) -> str:

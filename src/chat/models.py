@@ -25,6 +25,7 @@ class TravelPlanState(TypedDict):
     departure_location: str
     transport_mode: str
     no_car: bool  # 運転免許なし/運転不可。Trueなら車を使わず公共交通機関で組む
+    schedule_pref: str  # 時間の希望（「夕方までに帰りたい」「朝はゆっくり」等）。無ければ空
     special_requirements: List[str]
     transport_cost: int
     remaining_budget: int

@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from langgraph.graph import StateGraph, START, END
 from chat.models import TravelPlanState
+from chat.llm import estimate_cost, USD_TO_JPY
+from chat.logger import get_logger
 from chat.agents import (
     transport_agent, sightseeing_candidates, sightseeing_expert,
     gourmet_candidates, gourmet_hunter,
@@ -21,6 +23,13 @@ from chat.agents import (
     timekeeper, cost_manager, balancer,
     route_after_balancer,
 )
+
+try:
+    from langchain_core.callbacks import UsageMetadataCallbackHandler
+except Exception:  # 古い/異なるバージョンでも動作は継続（コストログのみ無効）
+    UsageMetadataCallbackHandler = None
+
+log = get_logger("graph")
 
 
 # プラン生成の状態グラフを構築する。
@@ -92,7 +101,25 @@ def generate_travel_plan(inputs: dict):
     inputs.update(transport_out)
     inputs.update(sightseeing_out)
 
-    return graph.invoke(inputs, {"recursion_limit": 60})
+    # トークン使用量を集計してコストを概算ログ（事前並列分の2呼び出しは集計対象外）
+    config = {"recursion_limit": 60}
+    handler = UsageMetadataCallbackHandler() if UsageMetadataCallbackHandler else None
+    if handler:
+        config["callbacks"] = [handler]
+
+    result = graph.invoke(inputs, config)
+
+    if handler:
+        try:
+            in_tok, out_tok, usd = estimate_cost(handler.usage_metadata)
+            log.info(
+                "💰 プラン生成コスト(主要部): 入力 %s / 出力 %s tok, 推定 $%.4f (約¥%.1f)",
+                f"{in_tok:,}", f"{out_tok:,}", usd, usd * USD_TO_JPY,
+            )
+        except Exception:
+            log.debug("コスト概算に失敗", exc_info=True)
+
+    return result
 
 
 if __name__ == "__main__":

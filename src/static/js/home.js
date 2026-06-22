@@ -8,6 +8,30 @@ const chatBox = document.getElementById('chat-box');
   let abortController = null;
   let currentRequestId = null;
 
+  // 生成中の「考え中」表示：段階メッセージを巡回させて待ち時間を楽しく見せる
+  const THINKING_STAGES = [
+    '行き先を調べています', '交通を手配しています', '観光スポットを探しています',
+    '宿を選んでいます', 'グルメを探しています', 'スケジュールを組んでいます', '仕上げています',
+  ];
+  let thinkingTimer = null;
+
+  function startThinking() {
+    const el = document.getElementById('thinking-text');
+    let i = 0;
+    if (el) el.textContent = THINKING_STAGES[0];
+    typingIndicator.style.display = 'flex';
+    if (thinkingTimer) clearInterval(thinkingTimer);
+    thinkingTimer = setInterval(() => {
+      i = (i + 1) % THINKING_STAGES.length;
+      if (el) el.textContent = THINKING_STAGES[i];
+    }, 2500);
+  }
+
+  function stopThinking() {
+    typingIndicator.style.display = 'none';
+    if (thinkingTimer) { clearInterval(thinkingTimer); thinkingTimer = null; }
+  }
+
   // 会話の最初にメイトから話しかける挨拶（クライアント側で常に先頭に表示）
   const GREETING = 'こんにちは！旅のプランを一緒に考える「ちゃむ」です🍀\n\n'
     + '行き先・日程・人数・ご予算・やってみたいことなど、わかる範囲で教えてくださいね。ぴったりの旅行プランをご提案します。\n\n'
@@ -114,7 +138,7 @@ const chatBox = document.getElementById('chat-box');
     messageInput.disabled = true;
     sendButton.style.display = 'none';
     stopButton.style.display = 'flex';
-    typingIndicator.style.display = 'block';
+    startThinking();
 
     chatBox.appendChild(createMessageElement('user', message));
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -189,7 +213,7 @@ const chatBox = document.getElementById('chat-box');
       messageInput.disabled = false;
       sendButton.style.display = 'flex';
       stopButton.style.display = 'none';
-      typingIndicator.style.display = 'none';
+      stopThinking();
       messageInput.focus();
       abortController = null;
       currentRequestId = null;

@@ -11,8 +11,13 @@
 {% block content %}
 {% if not session.get('user_id') %}
 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:80vh;gap:16px;text-align:center;">
-  <div style="display:flex;align-items:center;justify-content:center;border-radius:50%;background:radial-gradient(circle, rgba(246,246,165,0.45) 0%, rgba(246,246,165,0) 70%);padding:20px;">
-    <img src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ" style="width:auto;height:170px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(120,110,90,0.18));">
+  <div class="login-hero">
+    <span class="drift-clover" style="left:8%; animation-delay:0s;">🍀</span>
+    <span class="drift-clover" style="right:10%; animation-delay:2s;">🍀</span>
+    <span class="drift-clover" style="left:26%; animation-delay:4s;">🍀</span>
+    <div style="display:flex;align-items:center;justify-content:center;border-radius:50%;background:radial-gradient(circle, rgba(246,246,165,0.45) 0%, rgba(246,246,165,0) 70%);padding:20px;">
+      <img class="hero-mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ" style="width:auto;height:170px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(120,110,90,0.18));">
+    </div>
   </div>
   <h2 style="margin:0;font-size:1.5rem;color:#4a4540;font-weight:700;">たびメイト</h2>
   <p style="color:#8a817a;margin:0;">あなたの旅に、しあわせのお手伝い🍀</p>
@@ -34,7 +39,11 @@
     <div id="chat-box">
       <!-- チャットのメッセージはここに動的に追加される -->
     </div>
-    <div id="typing" class="typing-indicator">ちゃむが考えています…🍀</div>
+    <div id="typing" class="typing-indicator">
+      <img src="{{ url_for('static', filename='img/mate-head.png') }}" alt="" class="thinking-mate">
+      <span class="thinking-text" id="thinking-text">考えています</span>
+      <span class="thinking-dots"><i></i><i></i><i></i></span>
+    </div>
     <form id="message-form">
       <input type="text" id="message-input" autocomplete="off" placeholder="メッセージを入力...">
       <button type="submit" id="send-button">

@@ -9,7 +9,7 @@ from chat.logger import get_logger
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'))
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-3.1-flash-lite",
     temperature=0,
     max_tokens=None,
     timeout=120,

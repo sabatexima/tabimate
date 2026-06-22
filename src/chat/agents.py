@@ -17,7 +17,7 @@ invoke_with_retry でリトライしながら実行する。
 
 import re
 from chat.models import TravelPlanState
-from chat.llm import llm, invoke_with_retry, build_search_context
+from chat.llm import llm, llm_strong, invoke_with_retry, build_search_context
 from chat.logger import get_logger
 from chat.models import (
     TransportOutput, SightseeingOutput, GourmetOutput,
@@ -587,7 +587,7 @@ def cost_manager(state: TravelPlanState):
 """
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望（予算配分など）を必ず最優先で反映して見積もること。"
-    structured_llm = llm.with_structured_output(CostOutput)
+    structured_llm = llm_strong.with_structured_output(CostOutput)  # 数値計算は上位モデル
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.budget_estimate, "💰 費用見積もり:")
     log.info("💰 1人あたり合計: %s円（予算上限 %s円）", f"{response.total_per_person:,}", f"{state['budget_limit']:,}")
@@ -648,7 +648,7 @@ def balancer(state: TravelPlanState):
 """
     if state.get("retry_count", 0) == 0:
         prompt += "\n【重要】これは初回審査です。予算超過の場合でも budget_infeasible は選ばず、fix_* で差し戻してください。"
-    structured_llm = llm.with_structured_output(BalancerOutput)
+    structured_llm = llm_strong.with_structured_output(BalancerOutput)  # 多観点審査は上位モデル
     response = invoke_with_retry(structured_llm, prompt)
     status = response.status
     feedback = response.feedback

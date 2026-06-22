@@ -16,15 +16,6 @@ llm = ChatGoogleGenerativeAI(
     max_retries=2,
 )
 
-# 複雑な制約推論（スケジュール整合・プラン審査）に使う高性能モデル
-llm_pro = ChatGoogleGenerativeAI(
-    model="gemini-2.5-pro",
-    temperature=0,
-    max_tokens=None,
-    timeout=180,
-    max_retries=2,
-)
-
 _search = TavilySearch(max_results=8)
 log = get_logger("llm")
 

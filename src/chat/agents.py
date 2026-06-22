@@ -17,7 +17,7 @@ invoke_with_retry でリトライしながら実行する。
 
 import re
 from chat.models import TravelPlanState
-from chat.llm import llm, llm_pro, invoke_with_retry, build_search_context
+from chat.llm import llm, invoke_with_retry, build_search_context
 from chat.logger import get_logger
 from chat.models import (
     TransportOutput, SightseeingOutput, GourmetOutput,
@@ -489,7 +489,7 @@ def timekeeper(state: TravelPlanState):
             "＋徒歩で組み、各移動に路線・所要時間を明記すること。レンタカー・自家用車の運転を前提にしないこと。"
         )
 
-    structured_llm = llm_pro.with_structured_output(TimekeeperOutput)
+    structured_llm = llm.with_structured_output(TimekeeperOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.schedule, "📅 作成したスケジュール:")
     return {"schedule": response.schedule}
@@ -638,7 +638,7 @@ def balancer(state: TravelPlanState):
 """
     if state.get("retry_count", 0) == 0:
         prompt += "\n【重要】これは初回審査です。予算超過の場合でも budget_infeasible は選ばず、fix_* で差し戻してください。"
-    structured_llm = llm_pro.with_structured_output(BalancerOutput)
+    structured_llm = llm.with_structured_output(BalancerOutput)
     response = invoke_with_retry(structured_llm, prompt)
     log.info("👉 審査結果: [%s]", response.status.upper())
     log.info("💬 フィードバック: %s", response.feedback)

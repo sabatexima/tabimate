@@ -17,9 +17,10 @@ llm = ChatGoogleGenerativeAI(
 )
 
 # 推論・数値判断が重要なノード（審査=balancer、費用=cost_manager）用の上位モデル。
-# 大半は軽量な lite を使い、品質の効きどころだけ flash に上げてコスト増を抑える。
+# 大半は軽量な lite を使い、品質の効きどころだけ上位モデルに上げてコスト増を抑える。
+# gemini-3.5-flash は Flash 価格帯で Pro 近い性能（2026年時点の最新Flash）。
 llm_strong = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash",
+    model="gemini-3.5-flash",
     temperature=0,
     max_tokens=None,
     timeout=120,

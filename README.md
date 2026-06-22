@@ -1,13 +1,22 @@
-# TabiMate
+<p align="center">
+  <img src="src/static/img/mate-head.png" alt="Chamu — TabiMate mascot" width="120">
+</p>
 
-An AI-powered travel app that stays with you "before" and "after" your trip. It integrates travel planning, trip reflection, and sharing into a single Flask application.
+<h1 align="center">TabiMate 🍀</h1>
+
+<p align="center">
+  A gentle, picture-book-styled AI travel companion that stays with you <em>before</em> and <em>after</em> your trip.<br>
+  Plan creation, trip reflection (sticky notes), and sharing in a single Flask app.
+</p>
+
+<p align="center"><a href="README_jp.md">日本語版</a></p>
 
 ## Tech Stack
 
 ![Flask](https://img.shields.io/badge/Flask-3.1-000000.svg?logo=flask&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-1.3-1DA1F2.svg?logo=langchain)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.2-1DA1F2.svg?logo=langgraph&logoColor=white)
-![Google%20Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4.svg?logo=google%20gemini&logoColor=white)
+![Google%20Gemini](https://img.shields.io/badge/Gemini-3.5_Flash_%2F_3.1_Flash--Lite-4285F4.svg?logo=google%20gemini&logoColor=white)
 ![Tavily](https://img.shields.io/badge/Tavily-Search-F97316.svg?logo=tavily&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg?logo=mysql&logoColor=white)
 ![Google%20Cloud%20Run](https://img.shields.io/badge/Cloud_Run-Cloud-4285F4.svg?logo=google%20cloud&logoColor=white)
@@ -21,7 +30,8 @@ An AI-powered travel app that stays with you "before" and "after" your trip. It 
 - A multi-agent system powered by LangGraph workflows generates plans once all conditions are met.
 - Users can specify preferred transportation (Shinkansen, flight, car, highway bus, or "leave it to AI"). Estimation methods and schedule compilation adapt to the chosen transportation (defaults to "leave it to AI" for optimal selection).
 - A "no driver's license / public transport only" preference is detected from the conversation; when set, cars/rental cars are avoided and only public-transport-accessible spots and routes are used.
-- A Balancer (reviewer) detects budget overruns, schedule conflicts, theme mismatches, etc., and automatically rejects & triggers regeneration (up to 5 times).
+- A Balancer (reviewer) detects budget overruns, schedule conflicts, theme mismatches, etc., and automatically rejects & triggers regeneration (with a capped number of retries).
+- **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for most steps, and a stronger model (`gemini-3.5-flash`) for cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
 - Generated plans can be saved, viewed, and deleted from the saved plans list.
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
@@ -29,7 +39,7 @@ An AI-powered travel app that stays with you "before" and "after" your trip. It 
 - Tavily Web search reinforces real-time accuracy and information freshness.
 
 ### 2. Trip Reflection (Sticky Notes)
-- Create trips and upload multiple photos (saved to GCS or local storage).
+- Create trips and upload multiple photos (saved to GCS or local storage). HEIC/HEIF photos are converted to JPEG on upload, and lightweight thumbnails are generated (lists show thumbnails; the lightbox shows the original).
 - Extract shoot time and GPS coordinates from photo EXIF metadata, summarizing them into features (time-of-day bias, travel distance, activity range, etc.) on the backend.
 - Feed summarized features and representative photos to Gemini to generate 3 to 6 virtual sticky notes. Notes are re-pinned upon regeneration.
 - SNS-style feed on the home page. Each trip card features a large thumbnail and sticky note badges.
@@ -352,6 +362,8 @@ pytest tests/                       # Runs all tests
 
 `tests/test_smoke.py` executes the full planning workflow to verify that destinations are preserved and `spots` are returned as a list (requires Gemini/Tavily API keys).
 
+`tests/test_units.py` runs **offline (no API keys/DB)** and checks pure helpers — thumbnail key derivation, local URL generation/dedup, and path-traversal protection. Fast to run in CI.
+
 ---
 
 ## Security Policy
@@ -391,7 +403,7 @@ open -a Docker   # macOS
 - Expected timeouts are handled on the client side via the `abort_request` endpoint to cancel operations explicitly.
 
 ### Photo Loading is Slow
-GCS signed URLs call IAM signBlob per photo, which slows down as the photo count increases (increasing CPU/memory won't resolve this). `services/storage.py`'s `get_urls()` implements **caching & parallel generation** to mitigate this. For further improvements, consider serving thumbnails or configuring a minimum instance of 1 on Cloud Run.
+GCS signed URLs call IAM signBlob per photo, which slows down as the photo count increases (increasing CPU/memory won't resolve this). `services/storage.py`'s `get_urls()` implements **caching & parallel generation**, and **thumbnails** are served in lists (originals only in the lightbox). For photos uploaded before thumbnails existed, run `scripts/backfill_thumbnails.py`. To further reduce cold starts, consider a minimum instance of 1 on Cloud Run.
 
 ### Tavily Search Returns "String Instead of List" Error
 Tavily's search result types can occasionally be unstable (returning a `str` instead of a `list`). Check that `build_search_context()` in `chat/llm.py` includes the `if not isinstance(results, list)` guard, as previous issues have shown `AttributeError` from using `.get()` on strings.

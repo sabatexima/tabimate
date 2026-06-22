@@ -1,13 +1,22 @@
-# TabiMate（たびメイト）
+<p align="center">
+  <img src="src/static/img/mate-head.png" alt="ちゃむ（たびメイトのマスコット）" width="120">
+</p>
 
-AI が旅の「前」と「後」に寄り添う旅行アプリ。1つの Flask アプリに、旅行プラン作成と旅の振り返り＋共有をまとめています。
+<h1 align="center">たびメイト（TabiMate）🍀</h1>
+
+<p align="center">
+  AI が旅の「前」と「後」に寄り添う、やさしい絵本のような旅行アプリ。<br>
+  旅行プラン作成・旅の振り返り（付箋）・共有を、1つの Flask アプリにまとめています。
+</p>
+
+<p align="center"><a href="README.md">English</a></p>
 
 ## 技術スタック
 
 ![Flask](https://img.shields.io/badge/Flask-3.1-000000.svg?logo=flask&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-1.3-1DA1F2.svg?logo=langchain)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.2-1DA1F2.svg?logo=langgraph&logoColor=white)
-![Google%20Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4.svg?logo=google%20gemini&logoColor=white)
+![Google%20Gemini](https://img.shields.io/badge/Gemini-3.5_Flash_%2F_3.1_Flash--Lite-4285F4.svg?logo=google%20gemini&logoColor=white)
 ![Tavily](https://img.shields.io/badge/Tavily-Search-F97316.svg?logo=tavily&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg?logo=mysql&logoColor=white)
 ![Google%20Cloud%20Run](https://img.shields.io/badge/Cloud_Run-Cloud-4285F4.svg?logo=google%20cloud&logoColor=white)
@@ -20,14 +29,16 @@ AI が旅の「前」と「後」に寄り添う旅行アプリ。1つの Flask 
 - 自然な会話から旅行条件（必須7項目）を構造化抽出し、足りない項目を1つずつ質問。
 - 条件が揃うと LangGraph のワークフローで多段エージェントがプランを生成。
 - 交通手段（新幹線・飛行機・車・高速バス・おまかせ）を希望できる。希望に応じて往復費の試算方法とスケジュールの組み方が変わる（未指定は「おまかせ」で最適選択）。
-- バランサー（審査役）が予算超過・スケジュール矛盾・テーマ不一致などを検出し、最大5回まで自動で差し戻し→再生成。
+- バランサー（審査役）が予算超過・スケジュール矛盾・テーマ不一致などを検出し、自動で差し戻し→再生成（回数上限あり）。
+- **ハイブリッドモデル**：大半は軽量・低コストな `gemini-3.1-flash-lite`、費用見積もり・審査だけ上位の `gemini-3.5-flash`。費用合計の数値ガードで予算超過プランを防止し、構造的に無理な予算は「予算不足」として明示。生成ごとにトークン量と推定コストをログ出力。
 - 応答は SSE（Server-Sent Events）でストリーミング。生成中は「考え中（thinking）」を送り続け、途中キャンセルも可能。エラーや通信断はチャットに通知（無反応で止まらない）。
 - 完成プランは保存でき、保存プラン一覧から閲覧・削除できる。
 - 提示後もチャットで調整可能。「2日目をゆっくりに」「予算を抑えて」「宿を変えて」などで作り直し。**部分編集**にも対応し、指定した領域だけ再生成して他は前回のまま保持する。
+- **保存プランもカード上でチャット修正可能**。修正案はまずプレビュー表示し、「更新する」を押したときだけ保存する。
 - Web 検索（Tavily）で実在性・最新情報を補強。
 
 ### 2. 旅の振り返り（付箋）
-- 旅（trip）を作成し、写真を複数枚アップロード（GCS またはローカル保存）。
+- 旅（trip）を作成し、写真を複数枚アップロード（GCS またはローカル保存）。HEIC/HEIF はアップロード時に JPEG 変換し、軽量サムネイルを生成（一覧はサムネ、拡大時は原寸）。
 - 写真の EXIF から撮影時刻・GPS を抽出し、コード側で特徴量（時間帯の偏り・移動距離・滞在範囲など）に要約。
 - 特徴量＋代表写真を Gemini に渡し、付箋を3〜6枚生成。再生成のたびに付け直す。
 - トップページは SNS フィード風。各旅カードは大きなサムネイル＋付箋バッジ。
@@ -37,7 +48,7 @@ AI が旅の「前」と「後」に寄り添う旅行アプリ。1つの Flask 
 ### 3. 共有
 - 公開リンク: トークンURL（`/s/<token>`）を知る人が閲覧可能（ログイン不要）。
 - メール指定: 指定メールでログインした本人だけが閲覧/編集（`/shared/...`）。
-- 権限は `view`（閲覧のみ）/ `edit`（編集可）。編集は旅（写真追加・付箋生成）でのみ有効で、プランは常に閲覧専用。
+- 権限は `view`（閲覧のみ）/ `edit`（編集可）。旅は写真追加・付箋生成、プランは `edit` のメール共有で受領者がチャット修正（所有者のプランを上書き）できる。公開リンクは安全のため常に閲覧専用。
 - 所有者本人は常にフル権限。リンクの取り消しやグラントの削除も可能。
 - 共有された側（受領者）も、自分宛の共有を自分の一覧から解除できる（相手の元データは消えない／再共有されれば再表示）。
 - 共有された旅・プランは「共有された一覧」だけでなく、アルバム・保存プランにも統合表示される。
@@ -348,6 +359,8 @@ pytest tests/                       # 一式
 
 `tests/test_smoke.py` はプラン生成ワークフローを実際に通し実行し、目的地が保持されることと `spots` がリストであることを確認します（Gemini/Tavily の API キーが必要）。
 
+`tests/test_units.py` は **APIキー/DB不要のオフラインテスト**で、純粋関数（サムネイルキー導出・ローカルURL生成/重複集約・パストラバーサル拒否）を検証します。CIでも一瞬で回せます。
+
 ---
 
 ## セキュリティ方針
@@ -385,7 +398,7 @@ open -a Docker   # macOS
 - 計画的にタイムアウトが起きている場合は、生成中の `abort_request` でクライアント側から明示的にキャンセルする設計になっています。
 
 ### 写真の表示が遅い
-GCS の署名付きURLは写真ごとに IAM signBlob を呼ぶため、枚数が多いと遅くなります（CPU/メモリ増強では解消しません）。現在は `services/storage.py` の `get_urls()` で**キャッシュ＋並列生成**して短縮しています。さらに速くするなら、サムネイル配信や Cloud Run の最小インスタンス1（コールドスタート対策）を検討してください。
+GCS の署名付きURLは写真ごとに IAM signBlob を呼ぶため、枚数が多いと遅くなります（CPU/メモリ増強では解消しません）。現在は `services/storage.py` の `get_urls()` で**キャッシュ＋並列生成**し、一覧では**サムネイル**を配信（原寸は拡大時のみ）して短縮しています。サムネイル導入前の写真は `scripts/backfill_thumbnails.py` で一括生成できます。コールドスタートをさらに抑えるなら Cloud Run の最小インスタンス1も検討してください。
 
 ### Tavily 検索が「string が返ってきた」エラー
 検索結果の型が不定（`list` ではなく `str` で返る）ことがあります。`chat/llm.py` の `build_search_context()` で `if not isinstance(results, list)` のガードが入っているか確認してください。過去プロジェクトで同様の `AttributeError`（`.get()` が `str` で使えない）が発生しています。

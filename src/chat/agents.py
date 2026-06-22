@@ -217,9 +217,12 @@ def accommodation_candidates(state: TravelPlanState):
         return {"accommodation_candidates": []}
     log.info("[🏨 宿泊エキスパート]: 宿泊候補を抽出中... destination=%s", state["destination"])
     num_nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 1
+    # 1泊あたりの予算目安（残予算の40%を泊数で割る）。この価格帯で泊まれる候補を集める。
+    per_night_budget = int(state.get("remaining_budget", 0) * ACCOMMODATION_BUDGET_RATIO) // max(num_nights, 1)
     queries = [
         f"{state['destination']} ホテル 旅館 おすすめ {state['themes'][0]} 公式",
-        f"{state['destination']} 宿泊 観光協会 おすすめ",
+        f"{state['destination']} 宿泊 1泊 {per_night_budget}円以内 おすすめ",
+        f"{state['destination']} 格安 ビジネスホテル ゲストハウス",
     ]
     if any("車椅子" in r for r in state["special_requirements"]):
         queries.append(f"{state['destination']} バリアフリー ホテル 車椅子対応 ユニバーサルルーム")
@@ -234,10 +237,15 @@ def accommodation_candidates(state: TravelPlanState):
 期間: {state['duration']}（{num_nights}泊）
 テーマ: {', '.join(state['themes'])}
 参加人数: {state['num_people']}人
+1泊1人あたりの予算目安: {per_night_budget:,}円（この価格帯で泊まれる施設を中心に）
 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
 観光スポット: {', '.join(spots)}
 飲食店: {', '.join(restaurants)}
 {search_context}
+
+【選定の基準】
+・1泊1人あたり目安（{per_night_budget:,}円）前後で泊まれる施設を中心に選ぶこと。高級旅館だけに偏らず、ビジネスホテル・ゲストハウス・素泊まり可など手頃な選択肢も必ず含めること。
+・最低でも候補の半数は目安価格以内に収まる施設にすること。
 
 【出力】
 厳密に3個以上5個以下の施設名のみを返してください。
@@ -286,7 +294,8 @@ def accommodation_agent(state: TravelPlanState):
 ・メインの観光スポットまでのアクセス（徒歩/交通機関・所要時間）を明記すること
 ・繁忙期（{state['travel_date']}）のため、大人数グループでも予約が取りやすい施設を優先すること
 ・{state['num_people']}人全員が同一施設に宿泊できる部屋数・プランがあることを確認すること
-・1泊1人あたりの料金が目安上限（{per_night_budget:,}円）以内に収まる施設を選ぶこと。超えそうなら必ずより手頃な施設を選び、最初から予算内に収めること（後の差し戻しを避ける）
+・1泊1人あたりの料金が目安上限（{per_night_budget:,}円）以内に収まる施設を【必ず】選ぶこと。目安を超える高級宿は予算に余裕がある場合のみ。予算内の候補が無ければ、候補の中で最も安い施設を選ぶこと。
+・宿泊費の合計（{num_nights}泊）が宿泊予算の上限（{total_accommodation_budget:,}円/人）を絶対に超えないこと。食事・観光の費用も残ることを念頭に、宿で残予算を使い切らないこと。
 ・チェックイン時刻（最早）とチェックアウト時刻（最遅）を明記すること
 ・朝食プランの有無と料金を明記すること（テーマに合う朝食が提供される場合は積極的に推奨すること）
 ・特別条件がある場合（バリアフリー等）は、具体的な対応設備（スロープ・エレベーター・手すり等）を確認済みの施設のみ選ぶこと
@@ -581,7 +590,8 @@ def cost_manager(state: TravelPlanState):
     structured_llm = llm.with_structured_output(CostOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.budget_estimate, "💰 費用見積もり:")
-    return {"budget_estimate": response.budget_estimate}
+    log.info("💰 1人あたり合計: %s円（予算上限 %s円）", f"{response.total_per_person:,}", f"{state['budget_limit']:,}")
+    return {"budget_estimate": response.budget_estimate, "total_per_person": response.total_per_person}
 
 
 def balancer(state: TravelPlanState):
@@ -640,8 +650,32 @@ def balancer(state: TravelPlanState):
         prompt += "\n【重要】これは初回審査です。予算超過の場合でも budget_infeasible は選ばず、fix_* で差し戻してください。"
     structured_llm = llm.with_structured_output(BalancerOutput)
     response = invoke_with_retry(structured_llm, prompt)
-    log.info("👉 審査結果: [%s]", response.status.upper())
-    log.info("💬 フィードバック: %s", response.feedback)
+    status = response.status
+    feedback = response.feedback
+
+    # 数値による予算ガード：費用合計(total_per_person)が予算上限の110%を超えるなら、
+    # LLMの判定に関わらず承認させない。差し戻しても収まらない（リトライ上限）なら
+    # 「予算不足」として明示し、超過プランを黙って提示しないようにする。
+    _total = state.get("total_per_person") or 0
+    _budget = state.get("budget_limit") or 0
+    if not _is_edit and _total and _budget and _total > _budget * 1.10:
+        _new_retry = state.get("retry_count", 0) + 1
+        if _new_retry >= MAX_BALANCER_RETRIES:
+            status = "budget_infeasible"
+            feedback = (
+                f"費用の1人あたり合計が約{_total:,}円で、予算上限（{_budget:,}円）を超えています。"
+                "予算を上げるか、日程を短くする・宿のグレードを下げるなどをご検討ください。"
+            )
+        elif status not in ("budget_infeasible",):
+            status = "fix_budget"
+            feedback = (
+                f"1人あたり合計が約{_total:,}円で予算（{_budget:,}円）を超過しています。"
+                "宿泊・食事をより手頃な選択に見直して予算内に収めてください。"
+            ) + (f"\n（審査メモ: {response.feedback}）" if response.feedback else "")
+        log.info("⚖️ 予算ガード適用: total=%s budget=%s -> %s", _total, _budget, status)
+
+    log.info("👉 審査結果: [%s]", status.upper())
+    log.info("💬 フィードバック: %s", feedback)
 
     # 部分編集（予算影響あり）は差し戻さず、ご要望を反映したうえで懸念のみ警告する。
     if _is_edit:
@@ -660,9 +694,9 @@ def balancer(state: TravelPlanState):
         }
 
     return {
-        "status": response.status,
+        "status": status,
         "prev_status": state.get("status", ""),
-        "feedback": response.feedback,
+        "feedback": feedback,
         "retry_count": state.get("retry_count", 0) + 1,
     }
 

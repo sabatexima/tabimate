@@ -13,11 +13,13 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
 </head>
 <body>
+  {% if session.get('user_id') %}
   <button class="hamburger" id="hamburger" aria-label="メニューを開く">☰</button>
   <div class="sidebar-overlay" id="overlay"></div>
+  {% endif %}
 
   <div class="wrapper">
-    {% include "sidebar.html" %}
+    {% if session.get('user_id') %}{% include "sidebar.html" %}{% endif %}
     <div class="main">
       {% block content %}{% endblock %}
     </div>

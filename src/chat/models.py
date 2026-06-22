@@ -99,7 +99,7 @@ class AccommodationCandidatesOutput(BaseModel):
 
 class AccommodationOutput(BaseModel):
     accommodation: List[str] = Field(
-        description="厳密に1個以上2個以下の宿泊施設名のみのリスト。説明なし。重複なし。"
+        description="実際に宿泊する施設名のみ。原則1個（全員同一施設）。宿泊エリアが変わる連泊のときだけ最大2個。代替候補の併記は禁止。説明なし。重複なし。"
     )
 
 

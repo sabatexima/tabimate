@@ -104,6 +104,34 @@ def _extract_prev_plan(messages_history: list) -> dict | None:
     return None
 
 
+def _build_user_preferences(user_id: str) -> str:
+    """過去の★評価＋コメントから、生成時に参照する「好み」テキストを作る。"""
+    if not user_id:
+        return ""
+    try:
+        from db import get_rated_plans
+        rated = get_rated_plans(user_id, limit=8)
+    except Exception:
+        logger.debug("評価の取得に失敗", exc_info=True)
+        return ""
+    likes, dislikes = [], []
+    for p in rated:
+        r = p.get("rating") or 0
+        themes = "・".join(p.get("themes") or [])
+        comment = (p.get("rating_comment") or "").strip()
+        entry = f"{p.get('destination')}（{themes}）" + (f"：{comment}" if comment else "")
+        if r >= 4:
+            likes.append(entry)
+        elif r <= 2:
+            dislikes.append(entry)
+    parts = []
+    if likes:
+        parts.append("高評価だった旅: " + " / ".join(likes[:4]))
+    if dislikes:
+        parts.append("低評価だった旅: " + " / ".join(dislikes[:4]))
+    return "\n".join(parts)
+
+
 def _build_lc_messages(messages_history: list) -> list:
     """会話履歴をLangChainのメッセージリストに変換する。
     プランHTMLはトークン節約のためプレースホルダーに置き換える。"""
@@ -119,7 +147,7 @@ def _build_lc_messages(messages_history: list) -> list:
     return lc_messages
 
 
-def chat(user_message: str, messages_history=None, request_id=None, active_requests=None) -> str | None:
+def chat(user_message: str, messages_history=None, request_id=None, active_requests=None, user_id=None) -> str | None:
     """1回のユーザー発話を処理し、応答テキストまたはプランHTMLを返す。
 
     Args:
@@ -181,6 +209,8 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         "special_requirements": state.special_requirements or [],
         # 既存プランへの変更要望は user_feedback として各エージェントに最優先で反映させる
         "user_feedback":        state.plan_change_request or "",
+        # 過去の★評価から得た好み（参考としてやんわり反映）
+        "user_preferences":     _build_user_preferences(user_id),
     }
 
     # 部分編集: 変更要望があり、前回プランが復元でき、対象領域が限定されている場合は、

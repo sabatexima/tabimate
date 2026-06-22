@@ -117,10 +117,25 @@ function esc(str) {
         <button class="plan-edit-send" type="button">修正する</button>
       </div>` : '';
 
+    // 評価エリア（自分のプランのみ）。次回のプラン生成に好みとして活かす。
+    const rating = plan.rating || 0;
+    const ratingArea = shared ? '' : `
+      <div class="plan-rate">
+        <span class="rate-label">この旅はどうだった？</span>
+        <span class="rate-stars">
+          ${[1, 2, 3, 4, 5].map(n => `<button class="rate-star${rating >= n ? ' on' : ''}" data-n="${n}" type="button" aria-label="${n}つ星">★</button>`).join('')}
+        </span>
+        <input type="text" class="rate-comment" autocomplete="off"
+               placeholder="ひとこと（例: 歩きすぎた / ご飯が最高）" value="${esc(plan.rating_comment || '')}">
+        <button class="rate-save" type="button">記録</button>
+        <span class="rate-done" hidden>✓ 保存しました</span>
+      </div>`;
+
     card.innerHTML = `
       ${planBodyHtml(plan)}
       ${footer}
       ${editArea}
+      ${ratingArea}
     `;
 
     if (editable) {
@@ -204,6 +219,47 @@ function esc(str) {
       card.querySelector('.share-btn').addEventListener('click', () => {
         window.openShareModal('plan', plan.id);
       });
+
+      // ★評価＋コメント（次回のプラン生成に好みとして活かす）
+      const rateBox = card.querySelector('.plan-rate');
+      if (rateBox) {
+        const starEls = rateBox.querySelectorAll('.rate-star');
+        let current = plan.rating || 0;
+        const paint = (val) => starEls.forEach((s) => {
+          s.classList.toggle('on', parseInt(s.dataset.n, 10) <= val);
+        });
+        starEls.forEach((b) => {
+          b.addEventListener('click', () => { current = parseInt(b.dataset.n, 10); paint(current); });
+          b.addEventListener('mouseenter', () => paint(parseInt(b.dataset.n, 10)));
+        });
+        rateBox.querySelector('.rate-stars').addEventListener('mouseleave', () => paint(current));
+
+        rateBox.querySelector('.rate-save').addEventListener('click', async (e) => {
+          if (!current) { alert('★で評価を選んでください'); return; }
+          const comment = rateBox.querySelector('.rate-comment').value.trim();
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/rate_plan/${plan.id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rating: current, comment }),
+            });
+            const result = await res.json();
+            if (res.ok && result.status === 'OK') {
+              plan.rating = current; plan.rating_comment = comment;
+              const done = rateBox.querySelector('.rate-done');
+              done.hidden = false;
+              setTimeout(() => { done.hidden = true; }, 2000);
+            } else {
+              alert(result.message || '記録に失敗しました');
+            }
+          } catch (err) {
+            alert('通信エラーが発生しました。もう一度お試しください。');
+          }
+          btn.disabled = false;
+        });
+      }
 
       card.querySelector('.delete-btn').addEventListener('click', async (e) => {
         if (!confirm('このプランを削除しますか？')) return;

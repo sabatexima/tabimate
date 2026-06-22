@@ -153,6 +153,7 @@ def send_message():
                 messages_history=messages,
                 request_id=request_id,
                 active_requests=active_requests,
+                user_id=user_id,
             )
         except Exception:
             logger.exception("メッセージ処理中にエラーが発生しました: request_id=%s", request_id)
@@ -378,6 +379,25 @@ def apply_saved_plan(plan_id):
     update_travel_plan(plan_id, plan.get('google_user_id'), new_plan)
     logger.info("保存プランの修正を確定: plan_id=%s", plan_id)
     return json.dumps({'status': 'OK', 'plan': get_travel_plan_by_id(plan_id)}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
+
+
+@planner.route('/rate_plan/<int:plan_id>', methods=['POST'])
+@login_required
+def rate_plan(plan_id):
+    """保存プランに★評価（1〜5）とコメントを記録する（本人のみ）。"""
+    from db import rate_travel_plan
+    data = request.get_json(silent=True) or request.form
+    try:
+        rating = int(data.get('rating'))
+    except (TypeError, ValueError):
+        return json.dumps({'status': 'ERROR', 'message': '評価（1〜5）を指定してください'}), 400, {'Content-Type': 'application/json'}
+    if rating < 1 or rating > 5:
+        return json.dumps({'status': 'ERROR', 'message': '評価は1〜5で指定してください'}), 400, {'Content-Type': 'application/json'}
+    comment = (data.get('comment') or '').strip()[:1000]
+    ok = rate_travel_plan(plan_id, session['user_id'], rating, comment)
+    if not ok:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+    return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_my_plans')

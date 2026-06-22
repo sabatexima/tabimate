@@ -125,9 +125,31 @@ CREATE TABLE IF NOT EXISTS travel_plans (
     schedule_items   JSON,
     accommodation    JSON,
     budget_estimate  JSON,
+    rating           INT NULL,
+    rating_comment   TEXT NULL,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) CHARACTER SET utf8mb4
 """
+
+# 既存DBに rating / rating_comment 列が無い場合に遅延追加する（一度確認したらキャッシュ）
+_plan_columns_ensured = False
+
+
+def _ensure_plan_columns(conn) -> None:
+    global _plan_columns_ensured
+    if _plan_columns_ensured:
+        return
+    for col, ddl in (("rating", "INT NULL"), ("rating_comment", "TEXT NULL")):
+        exists = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_schema = DATABASE() AND table_name = 'travel_plans' AND column_name = :c"
+            ),
+            {"c": col},
+        ).scalar()
+        if not exists:
+            conn.execute(text(f"ALTER TABLE travel_plans ADD COLUMN {col} {ddl}"))
+    _plan_columns_ensured = True
 
 _CREATE_CHAT_TABLE = """
 CREATE TABLE IF NOT EXISTS chat_messages (
@@ -148,12 +170,14 @@ def _row_to_dict(row) -> dict:
 def get_travel_plans(google_user_id: str) -> list:
     with _get_engine().connect() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
         rows = conn.execute(
             text(
                 "SELECT id, destination, travel_date, duration, num_people, "
                 "budget_limit, departure_location, transport_cost, remaining_budget, "
                 "status, feedback, themes, special_requirements, "
-                "spots, restaurants, schedule_items, accommodation, budget_estimate, created_at "
+                "spots, restaurants, schedule_items, accommodation, budget_estimate, "
+                "rating, rating_comment, created_at "
                 "FROM travel_plans WHERE google_user_id = :uid ORDER BY created_at DESC"
             ),
             {"uid": google_user_id},
@@ -187,12 +211,14 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
     """
     with _get_engine().connect() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
         row = conn.execute(
             text(
                 "SELECT id, google_user_id, destination, travel_date, duration, num_people, "
                 "budget_limit, departure_location, transport_cost, remaining_budget, "
                 "status, feedback, themes, special_requirements, "
-                "spots, restaurants, schedule_items, accommodation, budget_estimate, created_at "
+                "spots, restaurants, schedule_items, accommodation, budget_estimate, "
+                "rating, rating_comment, created_at "
                 "FROM travel_plans WHERE id = :id"
             ),
             {"id": plan_id},
@@ -213,6 +239,48 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
     if d.get("created_at"):
         d["created_at"] = str(d["created_at"])
     return d
+
+
+def rate_travel_plan(plan_id: int, google_user_id: str, rating: int, comment: str = "") -> bool:
+    """保存プランに★評価とコメントを記録する（本人のプランのみ）。"""
+    with _get_engine().begin() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
+        result = conn.execute(
+            text(
+                "UPDATE travel_plans SET rating = :rating, rating_comment = :comment "
+                "WHERE id = :id AND google_user_id = :uid"
+            ),
+            {"rating": rating, "comment": comment or "", "id": plan_id, "uid": google_user_id},
+        )
+        return result.rowcount > 0
+
+
+def get_rated_plans(google_user_id: str, limit: int = 8) -> list:
+    """評価済みプランを新しい順に返す（次回生成の好み反映に使う）。"""
+    with _get_engine().connect() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
+        rows = conn.execute(
+            text(
+                "SELECT destination, themes, rating, rating_comment "
+                "FROM travel_plans WHERE google_user_id = :uid AND rating IS NOT NULL "
+                "ORDER BY created_at DESC LIMIT :lim"
+            ),
+            {"uid": google_user_id, "lim": limit},
+        ).fetchall()
+    result = []
+    for row in rows:
+        d = _row_to_dict(row)
+        if isinstance(d.get("themes"), str):
+            try:
+                d["themes"] = json.loads(d["themes"])
+            except Exception:
+                d["themes"] = []
+        elif d.get("themes") is None:
+            d["themes"] = []
+        result.append(d)
+    return result
 
 
 def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:

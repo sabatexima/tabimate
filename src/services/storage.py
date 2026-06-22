@@ -93,6 +93,17 @@ def _within_local(path: Path) -> bool:
         return str(path.resolve()).startswith(str(base) + os.sep)
 
 
+def exists(storage_path: str) -> bool:
+    """指定キーの実体が存在するか（GCS/ローカル）。バックフィルの重複生成回避に使う。"""
+    if using_gcs():
+        try:
+            return _get_gcs_client().bucket(_GCS_BUCKET).blob(storage_path).exists()
+        except Exception:
+            return False
+    path = _LOCAL_DIR / storage_path
+    return _within_local(path) and path.resolve().is_file()
+
+
 def save_at(key: str, data: bytes, content_type: str = "image/jpeg") -> str:
     """キーを指定してバイト列を保存する（サムネイル等、キーを自前で決めたい用途）。"""
     if using_gcs():

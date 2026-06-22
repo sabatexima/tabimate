@@ -77,7 +77,7 @@ active_requests = _ActiveRequests()
 
 _rate_lock = threading.Lock()
 _rate_log: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMIT = 5   # リクエスト数
+_RATE_LIMIT = 20  # リクエスト数（条件入力は1問1答で何度も送るため、通常会話で超えない値にする）
 _RATE_WINDOW = 60 # 秒
 _MAX_MESSAGE_LEN = 2000  # 1発話あたりの最大文字数（過大入力によるコスト増を抑制）
 _last_rate_sweep = 0.0   # 最後に古いエントリを掃除した時刻

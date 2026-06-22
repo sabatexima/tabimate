@@ -154,6 +154,26 @@ const chatBox = document.getElementById('chat-box');
         signal: abortController.signal,
       });
 
+      // SSE 以外の即時エラー応答（429:レート制限 / 400:入力不備 / 5xx など）を先に処理する。
+      // これらは data: イベントを返さないため、ストリームとして読むと誤って
+      // 「通信が途切れた」表示になってしまう。
+      if (!response.ok) {
+        let serverMsg = '';
+        try { serverMsg = (await response.json()).message || ''; } catch (e) { /* noop */ }
+        if (response.status === 429) {
+          showSystemMessage(
+            serverMsg || '少し早すぎたみたいです🍀\n\n少し時間をおいてから、もう一度「送信」ボタンを押してください（入力した内容はそのまま残してあります）。'
+          );
+        } else {
+          showSystemMessage(
+            (serverMsg ? serverMsg + '\n\n' : 'うまく送信できませんでした。\n\n')
+            + 'もう一度「送信」ボタンを押してお試しください（入力した内容はそのまま残してあります）🍀'
+          );
+        }
+        restoreInput(message);
+        return; // finally で入力欄は復帰する
+      }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';

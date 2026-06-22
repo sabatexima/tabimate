@@ -298,7 +298,7 @@ def accommodation_agent(state: TravelPlanState):
     total_accommodation_budget = int(state["remaining_budget"] * ACCOMMODATION_BUDGET_RATIO)
     per_night_budget = total_accommodation_budget // num_nights
     candidates = state.get("accommodation_candidates", [])
-    prompt = f"""あなたは宿泊施設の選定専門家です。以下の条件に合う最適な宿泊施設を1〜2箇所選んでください。
+    prompt = f"""あなたは宿泊施設の選定専門家です。全員が同一施設に宿泊する前提で、最適な宿泊施設を【1箇所だけ】選んでください（連泊で宿泊エリアが大きく変わる場合のみ、その泊数分）。代替案を複数併記しないこと。
 
 行き先: {state['destination']}
 旅行日程: {state['travel_date']}
@@ -316,6 +316,8 @@ def accommodation_agent(state: TravelPlanState):
 {chr(10).join(f'- {c}' for c in candidates)}
 
 【選定の条件】
+・実際に宿泊する施設のみを選ぶこと（全員同一施設・原則1軒）。代替候補や「どちらか」の複数列挙は禁止。宿泊エリアが変わる連泊でない限り1軒に絞ること。
+・{state['travel_date']}時点で確実に営業している（閉業・長期休業でない）施設を選ぶこと
 ・旅行テーマ（{', '.join(state['themes'])}）に合った雰囲気・コンセプトの施設を選ぶこと（旅館・ホテル・町家など）
 ・メインの観光スポットまでのアクセス（徒歩/交通機関・所要時間）を明記すること
 ・繁忙期（{state['travel_date']}）のため、大人数グループでも予約が取りやすい施設を優先すること
@@ -607,6 +609,7 @@ def cost_manager(state: TravelPlanState):
 
 【見積もりの指示】
 以下の項目を日別に分けて、具体的な金額（円）で箇条書きにしてください。上記の観光スポット・飲食店・宿泊施設は【すべて】費用見積もりに含めてください。
+※宿泊費は実際に宿泊する施設のみを「1泊につき1軒」で計上すること。複数施設を併記して二重に計上しないこと。
 
 ■ 往復交通費: {state['transport_cost']:,}円/人（確定済み）
 
@@ -801,7 +804,8 @@ def route_after_balancer(state: TravelPlanState):
 
     return {
         "fix_sightseeing": "sightseeing",
-        "fix_gourmet": "accommodation",
+        # グルメだけの問題は宿を選び直さず、飲食店の再抽出からやり直す（宿の再発防止）
+        "fix_gourmet": "gourmet_candidates_ready",
         "fix_accommodation": "accommodation",
         "fix_budget": "accommodation",
         "fix_time": "timekeeper",

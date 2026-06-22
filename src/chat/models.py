@@ -33,6 +33,7 @@ class TravelPlanState(TypedDict):
     schedule: List[str]
     accommodation: List[str]
     budget_estimate: List[str]
+    total_per_person: int
     feedback: str
     status: Literal[
         "approved",
@@ -109,6 +110,9 @@ class TimekeeperOutput(BaseModel):
 class CostOutput(BaseModel):
     budget_estimate: List[str] = Field(
         description="各費用項目と金額を箇条書きにしたリスト。日別に分けて記載し、最後に合計行を含めること。"
+    )
+    total_per_person: int = Field(
+        description="往復交通費を含む1人あたりの合計金額（円）。budget_estimateの合計と必ず一致させること。"
     )
 
 

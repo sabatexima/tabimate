@@ -73,7 +73,7 @@ class SightseeingCandidatesOutput(BaseModel):
 
 class SightseeingOutput(BaseModel):
     spots: List[str] = Field(
-        description="厳密に2個以上3個以下の候補スポット名称のみのリスト。説明なし。重複なし。"
+        description="2個以上6個以下の観光スポット名称のみのリスト。説明なし。重複なし。日帰りでも1日を充実させられる件数を選ぶこと。"
     )
 
 

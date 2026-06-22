@@ -16,6 +16,16 @@ llm = ChatGoogleGenerativeAI(
     max_retries=2,
 )
 
+# 推論・数値判断が重要なノード（審査=balancer、費用=cost_manager）用の上位モデル。
+# 大半は軽量な lite を使い、品質の効きどころだけ flash に上げてコスト増を抑える。
+llm_strong = ChatGoogleGenerativeAI(
+    model="gemini-3.1-flash",
+    temperature=0,
+    max_tokens=None,
+    timeout=120,
+    max_retries=2,
+)
+
 _search = TavilySearch(max_results=8)
 log = get_logger("llm")
 

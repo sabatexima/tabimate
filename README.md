@@ -38,7 +38,7 @@
 - Generated plans can be saved, viewed, and deleted from the saved plans list.
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
 - **Saved plans can also be edited via chat** directly on the card. The result is shown as a preview first and is only persisted when the user confirms ("update").
-- **Rating-based personalization**: users can rate a saved plan with ★1–5 plus a short comment (one rating per plan; locked once submitted). Highly-rated (★4+) and poorly-rated (★2−) plans and their comments are summarized into a preference hint that is softly applied to future plan generation (explicit requests still take priority; disliked tendencies are avoided).
+- **Rating-based personalization**: users can rate a saved plan with ★1–5 plus a short comment (one rating per plan, overwrite-style; revisable via an "edit" button to fix mistakes). Highly-rated (★4+) and poorly-rated (★2−) plans and their comments are summarized into a preference hint that is softly applied to future plan generation (explicit requests still take priority; disliked tendencies are avoided).
 - Tavily Web search reinforces real-time accuracy and information freshness.
 
 ### 2. Trip Reflection (Sticky Notes)

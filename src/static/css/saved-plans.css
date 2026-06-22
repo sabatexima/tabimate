@@ -326,6 +326,19 @@
     font-style: italic;
     font-size: 0.9em;
   }
+  .rate-edit {
+    margin-left: auto;
+    background: none;
+    border: 1px solid #cfe0c2;
+    color: #4a7a36;
+    border-radius: 16px;
+    padding: 5px 14px;
+    font-size: 0.82em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .rate-edit:hover { background: #eaf3e1; border-color: #4fa83a; }
   @keyframes ratePop {
     0% { transform: scale(0.96); opacity: 0.4; }
     60% { transform: scale(1.02); }
@@ -347,7 +360,8 @@
     .rate-star { font-size: 2.1em; padding: 4px 6px; }
     .rate-comment { width: 100%; padding: 12px 16px; font-size: 1em; }
     .rate-save { width: 100%; padding: 13px; font-size: 1em; }
-    .plan-rate.rated { flex-direction: column; gap: 8px; }
+    .plan-rate.rated { flex-direction: column; gap: 10px; }
     .rate-stars-static { justify-content: center; }
     .rate-star-static { font-size: 1.6em; }
+    .rate-edit { margin-left: 0; align-self: center; padding: 8px 24px; }
   }

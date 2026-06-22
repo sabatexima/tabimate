@@ -6,7 +6,7 @@ function esc(str) {
     return n != null ? Number(n).toLocaleString() : '—';
   }
 
-  // 評価済み（読み取り専用）の表示。評価は1プラン1回（記録後はロック）。
+  // 評価済みの表示（1プラン1評価・上書き式）。「修正」で再編集できる（誤入力の救済）。
   function ratedRateHtml(rating, comment) {
     const stars = [1, 2, 3, 4, 5]
       .map(n => `<span class="rate-star-static${rating >= n ? ' on' : ''}">★</span>`)
@@ -19,7 +19,82 @@ function esc(str) {
         <span class="rate-label">あなたの評価</span>
         <span class="rate-stars-static" aria-label="${rating}つ星">${stars}</span>
         ${c}
+        <button class="rate-edit" type="button">修正</button>
       </div>`;
+  }
+
+  // 編集可能な評価ウィジェット（既存の評価があれば★とコメントを引き継ぐ）。
+  function editableRateHtml(plan) {
+    const r = plan.rating || 0;
+    const stars = [1, 2, 3, 4, 5]
+      .map(n => `<button class="rate-star${r >= n ? ' on' : ''}" data-n="${n}" type="button" aria-label="${n}つ星">★</button>`)
+      .join('');
+    return `
+      <div class="plan-rate">
+        <span class="rate-label">この旅はどうだった？</span>
+        <div class="rate-controls">
+          <span class="rate-stars">${stars}</span>
+          <input type="text" class="rate-comment" autocomplete="off"
+                 placeholder="ひとこと（例: 歩きすぎた / ご飯が最高）" value="${esc(plan.rating_comment || '')}">
+          <button class="rate-save" type="button">${r ? '更新' : '記録'}</button>
+        </div>
+      </div>`;
+  }
+
+  // 評価エリアのイベントを結線する。記録/更新で読み取り表示へ、「修正」で編集へ戻る（相互再結線）。
+  function mountRate(card, plan) {
+    const box = card.querySelector('.plan-rate');
+    if (!box) return;
+
+    if (box.classList.contains('rated')) {
+      const editBtn = box.querySelector('.rate-edit');
+      if (editBtn) editBtn.addEventListener('click', () => {
+        box.outerHTML = editableRateHtml(plan);
+        mountRate(card, plan);
+      });
+      return;
+    }
+
+    const starEls = box.querySelectorAll('.rate-star');
+    const saveBtn = box.querySelector('.rate-save');
+    let current = plan.rating || 0;
+    const paint = (val) => starEls.forEach((s) => {
+      s.classList.toggle('on', parseInt(s.dataset.n, 10) <= val);
+    });
+    starEls.forEach((b) => {
+      b.addEventListener('click', () => { current = parseInt(b.dataset.n, 10); paint(current); });
+      b.addEventListener('mouseenter', () => paint(parseInt(b.dataset.n, 10)));
+    });
+    box.querySelector('.rate-stars').addEventListener('mouseleave', () => paint(current));
+
+    saveBtn.addEventListener('click', async () => {
+      if (!current) { alert('★で評価を選んでください'); return; }
+      const comment = box.querySelector('.rate-comment').value.trim();
+      const orig = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中…';
+      try {
+        const res = await fetch(`/rate_plan/${plan.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rating: current, comment }),
+        });
+        const result = await res.json();
+        if (res.ok && result.status === 'OK') {
+          plan.rating = current; plan.rating_comment = comment;
+          box.outerHTML = ratedRateHtml(current, comment);
+          mountRate(card, plan);
+        } else {
+          alert(result.message || '記録に失敗しました');
+          saveBtn.disabled = false;
+          saveBtn.textContent = orig;
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。もう一度お試しください。');
+        saveBtn.disabled = false;
+        saveBtn.textContent = orig;
+      }
+    });
   }
 
   function accordion(icon, label, items) {
@@ -134,24 +209,12 @@ function esc(str) {
       </div>` : '';
 
     // 評価エリア（自分のプランのみ）。次回のプラン生成に好みとして活かす。
-    // 評価は1プラン1回。記録済みなら読み取り専用で表示する。
-    const rating = plan.rating || 0;
+    // 1プラン1評価（上書き式）。記録済みは読み取り表示＋「修正」で再編集できる。
     const ratingArea = shared
       ? ''
-      : (rating
-        ? ratedRateHtml(rating, plan.rating_comment || '')
-        : `
-      <div class="plan-rate">
-        <span class="rate-label">この旅はどうだった？</span>
-        <div class="rate-controls">
-          <span class="rate-stars">
-            ${[1, 2, 3, 4, 5].map(n => `<button class="rate-star" data-n="${n}" type="button" aria-label="${n}つ星">★</button>`).join('')}
-          </span>
-          <input type="text" class="rate-comment" autocomplete="off"
-                 placeholder="ひとこと（例: 歩きすぎた / ご飯が最高）">
-          <button class="rate-save" type="button">記録</button>
-        </div>
-      </div>`);
+      : (plan.rating
+        ? ratedRateHtml(plan.rating, plan.rating_comment || '')
+        : editableRateHtml(plan));
 
     card.innerHTML = `
       ${planBodyHtml(plan)}
@@ -242,49 +305,8 @@ function esc(str) {
         window.openShareModal('plan', plan.id);
       });
 
-      // ★評価＋コメント（次回のプラン生成に好みとして活かす）。評価は1プラン1回。
-      const rateBox = card.querySelector('.plan-rate');
-      const saveBtn = rateBox && rateBox.querySelector('.rate-save');
-      if (rateBox && saveBtn) {
-        const starEls = rateBox.querySelectorAll('.rate-star');
-        let current = 0;
-        const paint = (val) => starEls.forEach((s) => {
-          s.classList.toggle('on', parseInt(s.dataset.n, 10) <= val);
-        });
-        starEls.forEach((b) => {
-          b.addEventListener('click', () => { current = parseInt(b.dataset.n, 10); paint(current); });
-          b.addEventListener('mouseenter', () => paint(parseInt(b.dataset.n, 10)));
-        });
-        rateBox.querySelector('.rate-stars').addEventListener('mouseleave', () => paint(current));
-
-        saveBtn.addEventListener('click', async () => {
-          if (!current) { alert('★で評価を選んでください'); return; }
-          const comment = rateBox.querySelector('.rate-comment').value.trim();
-          saveBtn.disabled = true;
-          saveBtn.textContent = '記録中…';
-          try {
-            const res = await fetch(`/rate_plan/${plan.id}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ rating: current, comment }),
-            });
-            const result = await res.json();
-            if (res.ok && result.status === 'OK') {
-              plan.rating = current; plan.rating_comment = comment;
-              // 記録後はロック（読み取り専用表示に差し替え）
-              rateBox.outerHTML = ratedRateHtml(current, comment);
-            } else {
-              alert(result.message || '記録に失敗しました');
-              saveBtn.disabled = false;
-              saveBtn.textContent = '記録';
-            }
-          } catch (err) {
-            alert('通信エラーが発生しました。もう一度お試しください。');
-            saveBtn.disabled = false;
-            saveBtn.textContent = '記録';
-          }
-        });
-      }
+      // ★評価＋コメント（次回のプラン生成に好みとして活かす）。記録後も「修正」で再編集可。
+      mountRate(card, plan);
 
       card.querySelector('.delete-btn').addEventListener('click', async (e) => {
         if (!confirm('このプランを削除しますか？')) return;

@@ -6,6 +6,22 @@ function esc(str) {
     return n != null ? Number(n).toLocaleString() : '—';
   }
 
+  // 評価済み（読み取り専用）の表示。評価は1プラン1回（記録後はロック）。
+  function ratedRateHtml(rating, comment) {
+    const stars = [1, 2, 3, 4, 5]
+      .map(n => `<span class="rate-star-static${rating >= n ? ' on' : ''}">★</span>`)
+      .join('');
+    const c = comment
+      ? `<span class="rate-comment-view">「${esc(comment)}」</span>`
+      : '';
+    return `
+      <div class="plan-rate rated">
+        <span class="rate-label">あなたの評価</span>
+        <span class="rate-stars-static" aria-label="${rating}つ星">${stars}</span>
+        ${c}
+      </div>`;
+  }
+
   function accordion(icon, label, items) {
     if (!items || items.length === 0) return '';
     const lis = items.map(i => `<li>${esc(i)}</li>`).join('');
@@ -118,18 +134,24 @@ function esc(str) {
       </div>` : '';
 
     // 評価エリア（自分のプランのみ）。次回のプラン生成に好みとして活かす。
+    // 評価は1プラン1回。記録済みなら読み取り専用で表示する。
     const rating = plan.rating || 0;
-    const ratingArea = shared ? '' : `
+    const ratingArea = shared
+      ? ''
+      : (rating
+        ? ratedRateHtml(rating, plan.rating_comment || '')
+        : `
       <div class="plan-rate">
         <span class="rate-label">この旅はどうだった？</span>
-        <span class="rate-stars">
-          ${[1, 2, 3, 4, 5].map(n => `<button class="rate-star${rating >= n ? ' on' : ''}" data-n="${n}" type="button" aria-label="${n}つ星">★</button>`).join('')}
-        </span>
-        <input type="text" class="rate-comment" autocomplete="off"
-               placeholder="ひとこと（例: 歩きすぎた / ご飯が最高）" value="${esc(plan.rating_comment || '')}">
-        <button class="rate-save" type="button">記録</button>
-        <span class="rate-done" hidden>✓ 保存しました</span>
-      </div>`;
+        <div class="rate-controls">
+          <span class="rate-stars">
+            ${[1, 2, 3, 4, 5].map(n => `<button class="rate-star" data-n="${n}" type="button" aria-label="${n}つ星">★</button>`).join('')}
+          </span>
+          <input type="text" class="rate-comment" autocomplete="off"
+                 placeholder="ひとこと（例: 歩きすぎた / ご飯が最高）">
+          <button class="rate-save" type="button">記録</button>
+        </div>
+      </div>`);
 
     card.innerHTML = `
       ${planBodyHtml(plan)}
@@ -220,11 +242,12 @@ function esc(str) {
         window.openShareModal('plan', plan.id);
       });
 
-      // ★評価＋コメント（次回のプラン生成に好みとして活かす）
+      // ★評価＋コメント（次回のプラン生成に好みとして活かす）。評価は1プラン1回。
       const rateBox = card.querySelector('.plan-rate');
-      if (rateBox) {
+      const saveBtn = rateBox && rateBox.querySelector('.rate-save');
+      if (rateBox && saveBtn) {
         const starEls = rateBox.querySelectorAll('.rate-star');
-        let current = plan.rating || 0;
+        let current = 0;
         const paint = (val) => starEls.forEach((s) => {
           s.classList.toggle('on', parseInt(s.dataset.n, 10) <= val);
         });
@@ -234,11 +257,11 @@ function esc(str) {
         });
         rateBox.querySelector('.rate-stars').addEventListener('mouseleave', () => paint(current));
 
-        rateBox.querySelector('.rate-save').addEventListener('click', async (e) => {
+        saveBtn.addEventListener('click', async () => {
           if (!current) { alert('★で評価を選んでください'); return; }
           const comment = rateBox.querySelector('.rate-comment').value.trim();
-          const btn = e.currentTarget;
-          btn.disabled = true;
+          saveBtn.disabled = true;
+          saveBtn.textContent = '記録中…';
           try {
             const res = await fetch(`/rate_plan/${plan.id}`, {
               method: 'POST',
@@ -248,16 +271,18 @@ function esc(str) {
             const result = await res.json();
             if (res.ok && result.status === 'OK') {
               plan.rating = current; plan.rating_comment = comment;
-              const done = rateBox.querySelector('.rate-done');
-              done.hidden = false;
-              setTimeout(() => { done.hidden = true; }, 2000);
+              // 記録後はロック（読み取り専用表示に差し替え）
+              rateBox.outerHTML = ratedRateHtml(current, comment);
             } else {
               alert(result.message || '記録に失敗しました');
+              saveBtn.disabled = false;
+              saveBtn.textContent = '記録';
             }
           } catch (err) {
             alert('通信エラーが発生しました。もう一度お試しください。');
+            saveBtn.disabled = false;
+            saveBtn.textContent = '記録';
           }
-          btn.disabled = false;
         });
       }
 

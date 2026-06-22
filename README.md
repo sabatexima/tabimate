@@ -30,12 +30,15 @@
 - A multi-agent system powered by LangGraph workflows generates plans once all conditions are met.
 - Users can specify preferred transportation (Shinkansen, flight, car, highway bus, or "leave it to AI"). Estimation methods and schedule compilation adapt to the chosen transportation (defaults to "leave it to AI" for optimal selection).
 - A "no driver's license / public transport only" preference is detected from the conversation; when set, cars/rental cars are avoided and only public-transport-accessible spots and routes are used.
+- **Time preferences** (e.g., "I want to be home by evening", "take it easy in the morning") are detected from the conversation and applied to the schedule with top priority.
+- **Day trips make full use of the day**: the number of spots scales with the trip length, and the schedule is built by working *backward from a reasonable return-home time* (departure time = home time − return travel time) instead of ending in the early afternoon.
 - A Balancer (reviewer) detects budget overruns, schedule conflicts, theme mismatches, etc., and automatically rejects & triggers regeneration (with a capped number of retries).
 - **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for most steps, and a stronger model (`gemini-3.5-flash`) for cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
 - Generated plans can be saved, viewed, and deleted from the saved plans list.
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
 - **Saved plans can also be edited via chat** directly on the card. The result is shown as a preview first and is only persisted when the user confirms ("update").
+- **Rating-based personalization**: users can rate a saved plan with ★1–5 plus a short comment (one rating per plan; locked once submitted). Highly-rated (★4+) and poorly-rated (★2−) plans and their comments are summarized into a preference hint that is softly applied to future plan generation (explicit requests still take priority; disliked tendencies are avoided).
 - Tavily Web search reinforces real-time accuracy and information freshness.
 
 ### 2. Trip Reflection (Sticky Notes)
@@ -268,6 +271,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 | GET | `/get_shared_plans` | JSON list of plans shared with the user (integrated into the saved plans view) |
 | POST | `/edit_saved_plan/<id>` | Chat-edits a saved plan and streams the proposed result via SSE (no save yet; owner or edit-grant recipient) |
 | POST | `/apply_saved_plan/<id>` | Persists the previewed edit (overwrites the owner's plan) |
+| POST | `/rate_plan/<id>` | Records a ★1–5 rating and comment for the user's own plan (used to personalize future generation) |
 
 ### auth (`/auth`) — `views/auth.py`
 
@@ -347,6 +351,8 @@ START
 - **Out of Budget**: If transportation costs exceed the total budget, `transport_agent` throws a `ValueError` to abort and notify the user.
 - **Day Trip Check**: `is_day_trip()` inspects the duration string to skip accommodation nodes.
 - **User Feedback Priority**: During planning adjustments, `user_feedback` is prioritized in prompts for all agents.
+- **Time Preference**: `schedule_pref` (e.g., "home by evening") is injected into the timekeeper as a top-priority constraint; the day-trip schedule is computed by back-calculating from the return-home time.
+- **Rating-based Preferences**: `user_preferences` is built from the user's past ★ ratings/comments (`get_rated_plans`) and softly injected into the sightseeing, accommodation, gourmet, and timekeeper agents.
 - **Partial Editing**: Automatically detects edit targets (`edit_targets`) based on adjustment requests, regenerating only targeted nodes (previous outputs are preserved for other nodes). Previous plans are restored via the `data-plan` attribute on the save button. Edits affecting budget (lodging, dining, transport, cost) verify budget/feasibility and return warnings rather than triggering a balancer rejection if exceeded.
 - **Web Search Integration**: `build_search_context()` in `chat/llm.py` uses Tavily to fetch official guidelines and reviews to back up candidates (filter score threshold: 0.3).
 - **Retries**: `invoke_with_retry()` retries API requests up to 5 times using exponential/linear backoff to handle rate limits (429/503) and network failures.

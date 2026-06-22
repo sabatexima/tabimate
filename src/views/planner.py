@@ -396,7 +396,8 @@ def rate_plan(plan_id):
     comment = (data.get('comment') or '').strip()[:1000]
     ok = rate_travel_plan(plan_id, session['user_id'], rating, comment)
     if not ok:
-        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+        # 対象なし、または既に評価済み（評価は1プラン1回）
+        return json.dumps({'status': 'ERROR', 'message': 'このプランは評価できません（既に評価済みの可能性があります）'}), 409, {'Content-Type': 'application/json'}
     return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 

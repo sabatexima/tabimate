@@ -244,50 +244,110 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed #e0d8c8;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #fbf6ec 0%, #f1f7e9 100%);
+    border: 1px solid #ece3d0;
   }
   .plan-rate .rate-label {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    font-weight: 600;
+    font-size: 0.95em;
+    color: var(--text-main);
+    font-weight: 700;
+    white-space: nowrap;
   }
-  .rate-stars { display: inline-flex; }
+  .rate-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+  }
+  .rate-stars { display: inline-flex; gap: 2px; }
   .rate-star {
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 1.3em;
+    font-size: 1.65em;
     line-height: 1;
-    padding: 0 1px;
-    color: #d8d0c0;
+    padding: 2px 2px;
+    color: #e3dac7;
     transition: color 0.12s, transform 0.12s;
   }
-  .rate-star:hover { transform: scale(1.15); }
-  .rate-star.on { color: #f5b301; }
+  .rate-star:hover { transform: scale(1.2) rotate(-6deg); }
+  .rate-star.on {
+    color: #f5b301;
+    text-shadow: 0 1px 4px rgba(245, 179, 1, 0.35);
+  }
   .rate-comment {
-    flex: 1 1 180px;
+    flex: 1 1 200px;
     min-width: 140px;
     border: 1px solid #e0d8c8;
-    border-radius: 16px;
-    padding: 6px 12px;
-    font-size: 0.85em;
+    border-radius: 20px;
+    padding: 9px 16px;
+    font-size: 0.9em;
     font-family: inherit;
+    background: #fff;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .rate-comment:focus { outline: none; border-color: var(--primary-color); }
+  .rate-comment:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 168, 58, 0.12);
+  }
   .rate-save {
     background: var(--primary-color);
     color: #fff;
     border: none;
-    border-radius: 16px;
-    padding: 6px 16px;
-    font-size: 0.85em;
-    font-weight: 600;
+    border-radius: 20px;
+    padding: 9px 22px;
+    font-size: 0.9em;
+    font-weight: 700;
     cursor: pointer;
-    transition: background 0.15s;
+    white-space: nowrap;
+    box-shadow: 0 3px 8px rgba(79, 168, 58, 0.25);
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
   }
-  .rate-save:hover { background: #418c30; }
-  .rate-save:disabled { background: #aaa; cursor: not-allowed; }
-  .rate-done { font-size: 0.85em; color: var(--primary-color); font-weight: 600; }
+  .rate-save:hover { background: #418c30; transform: translateY(-1px); }
+  .rate-save:active { transform: translateY(0); }
+  .rate-save:disabled { background: #aaa; cursor: not-allowed; box-shadow: none; }
+
+  /* 評価済み（読み取り専用） */
+  .plan-rate.rated {
+    background: #f3f8ee;
+    animation: ratePop 0.35s ease;
+  }
+  .rate-stars-static { display: inline-flex; gap: 1px; }
+  .rate-star-static { font-size: 1.25em; line-height: 1; color: #e3dac7; }
+  .rate-star-static.on { color: #f5b301; }
+  .rate-comment-view {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.9em;
+  }
+  @keyframes ratePop {
+    0% { transform: scale(0.96); opacity: 0.4; }
+    60% { transform: scale(1.02); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* スマホ: 縦積みで押しやすく */
+  @media (max-width: 600px) {
+    .plan-rate {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      text-align: center;
+      padding: 16px 14px;
+    }
+    .plan-rate .rate-label { text-align: center; white-space: normal; }
+    .rate-controls { flex-direction: column; align-items: stretch; gap: 12px; }
+    .rate-stars { justify-content: center; }
+    .rate-star { font-size: 2.1em; padding: 4px 6px; }
+    .rate-comment { width: 100%; padding: 12px 16px; font-size: 1em; }
+    .rate-save { width: 100%; padding: 13px; font-size: 1em; }
+    .plan-rate.rated { flex-direction: column; gap: 8px; }
+    .rate-stars-static { justify-content: center; }
+    .rate-star-static { font-size: 1.6em; }
+  }

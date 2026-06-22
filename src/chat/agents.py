@@ -16,6 +16,7 @@ invoke_with_retry でリトライしながら実行する。
 """
 
 import re
+from datetime import date
 from chat.models import TravelPlanState
 from chat.llm import llm, llm_strong, invoke_with_retry, build_search_context
 from chat.logger import get_logger
@@ -67,6 +68,17 @@ def _skip(state, area: str) -> bool:
     """部分編集で、この領域を再生成せず前回の成果物を引き継ぐ場合 True。"""
     run = _run_set(state)
     return run is not None and area not in run
+
+
+def _directive(state=None) -> str:
+    """全エージェント共通の指示（出力言語・本日の日付・実在性）。各プロンプト末尾に付与する。"""
+    return (
+        "\n【共通の指示】\n"
+        f"・本日の日付は {date.today().isoformat()}。営業状況・季節・開催時期の判断に使うこと。\n"
+        "・すべて日本語で出力すること。\n"
+        "・実在し、現在も営業している施設・スポット・店舗のみを扱うこと。"
+        "閉業・移転・長期休業・期間限定の終了が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。\n"
+    )
 
 
 def transport_agent(state: TravelPlanState):
@@ -162,6 +174,7 @@ def sightseeing_candidates(state: TravelPlanState):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して候補を選ぶこと。"
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
+    prompt += _directive(state)
     structured_llm = llm.with_structured_output(SightseeingCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.candidates, "✨ 候補スポット:")
@@ -197,11 +210,7 @@ def sightseeing_expert(state: TravelPlanState):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映してスポットを選ぶこと。"
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
-    prompt += (
-        "\n【実在性・最新性】実在し、現在も営業しているスポットのみを選ぶこと。"
-        "閉業・移転・長期休業・期間限定の終了が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。"
-        "検索の参考情報がある場合はそれと矛盾しないこと。"
-    )
+    prompt += _directive(state)
     structured_llm = llm.with_structured_output(SightseeingOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.spots, "✨ 選定スポット:")
@@ -250,6 +259,7 @@ def accommodation_candidates(state: TravelPlanState):
 【出力】
 厳密に3個以上5個以下の施設名のみを返してください。
 """
+    prompt += _directive(state)
     structured_llm = llm.with_structured_output(AccommodationCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.accommodation, "🏨 候補宿泊施設:")
@@ -304,10 +314,7 @@ def accommodation_agent(state: TravelPlanState):
         prompt += f"\n【バランサーからの修正要求】:\n{state['feedback']}\nこの指摘を反映して、施設を選び直してください。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して宿泊施設を選んでください。"
-    prompt += (
-        "\n【実在性・最新性】実在し、現在も営業している宿泊施設のみを選ぶこと。"
-        "閉業・休業・建て替え中が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。"
-    )
+    prompt += _directive(state)
 
     structured_llm = llm.with_structured_output(AccommodationOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -345,6 +352,7 @@ def gourmet_candidates(state: TravelPlanState):
 【出力】
 厳密に4個以上6個以下の飲食店名のみを返してください。
 """
+    prompt += _directive(state)
     structured_llm = llm.with_structured_output(GourmetCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.restaurants, "🍱 候補飲食店:")
@@ -389,10 +397,7 @@ def gourmet_hunter(state: TravelPlanState):
         prompt += f"\n【バランサーからの修正要求】:\n{state['feedback']}\nこの指摘を反映して、飲食店を選び直してください。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して飲食店を選んでください。"
-    prompt += (
-        "\n【実在性・最新性】実在し、現在も営業している飲食店のみを選ぶこと。"
-        "閉業・移転・長期休業が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。"
-    )
+    prompt += _directive(state)
 
     structured_llm = llm.with_structured_output(GourmetOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -498,6 +503,7 @@ def timekeeper(state: TravelPlanState):
             "＋徒歩で組み、各移動に路線・所要時間を明記すること。レンタカー・自家用車の運転を前提にしないこと。"
         )
 
+    prompt += _directive(state)
     structured_llm = llm.with_structured_output(TimekeeperOutput)
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.schedule, "📅 作成したスケジュール:")
@@ -587,6 +593,11 @@ def cost_manager(state: TravelPlanState):
 """
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望（予算配分など）を必ず最優先で反映して見積もること。"
+    prompt += (
+        "\n【整合の必須事項】1人あたり合計は往復交通費を含み、各費用項目の和と必ず一致させること。"
+        "予算上限を超える場合は超過額を明記すること。total_per_person は同じ合計額（整数・円）にすること。"
+    )
+    prompt += _directive(state)
     structured_llm = llm_strong.with_structured_output(CostOutput)  # 数値計算は上位モデル
     response = invoke_with_retry(structured_llm, prompt)
     _pp(response.budget_estimate, "💰 費用見積もり:")
@@ -648,6 +659,7 @@ def balancer(state: TravelPlanState):
 """
     if state.get("retry_count", 0) == 0:
         prompt += "\n【重要】これは初回審査です。予算超過の場合でも budget_infeasible は選ばず、fix_* で差し戻してください。"
+    prompt += _directive(state)
     structured_llm = llm_strong.with_structured_output(BalancerOutput)  # 多観点審査は上位モデル
     response = invoke_with_retry(structured_llm, prompt)
     status = response.status

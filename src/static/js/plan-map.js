@@ -2,9 +2,10 @@
   const STADIA_KEY = document.querySelector('meta[name="stadia-key"]')?.content || '';
   const CACHE_PREFIX = 'tabimate_geo_';
 
-  async function geocode(name, destination) {
-    const query = destination ? `${name}, ${destination}` : name;
-    const url = `/api/geocode?q=${encodeURIComponent(query)}`;
+  async function geocode(name) {
+    // destination（「関西」「浅草」等）を付けると Nominatim のヒット率が下がるため、
+    // スポット名のみで検索する（国の絞り込みはサーバー側の countrycodes=jp で担保）。
+    const url = `/api/geocode?q=${encodeURIComponent(name)}`;
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -23,7 +24,7 @@
     const results = [];
     for (const spot of spots) {
       await new Promise(r => setTimeout(r, 1000));  // Nominatim rate limit: 1 req/s
-      const coords = await geocode(spot, destination);
+      const coords = await geocode(spot);
       if (coords) results.push(coords);
     }
     // 全スポット失敗時はキャッシュしない（次回リトライを可能にする）

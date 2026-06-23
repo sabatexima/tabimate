@@ -424,7 +424,7 @@ def geocode():
     try:
         resp = req.get(
             'https://nominatim.openstreetmap.org/search',
-            params={'q': q, 'format': 'json', 'limit': 1},
+            params={'q': q, 'format': 'json', 'limit': 1, 'countrycodes': 'jp'},
             headers={'User-Agent': 'tabimate/1.0 (travel planner app)', 'Accept-Language': 'ja'},
             timeout=5,
         )

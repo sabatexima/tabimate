@@ -206,6 +206,7 @@ function esc(str) {
          </div>`
       : `<div class="plan-footer">
            ${editBtnHtml}
+           <a class="cal-btn" href="/export_plan_ics/${esc(plan.id)}">📅 カレンダー</a>
            <button class="share-btn" data-id="${esc(plan.id)}">🔗 共有</button>
            <button class="delete-btn" data-id="${esc(plan.id)}">削除</button>
          </div>`;

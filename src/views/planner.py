@@ -414,6 +414,74 @@ def rate_plan(plan_id):
     return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 
+def _build_plan_ics(plan: dict) -> str:
+    """保存プランを iCalendar(.ics) 文字列に変換する（Google カレンダー等に取込可能）。
+
+    スケジュールは自由文のため、旅行日〜期間から終日イベントを1件作り、
+    観光・グルメ・宿・スケジュール・費用を説明文にまとめる。
+    """
+    import re
+    from datetime import date, datetime, timedelta
+
+    def esc(s):
+        return (str(s or '').replace('\\', '\\\\').replace(';', '\\;')
+                .replace(',', '\\,').replace('\n', '\\n'))
+
+    # 旅行日の抽出（YYYY-MM-DD / YYYY/MM/DD / YYYY年M月D日）。取れなければ今日。
+    m = re.search(r'(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})', str(plan.get('travel_date') or ''))
+    try:
+        start = date(int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else date.today()
+    except ValueError:
+        start = date.today()
+    # 期間 → 日数（「N泊」→ N+1日、それ以外は1日）
+    nm = re.search(r'(\d+)\s*泊', str(plan.get('duration') or ''))
+    end = start + timedelta(days=(int(nm.group(1)) + 1 if nm else 1))
+
+    lines = []
+    def add(label, items):
+        if items:
+            lines.append(f"{label}: " + "、".join(items))
+    add('✨観光', plan.get('spots'))
+    add('🍱グルメ', plan.get('restaurants'))
+    add('🏨宿泊', plan.get('accommodation'))
+    if plan.get('schedule'):
+        lines.append('📅スケジュール')
+        lines.extend(plan.get('schedule'))
+    if plan.get('budget_estimate'):
+        lines.append('💰費用')
+        lines.extend(plan.get('budget_estimate'))
+
+    summary = f"🗾 {plan.get('destination') or '旅行'} 旅行プラン"
+    dtstamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    return "\r\n".join([
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//tabimate//travel plan//JA",
+        "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
+        f"UID:tabimate-plan-{plan.get('id')}@kabu-app",
+        f"DTSTAMP:{dtstamp}",
+        f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}",
+        f"DTEND;VALUE=DATE:{end.strftime('%Y%m%d')}",
+        f"SUMMARY:{esc(summary)}",
+        f"DESCRIPTION:{esc(chr(10).join(lines))}",
+        "END:VEVENT", "END:VCALENDAR", "",
+    ])
+
+
+@planner.route('/export_plan_ics/<int:plan_id>')
+@login_required
+def export_plan_ics(plan_id):
+    """保存プランを .ics（iCalendar）でダウンロードする（本人のプランのみ）。"""
+    from db import get_travel_plan_by_id
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+    if plan.get('google_user_id') != session.get('user_id'):
+        return json.dumps({'status': 'ERROR', 'message': 'このプランを書き出す権限がありません'}), 403, {'Content-Type': 'application/json'}
+    ics = _build_plan_ics(plan)
+    return Response(ics, mimetype='text/calendar; charset=utf-8', headers={
+        'Content-Disposition': f'attachment; filename="tabimate_plan_{plan_id}.ics"',
+    })
+
+
 @planner.route('/get_my_plans')
 @login_required
 def get_my_plans():

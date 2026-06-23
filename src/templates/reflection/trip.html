@@ -4,6 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reflection-trip.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -67,6 +68,16 @@
   <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
 
+{% if footprints %}
+<!-- 旅の足あと（撮影地マップ）-->
+<div class="section">
+  <h2>🐾 旅の足あと</h2>
+  <p class="hint">写真の位置情報から、歩いた道のりを地図にしました。</p>
+  <button class="plan-map-btn" type="button" id="footprint-btn">🗺 地図で見る</button>
+  <div class="plan-map-container" id="footprint-map" hidden></div>
+</div>
+{% endif %}
+
 {% include "_share_modal.html" %}
 
 <!-- 危険ゾーン（旅の削除）-->
@@ -88,4 +99,22 @@
 
 <script type="application/json" id="page-config">{{ {"tripId": trip.id, "indexUrl": url_for('reflection.index')}|tojson }}</script>
 <script src="{{ url_for('static', filename='js/reflection-trip.js') }}"></script>
+
+{% if footprints %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ url_for('static', filename='js/footprint-map.js') }}"></script>
+<script>
+  (function () {
+    var fpPoints = {{ footprints | tojson }};
+    var btn = document.getElementById('footprint-btn');
+    var box = document.getElementById('footprint-map');
+    btn.addEventListener('click', function () {
+      var opening = box.hidden;
+      box.hidden = !opening;
+      btn.textContent = opening ? '🗺 地図を閉じる' : '🗺 地図で見る';
+      if (opening) window.initFootprintMap('footprint-map', fpPoints);
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

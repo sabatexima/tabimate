@@ -121,6 +121,19 @@
     transition: background 0.15s, color 0.15s;
   }
   .share-btn:hover { background: var(--primary-color); color: white; }
+  .cal-btn {
+    background: none;
+    border: 1px solid #c79a4e;
+    color: #a9772f;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .cal-btn:hover { background: #c79a4e; color: white; }
   .delete-btn {
     background: none;
     border: 1px solid #f43f5e;

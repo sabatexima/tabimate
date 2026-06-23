@@ -104,9 +104,20 @@ def trip_detail(trip_id: int):
         p["url"] = url_map.get(p["storage_path"])
         p["thumb_url"] = thumb_map.get(p["storage_path"])
     stickers = repo.get_stickers(trip_id)
+    # 撮影地マップ用：GPS のある写真だけを撮影時刻順に並べた「足あと」点列
+    footprints = [
+        {
+            "lat": p["lat"], "lng": p["lng"],
+            "thumb": p.get("thumb_url") or p.get("url"),
+            "taken": str(p["taken_at"]) if p.get("taken_at") else None,
+        }
+        for p in photos
+        if p.get("lat") is not None and p.get("lng") is not None
+    ]
+    footprints.sort(key=lambda x: x["taken"] or "")
     return render_template(
         "reflection/trip.html",
-        trip=trip, photos=photos, stickers=stickers,
+        trip=trip, photos=photos, stickers=stickers, footprints=footprints,
     )
 
 

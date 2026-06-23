@@ -5,9 +5,13 @@
   async function geocode(name, destination) {
     const query = destination ? `${name}, ${destination}` : name;
     const url = `/api/geocode?q=${encodeURIComponent(query)}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data && data[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), name };
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && data[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), name };
+    } catch (e) {
+      // ネットワークエラーや JSON パース失敗は null 扱いで継続
+    }
     return null;
   }
 
@@ -18,11 +22,14 @@
 
     const results = [];
     for (const spot of spots) {
-      await new Promise(r => setTimeout(r, 300));  // Nominatim rate limit: 1 req/s
+      await new Promise(r => setTimeout(r, 1000));  // Nominatim rate limit: 1 req/s
       const coords = await geocode(spot, destination);
       if (coords) results.push(coords);
     }
-    sessionStorage.setItem(cacheKey, JSON.stringify(results));
+    // 全スポット失敗時はキャッシュしない（次回リトライを可能にする）
+    if (results.length > 0) {
+      sessionStorage.setItem(cacheKey, JSON.stringify(results));
+    }
     return results;
   }
 

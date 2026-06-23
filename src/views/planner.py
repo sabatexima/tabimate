@@ -412,6 +412,28 @@ def get_my_plans():
         return json.dumps({'status': 'ERROR', 'message': 'サーバーエラーが発生しました。しばらくして再度お試しください。'}), 500, {'Content-Type': 'application/json'}
 
 
+@planner.route('/api/geocode')
+@login_required
+def geocode():
+    """Nominatimジオコーディングをサーバー経由でプロキシする。
+    ブラウザからは User-Agent ヘッダーを設定できないため、サーバー側で付与する。"""
+    import requests as req
+    q = request.args.get('q', '').strip()
+    if not q:
+        return json.dumps([]), 200, {'Content-Type': 'application/json'}
+    try:
+        resp = req.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={'q': q, 'format': 'json', 'limit': 1},
+            headers={'User-Agent': 'tabimate/1.0 (travel planner app)', 'Accept-Language': 'ja'},
+            timeout=5,
+        )
+        return json.dumps(resp.json()), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        logger.warning("ジオコーディング失敗: q=%s, error=%s", q, e)
+        return json.dumps([]), 200, {'Content-Type': 'application/json'}
+
+
 @planner.route('/get_shared_plans')
 @login_required
 def get_shared_plans():

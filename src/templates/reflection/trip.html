@@ -68,11 +68,22 @@
   <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
 
-{% if footprints %}
-<!-- 旅の足あと（撮影地マップ）-->
+{% if footprints or my_plans %}
+<!-- 旅の足あと（撮影地マップ）＋プランの重ね合わせ -->
 <div class="section">
   <h2>🐾 旅の足あと</h2>
-  <p class="hint">写真の位置情報から、歩いた道のりを地図にしました。</p>
+  <p class="hint">写真の位置情報から歩いた道のりを地図にしました。旅行プランを紐付けると、計画と実際を重ねて見られます。</p>
+  {% if my_plans %}
+  <div class="link-plan-row">
+    <label for="link-plan-select">📋 プランと重ねる：</label>
+    <select id="link-plan-select">
+      <option value="">（重ねない）</option>
+      {% for p in my_plans %}
+      <option value="{{ p.id }}" {{ 'selected' if linked_plan_id == p.id else '' }}>{{ p.destination }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
   <button class="plan-map-btn" type="button" id="footprint-btn">🗺 地図で見る</button>
   <div class="plan-map-container" id="footprint-map" hidden></div>
 </div>
@@ -100,20 +111,34 @@
 <script type="application/json" id="page-config">{{ {"tripId": trip.id, "indexUrl": url_for('reflection.index')}|tojson }}</script>
 <script src="{{ url_for('static', filename='js/reflection-trip.js') }}"></script>
 
-{% if footprints %}
+{% if footprints or my_plans %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{{ url_for('static', filename='js/footprint-map.js') }}"></script>
 <script>
   (function () {
     var fpPoints = {{ footprints | tojson }};
+    var plannedPoints = {{ planned_points | tojson }};
     var btn = document.getElementById('footprint-btn');
     var box = document.getElementById('footprint-map');
     btn.addEventListener('click', function () {
       var opening = box.hidden;
       box.hidden = !opening;
       btn.textContent = opening ? '🗺 地図を閉じる' : '🗺 地図で見る';
-      if (opening) window.initFootprintMap('footprint-map', fpPoints);
+      if (opening) window.initFootprintMap('footprint-map', fpPoints, plannedPoints);
     });
+    var sel = document.getElementById('link-plan-select');
+    if (sel) {
+      sel.addEventListener('change', function () {
+        sel.disabled = true;
+        fetch('/reflection/trips/{{ trip.id }}/linked-plan', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan_id: sel.value || null }),
+        }).then(function (r) { return r.json(); }).then(function () {
+          location.reload();  // 重ね合わせを反映するため再読込
+        }).catch(function () { sel.disabled = false; alert('紐付けに失敗しました'); });
+      });
+    }
   })();
 </script>
 {% endif %}

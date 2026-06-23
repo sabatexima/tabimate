@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS trips (
     start_date  DATE,
     end_date    DATE,
     is_favorite TINYINT NOT NULL DEFAULT 0,
+    linked_plan_id INT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_trips_user (user_id)
 ) CHARACTER SET utf8mb4
@@ -135,6 +136,8 @@ def _ensure_all(conn) -> None:
     conn.execute(text(_CREATE_TRIP_FAVORITES_TABLE))
     # 既存DB向け: お気に入り列が無ければ追加（移行元として保持）
     _ensure_column(conn, "trips", "is_favorite", "is_favorite TINYINT NOT NULL DEFAULT 0")
+    # 既存DB向け: 旅に紐付ける旅行プランID列が無ければ追加（実績↔プランの重ね合わせ用）
+    _ensure_column(conn, "trips", "linked_plan_id", "linked_plan_id INT NULL")
     # 旧来のお気に入りをユーザー別テーブルへ移送
     _migrate_favorites_once(conn)
 
@@ -321,6 +324,23 @@ def rename_trip(trip_id: int, user_id: str, title: str) -> bool:
             {"title": title, "id": trip_id, "uid": user_id},
         )
         return result.rowcount > 0
+
+
+def set_trip_linked_plan(trip_id: int, user_id: str, plan_id) -> bool:
+    """旅に旅行プランを紐付ける（本人の旅のみ）。plan_id=None で解除。"""
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        exists = conn.execute(
+            text("SELECT 1 FROM trips WHERE id = :id AND user_id = :uid"),
+            {"id": trip_id, "uid": user_id},
+        ).fetchone()
+        if not exists:
+            return False
+        conn.execute(
+            text("UPDATE trips SET linked_plan_id = :pid WHERE id = :id AND user_id = :uid"),
+            {"pid": plan_id, "id": trip_id, "uid": user_id},
+        )
+    return True
 
 
 def update_trip_dates(trip_id: int, user_id: str, start_date, end_date) -> bool:

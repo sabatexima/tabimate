@@ -115,9 +115,24 @@ def trip_detail(trip_id: int):
         if p.get("lat") is not None and p.get("lng") is not None
     ]
     footprints.sort(key=lambda x: x["taken"] or "")
+
+    # 実績↔プランの重ね合わせ：紐付け用に自分のプラン一覧と、紐付け済みプランの
+    # 観光スポット座標（計画地点）を渡す。
+    from db import get_travel_plans, get_travel_plan_by_id
+    my_plans = [{"id": p["id"], "destination": p.get("destination") or "（無題）"}
+                for p in get_travel_plans(_uid())]
+    linked_plan_id = trip.get("linked_plan_id")
+    planned = []
+    if linked_plan_id:
+        lp = get_travel_plan_by_id(linked_plan_id)
+        if lp and lp.get("google_user_id") == _uid():
+            planned = lp.get("spot_coords") or []
+        else:
+            linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化
     return render_template(
         "reflection/trip.html",
         trip=trip, photos=photos, stickers=stickers, footprints=footprints,
+        my_plans=my_plans, linked_plan_id=linked_plan_id, planned_points=planned,
     )
 
 
@@ -160,6 +175,29 @@ def update_trip(trip_id: int):
     ok = repo.rename_trip(trip_id, _uid(), title)
     logger.info("旅のタイトル変更: trip_id=%s user=%s", trip_id, _uid())
     return jsonify({"updated": ok, "title": title})
+
+
+@reflection.route("/trips/<int:trip_id>/linked-plan", methods=["PATCH"])
+@login_required
+def update_trip_linked_plan(trip_id: int):
+    """旅に旅行プランを紐付け／解除する（実績↔プランの重ね合わせ用）。"""
+    _require_trip(trip_id)
+    data = request.get_json(silent=True) or {}
+    raw = data.get("plan_id")
+    plan_id = None
+    if raw not in (None, "", "none"):
+        try:
+            plan_id = int(raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "plan_id が不正です"}), 400
+        # 紐付け先は自分のプランに限定する
+        from db import get_travel_plan_by_id
+        lp = get_travel_plan_by_id(plan_id)
+        if not lp or lp.get("google_user_id") != _uid():
+            return jsonify({"error": "プランが見つかりません"}), 404
+    ok = repo.set_trip_linked_plan(trip_id, _uid(), plan_id)
+    logger.info("旅のプラン紐付け: trip_id=%s plan_id=%s user=%s", trip_id, plan_id, _uid())
+    return jsonify({"updated": ok, "plan_id": plan_id})
 
 
 def _can_view_trip(trip_id: int) -> bool:

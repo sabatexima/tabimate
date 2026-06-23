@@ -78,6 +78,26 @@
   border: 1.5px solid #fff;
 }
 
+/* プラン紐付けセレクタ（旅の足あと） */
+.link-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 0.9em;
+  color: var(--text-main);
+}
+.link-plan-row select {
+  font-family: inherit;
+  font-size: 0.95em;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #d9cfbe;
+  background: #fff;
+  color: var(--text-main);
+}
+
 @media (max-width: 600px) {
   .plan-map-container { height: 240px; }
 }

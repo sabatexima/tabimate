@@ -22,6 +22,8 @@
 ![Google%20Cloud%20Run](https://img.shields.io/badge/Cloud_Run-Cloud-4285F4.svg?logo=google%20cloud&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Build-2496ED.svg?logo=docker&logoColor=white)
 ![Google%20OAuth](https://img.shields.io/badge/Google_OAuth-2.0-4285F4.svg?logo=google&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900.svg?logo=leaflet&logoColor=white)
+![Stadia%20Maps](https://img.shields.io/badge/Stadia_Maps-Watercolor-7AB870.svg)
 
 ## 主な機能
 
@@ -35,6 +37,7 @@
 - **ハイブリッドモデル**：大半は軽量・低コストな `gemini-3.1-flash-lite`、費用見積もり・審査だけ上位の `gemini-3.5-flash`。費用合計の数値ガードで予算超過プランを防止し、構造的に無理な予算は「予算不足」として明示。生成ごとにトークン量と推定コストをログ出力。
 - 応答は SSE（Server-Sent Events）でストリーミング。生成中は「考え中（thinking）」を送り続け、途中キャンセルも可能。エラーや通信断はチャットに通知（無反応で止まらない）。
 - 完成プランは保存でき、保存プラン一覧から閲覧・削除できる。
+- **スポットの地図表示**：保存プランに水彩スタイルの地図（Leaflet + Stadia Maps / Stamen Watercolor タイル）を表示し、各観光スポットを番号付きのしずく型ピン（マスコット由来の四つ葉アクセント付き）でルート順に結んで描画する。スポットの緯度経度は**保存・編集時**にサーバー側でジオコーディング（Nominatim・`countrycodes=jp` で日本に限定）して一緒に保存するため、地図は即座に表示される。本機能より前に保存されたプランは、`/api/geocode` プロキシ経由のオンデマンド取得にフォールバックする。
 - 提示後もチャットで調整可能。「2日目をゆっくりに」「予算を抑えて」「宿を変えて」などで作り直し。**部分編集**にも対応し、指定した領域だけ再生成して他は前回のまま保持する。
 - **保存プランもカード上でチャット修正可能**。修正案はまずプレビュー表示し、「更新する」を押したときだけ保存する。
 - **★評価による好みの学習**：保存プランを ★1〜5＋ひとことコメントで評価できる（1プラン1評価・上書き式。記録後も「修正」ボタンで再編集でき、誤入力を直せる）。高評価（★4以上）・低評価（★2以下）とコメントを要約し、次回以降のプラン生成に「好み」としてやんわり反映する（明示の要望が最優先／低評価の傾向は避ける）。
@@ -67,6 +70,7 @@
 | `SECRET_KEY` | 本番 | Flask セッション署名鍵 |
 | `GOOGLE_API_KEY` | ✓ | Gemini API キー |
 | `TAVILY_API_KEY` | ✓ | Tavily Web 検索 |
+| `STADIA_API_KEY` | | スポット地図の水彩タイル用 Stadia Maps キー（未設定時は標準 OpenStreetMap タイルにフォールバック） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | ✓ | DB 接続情報 |
 | `DB_SSL` | △ | `true` で TLS 接続（TiDB Cloud は必須） |
@@ -98,6 +102,7 @@ tabimate/
     ├── db.py                 # travel_plans / chat_messages の DAO + 共有エンジン
     ├── db_reflection.py      # trips / photos / stickers ほかの DAO
     ├── db_sharing.py         # 共有リンク/メールグラントの DAO
+    ├── geocoding.py          # スポット名→緯度経度（Nominatim・countrycodes=jp）。バッチ/単体
     ├── chat/                 # 旅行プラン生成（LLM/エージェント）
     │   ├── chat.py           #  会話の司令塔（条件抽出→質問 or プラン生成）
     │   ├── graph.py          #  LangGraph ワークフロー定義・実行
@@ -206,7 +211,7 @@ python3 app.py
 
 スクリプトが行うこと:
 1. 必要な GCP API を有効化（run / artifactregistry / cloudbuild / secretmanager / storage / iamcredentials）。
-2. シークレット（`GOOGLE_API_KEY`, `TAVILY_API_KEY`, `GOOGLE_CLIENT_SECRET`, `DB_PASS`, `SECRET_KEY`）を Secret Manager に登録/更新し、Cloud Run の SA に閲覧権限を付与。
+2. シークレット（`GOOGLE_API_KEY`, `TAVILY_API_KEY`, `GOOGLE_CLIENT_SECRET`, `DB_PASS`, `SECRET_KEY`, `STADIA_API_KEY`）を Secret Manager に登録/更新し、Cloud Run の SA に閲覧権限を付与。
 3. 写真用 GCS バケットを作成し、SA に `objectAdmin` を付与。
 4. 署名付きURL のため SA に `serviceAccountTokenCreator`（IAM signBlob）を付与。
 5. `gcloud run deploy --source .` でソースデプロイ（リージョン `asia-northeast1`、サービス名、プロジェクトを指定）。
@@ -236,7 +241,7 @@ rm -rf src/uploads/*               # ローカル保存写真を全削除
 
 | テーブル | 用途 |
 |----------|------|
-| `travel_plans` | 保存された旅行プラン（条件・成果物を JSON 列で保持） |
+| `travel_plans` | 保存された旅行プラン（条件・成果物を JSON 列で保持。`spot_coords` は地図用に各スポットの緯度経度をキャッシュ） |
 | `chat_messages` | チャット履歴（role/content/request_id） |
 | `trips` | 旅（タイトル・期間・所有ユーザー） |
 | `photos` | アップロード写真（storage_path・撮影時刻・GPS） |
@@ -271,6 +276,7 @@ rm -rf src/uploads/*               # ローカル保存写真を全削除
 | POST | `/edit_saved_plan/<id>` | 保存プランをチャット修正し、修正案を SSE ストリーミング（保存はまだ。所有者または編集権限の受領者） |
 | POST | `/apply_saved_plan/<id>` | プレビューした修正を保存（所有者のプランを上書き） |
 | POST | `/rate_plan/<id>` | 自分のプランに ★1〜5＋コメントを記録（次回生成の好み反映に利用） |
+| GET | `/api/geocode` | ジオコーディングのプロキシ（Nominatim・`countrycodes=jp`）。座標未保存プランのフォールバック用（要ログイン） |
 
 ### auth（`/auth`） — `views/auth.py`
 

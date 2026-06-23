@@ -22,6 +22,8 @@
 ![Google%20Cloud%20Run](https://img.shields.io/badge/Cloud_Run-Cloud-4285F4.svg?logo=google%20cloud&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Build-2496ED.svg?logo=docker&logoColor=white)
 ![Google%20OAuth](https://img.shields.io/badge/Google_OAuth-2.0-4285F4.svg?logo=google&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900.svg?logo=leaflet&logoColor=white)
+![Stadia%20Maps](https://img.shields.io/badge/Stadia_Maps-Watercolor-7AB870.svg)
 
 ## Key Features
 
@@ -36,6 +38,7 @@
 - **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for most steps, and a stronger model (`gemini-3.5-flash`) for cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
 - Generated plans can be saved, viewed, and deleted from the saved plans list.
+- **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles) that plots each sightseeing spot as a numbered teardrop pin (with a four-leaf-clover accent matching the mascot) connected in route order. Spot coordinates are geocoded server-side (Nominatim, restricted to Japan with `countrycodes=jp`) and stored alongside the plan **when it is saved/edited**, so the map renders instantly. Plans saved before this feature fall back to on-demand geocoding via the `/api/geocode` proxy.
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
 - **Saved plans can also be edited via chat** directly on the card. The result is shown as a preview first and is only persisted when the user confirms ("update").
 - **Rating-based personalization**: users can rate a saved plan with ★1–5 plus a short comment (one rating per plan, overwrite-style; revisable via an "edit" button to fix mistakes). Highly-rated (★4+) and poorly-rated (★2−) plans and their comments are summarized into a preference hint that is softly applied to future plan generation (explicit requests still take priority; disliked tendencies are avoided).
@@ -68,6 +71,7 @@ Configured in `src/.env` (local) or via Cloud Run environment variables / Secret
 | `SECRET_KEY` | Production | Flask session signature key |
 | `GOOGLE_API_KEY` | Yes | Gemini API Key |
 | `TAVILY_API_KEY` | Yes | Tavily Web Search API Key |
+| `STADIA_API_KEY` | | Stadia Maps key for watercolor map tiles on the spot map (falls back to standard OpenStreetMap tiles if unset) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth Credentials |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | Yes | Database connection details |
 | `DB_SSL` | Conditional | Set to `true` for TLS connections (required for TiDB Cloud) |
@@ -99,6 +103,7 @@ tabimate/
     ├── db.py                 # DAO for travel_plans / chat_messages + shared engine
     ├── db_reflection.py      # DAO for trips / photos / stickers etc.
     ├── db_sharing.py         # DAO for sharing links / email grants
+    ├── geocoding.py          # Spot name -> lat/lng via Nominatim (countrycodes=jp); batch + single
     ├── chat/                 # Travel plan generation (LLM/Agents)
     │   ├── chat.py           #  Orchestrates conversation (extract conditions -> question or plan)
     │   ├── graph.py          #  LangGraph workflow definitions & execution
@@ -207,7 +212,7 @@ The `deploy.sh` script automates the entire deployment process (reads variables 
 
 What the script does:
 1. Enables necessary GCP APIs (run, artifactregistry, cloudbuild, secretmanager, storage, iamcredentials).
-2. Registers/updates secrets (`GOOGLE_API_KEY`, `TAVILY_API_KEY`, `GOOGLE_CLIENT_SECRET`, `DB_PASS`, `SECRET_KEY`) in Secret Manager and grants access to the Cloud Run service account.
+2. Registers/updates secrets (`GOOGLE_API_KEY`, `TAVILY_API_KEY`, `GOOGLE_CLIENT_SECRET`, `DB_PASS`, `SECRET_KEY`, `STADIA_API_KEY`) in Secret Manager and grants access to the Cloud Run service account.
 3. Creates a GCS bucket for photos and grants `objectAdmin` permissions to the service account.
 4. Grants `serviceAccountTokenCreator` (IAM signBlob) to the service account for generating signed URLs.
 5. Deploys the application via `gcloud run deploy --source .` (specifies region `asia-northeast1`, service name, and project).
@@ -237,7 +242,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 
 | Table | Purpose |
 |----------|------|
-| `travel_plans` | Saved travel plans (conditions and results stored in a JSON column) |
+| `travel_plans` | Saved travel plans (conditions and results stored in JSON columns; `spot_coords` caches the geocoded lat/lng of each spot for the map) |
 | `chat_messages` | Chat history (role/content/request_id) |
 | `trips` | Trips (title, dates, owner user) |
 | `photos` | Uploaded photos (storage_path, shoot time, GPS) |
@@ -272,6 +277,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 | POST | `/edit_saved_plan/<id>` | Chat-edits a saved plan and streams the proposed result via SSE (no save yet; owner or edit-grant recipient) |
 | POST | `/apply_saved_plan/<id>` | Persists the previewed edit (overwrites the owner's plan) |
 | POST | `/rate_plan/<id>` | Records a ★1–5 rating and comment for the user's own plan (used to personalize future generation) |
+| GET | `/api/geocode` | Geocoding proxy (Nominatim, `countrycodes=jp`) used as a fallback for plans without stored spot coordinates (login required) |
 
 ### auth (`/auth`) — `views/auth.py`
 

@@ -428,7 +428,16 @@ def geocode():
             headers={'User-Agent': 'tabimate/1.0 (travel planner app)', 'Accept-Language': 'ja'},
             timeout=5,
         )
-        return json.dumps(resp.json()), 200, {'Content-Type': 'application/json'}
+        # 一時診断: Nominatim が実際に何を返しているかを記録する
+        try:
+            data = resp.json()
+            logger.info("GEOCODE_DIAG q=%s nominatim_status=%s count=%s",
+                        q, resp.status_code, len(data) if isinstance(data, list) else 'not-list')
+        except Exception:
+            logger.info("GEOCODE_DIAG q=%s nominatim_status=%s non_json_body=%s",
+                        q, resp.status_code, resp.text[:200])
+            return json.dumps([]), 200, {'Content-Type': 'application/json'}
+        return json.dumps(data), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         logger.warning("ジオコーディング失敗: q=%s, error=%s", q, e)
         return json.dumps([]), 200, {'Content-Type': 'application/json'}

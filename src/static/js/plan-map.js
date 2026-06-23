@@ -63,11 +63,24 @@
   }
 
   function numberIcon(n) {
+    // しずく型のマップピン（緑＝若葉色 / クリームの中抜き / 番号）に、
+    // マスコット「みつば」の四つ葉アクセント（ピンク）を添えた世界観仕様。
+    const fs = String(n).length > 1 ? 11 : 13;
+    const ty = (15 + fs * 0.35).toFixed(1);
+    const svg = `<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">`
+      + `<path d="M16 2C8.8 2 3 7.8 3 15c0 9.2 13 24 13 24s13-14.8 13-24C29 7.8 23.2 2 16 2Z" fill="#4fa83a" stroke="#fff" stroke-width="2.5"/>`
+      + `<circle cx="16" cy="15" r="8.5" fill="#fff9ec"/>`
+      + `<text x="16" y="${ty}" text-anchor="middle" font-size="${fs}" font-weight="700" fill="#3b8a2c" font-family="'Zen Maru Gothic',sans-serif">${n}</text>`
+      + `<g stroke="#fff" stroke-width="1">`
+      + `<circle cx="24.5" cy="4.4" r="2.3" fill="#f08ba0"/><circle cx="26.6" cy="6.5" r="2.3" fill="#f08ba0"/>`
+      + `<circle cx="24.5" cy="8.6" r="2.3" fill="#f08ba0"/><circle cx="22.4" cy="6.5" r="2.3" fill="#f08ba0"/>`
+      + `</g></svg>`;
     return L.divIcon({
-      className: '',
-      html: `<div class="plan-map-pin">${n}</div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
+      className: 'plan-map-pin',
+      html: svg,
+      iconSize: [32, 42],
+      iconAnchor: [16, 39],
+      popupAnchor: [0, -36],
     });
   }
 

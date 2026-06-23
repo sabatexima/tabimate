@@ -404,22 +404,16 @@
     font-size: 0.9em;
     background: #fbf6ec;
   }
-  /* 番号付きピン */
+  /* 番号付きピン（しずく型SVG。Leaflet既定の白枠を打ち消す） */
   .plan-map-pin {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--primary-color);
-    color: #fff;
-    font-size: 0.8em;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-    font-family: inherit;
+    background: none;
+    border: none;
+    line-height: 0;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.22));
+    transform-origin: 50% 100%;
+    transition: transform 0.15s ease;
   }
+  .plan-map-pin:hover { transform: scale(1.15) translateY(-2px); }
   @media (max-width: 600px) {
     .plan-map-container { height: 240px; }
   }

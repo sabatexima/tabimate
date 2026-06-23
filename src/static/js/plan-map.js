@@ -1,6 +1,7 @@
 (() => {
   const STADIA_KEY = document.querySelector('meta[name="stadia-key"]')?.content || '';
-  const CACHE_PREFIX = 'tabimate_geo_';
+  // v2: 旧版で焼き付いた空配列([])キャッシュを無効化するためキーを更新
+  const CACHE_PREFIX = 'tabimate_geo_v2_';
 
   async function geocode(name) {
     // destination（「関西」「浅草」等）を付けると Nominatim のヒット率が下がるため、
@@ -19,7 +20,11 @@
   async function resolveSpots(planId, spots, destination) {
     const cacheKey = CACHE_PREFIX + planId;
     const cached = sessionStorage.getItem(cacheKey);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      // 空配列のキャッシュは「失敗の焼き付き」なので無視して再取得する
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
 
     const results = [];
     for (const spot of spots) {

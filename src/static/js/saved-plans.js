@@ -130,6 +130,7 @@ function esc(str) {
           <span>💴 予算上限: ${fmt(plan.budget_limit)}円/人</span>
         </div>
       </div>
+      <div class="plan-weather" id="weather-${esc(plan.id)}" hidden></div>
       <div class="plan-accordion">
         ${accordion('✨', '主要観光地', plan.spots)}
         ${accordion('🍱', 'グルメ', plan.restaurants)}
@@ -377,6 +378,26 @@ function esc(str) {
     return card;
   }
 
+  // 旅行日の天気予報を読み込んでカード上部に表示する（自分のプランのみ）。
+  function wxDate(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
+    return m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}` : esc(s);
+  }
+  async function loadWeather(plan) {
+    try {
+      const res = await fetch(`/api/plan_weather/${plan.id}`);
+      const data = await res.json();
+      if (!data.days || data.days.length === 0) return;
+      const el = document.getElementById(`weather-${plan.id}`);
+      if (!el) return;
+      el.innerHTML = '<span class="plan-weather-label">🌤 旅行日の天気</span>'
+        + data.days.map(d => `<span class="wx-day"><b>${wxDate(d.date)}</b>`
+          + `<span class="wx-emoji">${d.emoji}</span>`
+          + `<span class="wx-temp">${d.tmax != null ? d.tmax + '°' : '–'}<i>/</i>${d.tmin != null ? d.tmin + '°' : '–'}</span></span>`).join('');
+      el.hidden = false;
+    } catch (e) { /* 天気は付加情報なので失敗は無視 */ }
+  }
+
   function showEmpty() {
     const container = document.getElementById('plans-container');
     container.innerHTML = `<div class="empty-state"><div class="icon">🗂️</div>保存済みのプランはありません</div>`;
@@ -405,7 +426,7 @@ function esc(str) {
         showEmpty();
         return;
       }
-      myPlans.forEach(plan => container.appendChild(renderPlan(plan)));
+      myPlans.forEach(plan => { container.appendChild(renderPlan(plan)); loadWeather(plan); });
       sharedPlans.forEach(plan => container.appendChild(renderPlan(plan, { shared: true })));
     } catch (err) {
       loading.textContent = 'プランの読み込みに失敗しました';

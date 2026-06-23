@@ -283,6 +283,7 @@
   .rate-comment {
     flex: 1 1 200px;
     min-width: 140px;
+    box-sizing: border-box;
     border: 1px solid #e0d8c8;
     border-radius: 20px;
     padding: 9px 16px;
@@ -301,6 +302,7 @@
     color: #fff;
     border: none;
     border-radius: 20px;
+    box-sizing: border-box;
     padding: 9px 22px;
     font-size: 0.9em;
     font-weight: 700;

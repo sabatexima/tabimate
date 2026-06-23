@@ -118,6 +118,7 @@ function esc(str) {
         <button class="plan-map-btn" type="button" data-map-id="${mapId}"
                 data-plan-id="${esc(plan.id)}"
                 data-spots="${esc(JSON.stringify(plan.spots))}"
+                data-coords="${esc(JSON.stringify(plan.spot_coords || []))}"
                 data-destination="${esc(plan.destination || '')}">🗺 地図で見る</button>
         <div class="plan-map-container" id="${mapId}" hidden></div>
       </div>` : '';
@@ -322,7 +323,8 @@ function esc(str) {
         mapBtn.textContent = opening ? '🗺 地図を閉じる' : '🗺 地図で見る';
         if (opening) {
           const spots = JSON.parse(mapBtn.dataset.spots || '[]');
-          window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, spots, mapBtn.dataset.destination);
+          const coords = JSON.parse(mapBtn.dataset.coords || '[]');
+          window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, spots, mapBtn.dataset.destination, coords);
         }
       });
     }

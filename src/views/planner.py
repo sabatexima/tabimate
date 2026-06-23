@@ -229,6 +229,9 @@ def save_plan():
     try:
         plan = request.get_json(force=True)
         from db import save_travel_plan
+        from geocoding import geocode_spots
+        # 保存時にスポットの緯度経度を取得して一緒に保存する（地図表示を即時・確実にする）。
+        plan['spot_coords'] = geocode_spots(plan.get('spots', []))
         plan_id = save_travel_plan(
             plan,
             google_user_id=session.get('user_id'),
@@ -375,6 +378,12 @@ def apply_saved_plan(plan_id):
     if not isinstance(new_plan, dict):
         return json.dumps({'status': 'ERROR', 'message': '更新内容が不正です'}), 400, {'Content-Type': 'application/json'}
 
+    # スポットが変わった可能性があるので座標を取り直す。変更のないスポットは
+    # 既存の座標を流用し、Nominatim への不要な再問い合わせを避ける。
+    from geocoding import geocode_spots
+    known = {c['name']: c for c in (plan.get('spot_coords') or []) if c.get('name')}
+    new_plan['spot_coords'] = geocode_spots(new_plan.get('spots', []), known=known)
+
     # 共有編集でも書き換える対象は所有者の行（共同編集＝上書き）
     update_travel_plan(plan_id, plan.get('google_user_id'), new_plan)
     logger.info("保存プランの修正を確定: plan_id=%s", plan_id)
@@ -415,23 +424,17 @@ def get_my_plans():
 @planner.route('/api/geocode')
 @login_required
 def geocode():
-    """Nominatimジオコーディングをサーバー経由でプロキシする。
-    ブラウザからは User-Agent ヘッダーを設定できないため、サーバー側で付与する。"""
-    import requests as req
+    """スポット名を緯度経度に変換するプロキシ（座標未保存の旧プラン用フォールバック）。
+
+    生成・編集時に座標を保存する方式に移行したため、新規プランは通常これを使わない。
+    返り値はクライアント側の後方互換のため [{"lat","lon"}] 形式にする。
+    """
+    from geocoding import geocode_one
     q = request.args.get('q', '').strip()
-    if not q:
-        return json.dumps([]), 200, {'Content-Type': 'application/json'}
-    try:
-        resp = req.get(
-            'https://nominatim.openstreetmap.org/search',
-            params={'q': q, 'format': 'json', 'limit': 1, 'countrycodes': 'jp'},
-            headers={'User-Agent': 'tabimate/1.0 (travel planner app)', 'Accept-Language': 'ja'},
-            timeout=5,
-        )
-        return json.dumps(resp.json()), 200, {'Content-Type': 'application/json'}
-    except Exception as e:
-        logger.warning("ジオコーディング失敗: q=%s, error=%s", q, e)
-        return json.dumps([]), 200, {'Content-Type': 'application/json'}
+    coords = geocode_one(q) if q else None
+    if coords:
+        return json.dumps([{'lat': coords['lat'], 'lon': coords['lng']}]), 200, {'Content-Type': 'application/json'}
+    return json.dumps([]), 200, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_shared_plans')

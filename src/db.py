@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS travel_plans (
     themes           JSON,
     special_requirements JSON,
     spots            JSON,
+    spot_coords      JSON,
     restaurants      JSON,
     schedule_items   JSON,
     accommodation    JSON,
@@ -139,7 +140,8 @@ def _ensure_plan_columns(conn) -> None:
     global _plan_columns_ensured
     if _plan_columns_ensured:
         return
-    for col, ddl in (("rating", "INT NULL"), ("rating_comment", "TEXT NULL")):
+    for col, ddl in (("rating", "INT NULL"), ("rating_comment", "TEXT NULL"),
+                     ("spot_coords", "JSON NULL")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -176,7 +178,7 @@ def get_travel_plans(google_user_id: str) -> list:
                 "SELECT id, destination, travel_date, duration, num_people, "
                 "budget_limit, departure_location, transport_cost, remaining_budget, "
                 "status, feedback, themes, special_requirements, "
-                "spots, restaurants, schedule_items, accommodation, budget_estimate, "
+                "spots, spot_coords, restaurants, schedule_items, accommodation, budget_estimate, "
                 "rating, rating_comment, created_at "
                 "FROM travel_plans WHERE google_user_id = :uid ORDER BY created_at DESC"
             ),
@@ -186,8 +188,8 @@ def get_travel_plans(google_user_id: str) -> list:
     result = []
     for row in rows:
         d = _row_to_dict(row)
-        for col in ("themes", "special_requirements", "spots", "restaurants",
-                    "schedule_items", "accommodation", "budget_estimate"):
+        for col in ("themes", "special_requirements", "spots", "spot_coords",
+                    "restaurants", "schedule_items", "accommodation", "budget_estimate"):
             if isinstance(d.get(col), str):
                 try:
                     d[col] = json.loads(d[col])
@@ -217,7 +219,7 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
                 "SELECT id, google_user_id, destination, travel_date, duration, num_people, "
                 "budget_limit, departure_location, transport_cost, remaining_budget, "
                 "status, feedback, themes, special_requirements, "
-                "spots, restaurants, schedule_items, accommodation, budget_estimate, "
+                "spots, spot_coords, restaurants, schedule_items, accommodation, budget_estimate, "
                 "rating, rating_comment, created_at "
                 "FROM travel_plans WHERE id = :id"
             ),
@@ -226,8 +228,8 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
     if not row:
         return None
     d = _row_to_dict(row)
-    for col in ("themes", "special_requirements", "spots", "restaurants",
-                "schedule_items", "accommodation", "budget_estimate"):
+    for col in ("themes", "special_requirements", "spots", "spot_coords",
+                "restaurants", "schedule_items", "accommodation", "budget_estimate"):
         if isinstance(d.get(col), str):
             try:
                 d[col] = json.loads(d[col])
@@ -306,6 +308,7 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                     themes = :themes,
                     special_requirements = :special_requirements,
                     spots = :spots,
+                    spot_coords = :spot_coords,
                     restaurants = :restaurants,
                     schedule_items = :schedule_items,
                     accommodation = :accommodation,
@@ -328,6 +331,7 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                 "themes":               json.dumps(state.get("themes", []), ensure_ascii=False),
                 "special_requirements": json.dumps(state.get("special_requirements", []), ensure_ascii=False),
                 "spots":                json.dumps(state.get("spots", []), ensure_ascii=False),
+                "spot_coords":          json.dumps(state.get("spot_coords", []), ensure_ascii=False),
                 "restaurants":          json.dumps(state.get("restaurants", []), ensure_ascii=False),
                 "schedule_items":       json.dumps(state.get("schedule", []), ensure_ascii=False),
                 "accommodation":        json.dumps(state.get("accommodation", []), ensure_ascii=False),
@@ -399,14 +403,14 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                     destination, travel_date, duration, num_people,
                     budget_limit, departure_location, transport_cost,
                     remaining_budget, status, feedback,
-                    themes, special_requirements, spots, restaurants,
+                    themes, special_requirements, spots, spot_coords, restaurants,
                     schedule_items, accommodation, budget_estimate
                 ) VALUES (
                     :google_user_id, :user_email,
                     :destination, :travel_date, :duration, :num_people,
                     :budget_limit, :departure_location, :transport_cost,
                     :remaining_budget, :status, :feedback,
-                    :themes, :special_requirements, :spots, :restaurants,
+                    :themes, :special_requirements, :spots, :spot_coords, :restaurants,
                     :schedule_items, :accommodation, :budget_estimate
                 )
             """),
@@ -426,6 +430,7 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                 "themes":               json.dumps(state.get("themes", []), ensure_ascii=False),
                 "special_requirements": json.dumps(state.get("special_requirements", []), ensure_ascii=False),
                 "spots":                json.dumps(state.get("spots", []), ensure_ascii=False),
+                "spot_coords":          json.dumps(state.get("spot_coords", []), ensure_ascii=False),
                 "restaurants":          json.dumps(state.get("restaurants", []), ensure_ascii=False),
                 "schedule_items":       json.dumps(state.get("schedule", []), ensure_ascii=False),
                 "accommodation":        json.dumps(state.get("accommodation", []), ensure_ascii=False),

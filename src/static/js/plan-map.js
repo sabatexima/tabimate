@@ -17,7 +17,15 @@
     return null;
   }
 
-  async function resolveSpots(planId, spots, destination) {
+  async function resolveSpots(planId, spots, destination, coords) {
+    // 生成・編集時に保存された座標があればそれを使う（ジオコーディング不要・即時）。
+    if (Array.isArray(coords) && coords.length > 0) {
+      return coords
+        .filter(c => c && c.lat != null && c.lng != null)
+        .map(c => ({ lat: parseFloat(c.lat), lng: parseFloat(c.lng), name: c.name }));
+    }
+
+    // 座標未保存の旧プランは従来どおりオンデマンドでジオコーディングする。
     const cacheKey = CACHE_PREFIX + planId;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
@@ -63,14 +71,14 @@
     });
   }
 
-  window.initPlanMap = async function(containerId, planId, spots, destination) {
+  window.initPlanMap = async function(containerId, planId, spots, destination, coords) {
     const el = document.getElementById(containerId);
     if (!el || el.dataset.initialized) return;
     el.dataset.initialized = '1';
 
     el.innerHTML = '<div class="plan-map-loading">地図を読み込み中…</div>';
 
-    const points = await resolveSpots(planId, spots, destination);
+    const points = await resolveSpots(planId, spots, destination, coords);
 
     if (points.length === 0) {
       el.innerHTML = '<div class="plan-map-loading">スポットの位置を特定できませんでした</div>';

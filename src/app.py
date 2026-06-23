@@ -48,6 +48,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=_IS_PROD,
+    STADIA_API_KEY=os.environ.get('STADIA_API_KEY', ''),
 )
 
 app.register_blueprint(planner, url_prefix='/')

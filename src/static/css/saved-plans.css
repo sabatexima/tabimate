@@ -365,3 +365,59 @@
     .rate-star-static { font-size: 1.6em; }
     .rate-edit { margin-left: 0; align-self: center; padding: 8px 24px; }
   }
+
+  /* 地図セクション */
+  .plan-map-section {
+    padding: 0 16px 16px;
+  }
+  .plan-map-btn {
+    background: none;
+    border: 1px solid rgba(79,168,58,0.5);
+    color: var(--primary-color);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+  .plan-map-btn:hover { background: var(--primary-color); color: white; }
+  .plan-map-container {
+    height: 280px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 10px;
+    border: 1px solid #ece3d0;
+    position: relative;
+  }
+  .plan-map-container[hidden] { display: none; }
+  .plan-map-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.9em;
+    background: #fbf6ec;
+  }
+  /* 番号付きピン */
+  .plan-map-pin {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 0.8em;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    font-family: inherit;
+  }
+  @media (max-width: 600px) {
+    .plan-map-container { height: 240px; }
+  }

@@ -111,6 +111,16 @@ function esc(str) {
     const saved = plan.created_at
       ? new Date(plan.created_at).toLocaleDateString('ja-JP')
       : '';
+    const mapId = `plan-map-${esc(plan.id)}`;
+    const hasSpots = plan.spots && plan.spots.length > 0;
+    const mapSection = hasSpots ? `
+      <div class="plan-map-section">
+        <button class="plan-map-btn" type="button" data-map-id="${mapId}"
+                data-plan-id="${esc(plan.id)}"
+                data-spots="${esc(JSON.stringify(plan.spots))}"
+                data-destination="${esc(plan.destination || '')}">🗺 地図で見る</button>
+        <div class="plan-map-container" id="${mapId}" hidden></div>
+      </div>` : '';
     return `
       <div class="plan-summary-block">
         <div class="plan-title">🗾 旅行プラン：${esc(plan.destination)}</div>
@@ -128,7 +138,8 @@ function esc(str) {
         ${accordion('🏨', '宿泊施設', plan.accommodation)}
         ${accordion('📅', 'スケジュール', plan.schedule)}
         ${accordion('💰', '費用見積もり', plan.budget_estimate)}
-      </div>`;
+      </div>
+      ${mapSection}`;
   }
 
   // 修正案のプレビュー（未保存）。確定するまで元プランは変更しない。
@@ -298,6 +309,22 @@ function esc(str) {
       };
       editSend.addEventListener('click', submitEdit);
       editInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitEdit(); });
+    }
+
+    // 地図ボタン：クリックでコンテナを開閉し、初回のみ地図を初期化
+    const mapBtn = card.querySelector('.plan-map-btn');
+    if (mapBtn) {
+      mapBtn.addEventListener('click', () => {
+        const container = document.getElementById(mapBtn.dataset.mapId);
+        if (!container) return;
+        const opening = container.hidden;
+        container.hidden = !opening;
+        mapBtn.textContent = opening ? '🗺 地図を閉じる' : '🗺 地図で見る';
+        if (opening) {
+          const spots = JSON.parse(mapBtn.dataset.spots || '[]');
+          window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, spots, mapBtn.dataset.destination);
+        }
+      });
     }
 
     if (!shared) {

@@ -230,8 +230,10 @@ def save_plan():
         plan = request.get_json(force=True)
         from db import save_travel_plan
         from geocoding import geocode_spots
-        # 保存時にスポットの緯度経度を取得して一緒に保存する（地図表示を即時・確実にする）。
+        # 保存時に観光・グルメ・宿の緯度経度を取得して一緒に保存する（地図表示を即時・確実にする）。
         plan['spot_coords'] = geocode_spots(plan.get('spots', []))
+        plan['restaurant_coords'] = geocode_spots(plan.get('restaurants', []))
+        plan['accommodation_coords'] = geocode_spots(plan.get('accommodation', []))
         plan_id = save_travel_plan(
             plan,
             google_user_id=session.get('user_id'),
@@ -378,11 +380,14 @@ def apply_saved_plan(plan_id):
     if not isinstance(new_plan, dict):
         return json.dumps({'status': 'ERROR', 'message': '更新内容が不正です'}), 400, {'Content-Type': 'application/json'}
 
-    # スポットが変わった可能性があるので座標を取り直す。変更のないスポットは
+    # 観光・グルメ・宿が変わった可能性があるので座標を取り直す。変更のない項目は
     # 既存の座標を流用し、Nominatim への不要な再問い合わせを避ける。
     from geocoding import geocode_spots
-    known = {c['name']: c for c in (plan.get('spot_coords') or []) if c.get('name')}
-    new_plan['spot_coords'] = geocode_spots(new_plan.get('spots', []), known=known)
+    def _known(field):
+        return {c['name']: c for c in (plan.get(field) or []) if c.get('name')}
+    new_plan['spot_coords'] = geocode_spots(new_plan.get('spots', []), known=_known('spot_coords'))
+    new_plan['restaurant_coords'] = geocode_spots(new_plan.get('restaurants', []), known=_known('restaurant_coords'))
+    new_plan['accommodation_coords'] = geocode_spots(new_plan.get('accommodation', []), known=_known('accommodation_coords'))
 
     # 共有編集でも書き換える対象は所有者の行（共同編集＝上書き）
     update_travel_plan(plan_id, plan.get('google_user_id'), new_plan)

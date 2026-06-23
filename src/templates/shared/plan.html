@@ -4,6 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/shared-plan.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
 {% endblock %}
 
 {% macro accordion(icon, label, items) %}
@@ -40,5 +41,36 @@
     {{ accordion('📅', 'スケジュール', plan.schedule) }}
     {{ accordion('💰', '費用見積もり', plan.budget_estimate) }}
   </div>
+  {% if plan.spots %}
+  <div class="plan-map-section">
+    <button class="plan-map-btn" type="button" id="shared-map-btn">🗺 地図で見る</button>
+    <div class="plan-map-container" id="shared-plan-map" hidden></div>
+  </div>
+  {% endif %}
 </div>
+
+{% if plan.spots %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ url_for('static', filename='js/plan-map.js') }}"></script>
+<script>
+  (function () {
+    var planData = {
+      spots: {{ plan.spots | tojson }},
+      spot_coords: {{ (plan.spot_coords or []) | tojson }},
+      restaurants: {{ (plan.restaurants or []) | tojson }},
+      restaurant_coords: {{ (plan.restaurant_coords or []) | tojson }},
+      accommodation: {{ (plan.accommodation or []) | tojson }},
+      accommodation_coords: {{ (plan.accommodation_coords or []) | tojson }}
+    };
+    var btn = document.getElementById('shared-map-btn');
+    var box = document.getElementById('shared-plan-map');
+    btn.addEventListener('click', function () {
+      var opening = box.hidden;
+      box.hidden = !opening;
+      btn.textContent = opening ? '🗺 地図を閉じる' : '🗺 地図で見る';
+      if (opening) window.initPlanMap('shared-plan-map', {{ plan.id | tojson }}, planData);
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

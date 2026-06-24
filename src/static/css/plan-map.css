@@ -132,18 +132,30 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   cursor: pointer;
 }
 .leaflet-popup-content .pin-type-tag { font-size: 11px; font-weight: 700; }
-.leaflet-popup-content .pin-form { display: flex; align-items: center; gap: 4px; }
+.leaflet-popup-content .pin-form { display: flex; flex-direction: column; gap: 6px; }
+.leaflet-popup-content .pin-form-top { display: flex; align-items: center; gap: 4px; }
 .leaflet-popup-content .pin-form .pin-name {
-  width: 120px; padding: 4px 8px; border: 1px solid #d9cfbe; border-radius: 8px;
+  flex: 1 1 auto; min-width: 90px; padding: 4px 8px; border: 1px solid #d9cfbe; border-radius: 8px;
   font-size: 13px; font-family: 'Zen Maru Gothic', sans-serif;
 }
 .leaflet-popup-content .pin-form .pin-type {
   padding: 4px 6px; border: 1px solid #d9cfbe; border-radius: 8px; font-size: 12px;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
+.leaflet-popup-content .pin-colors { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.leaflet-popup-content .pin-color {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #d9cfbe; cursor: pointer; padding: 0;
+}
+.leaflet-popup-content .pin-color[data-color=""] {
+  width: auto; height: auto; border-radius: 10px; background: #fff; color: #6b6358;
+  box-shadow: none; border: 1px solid #d9cfbe; font-size: 11px; padding: 2px 8px;
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.leaflet-popup-content .pin-color.sel { box-shadow: 0 0 0 2px #4fa83a; }
 .leaflet-popup-content .pin-form .pin-add {
   border: none; background: #4fa83a; color: #fff; border-radius: 8px;
-  padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
 }
 
 /* プラン紐付けセレクタ（旅の足あと） */

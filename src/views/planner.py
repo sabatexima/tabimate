@@ -519,7 +519,8 @@ def save_plan_pins(plan_id):
     raw = data.get('pins')
     if not isinstance(raw, list):
         return json.dumps({'status': 'ERROR', 'message': 'ピンの形式が不正です'}), 400, {'Content-Type': 'application/json'}
-    # 値域を検証して安全な形だけ保存する（名前は60字まで、種類はホワイトリスト）
+    # 値域を検証して安全な形だけ保存する（名前60字・種類ホワイトリスト・色は#rrggbb）
+    import re as _re
     _PIN_TYPES = {'memo', 'spot', 'restaurant', 'accommodation'}
     pins = []
     for p in raw[:50]:
@@ -533,7 +534,11 @@ def save_plan_pins(plan_id):
         ptype = str(p.get('type') or 'memo')
         if ptype not in _PIN_TYPES:
             ptype = 'memo'
-        pins.append({'name': name, 'lat': lat, 'lng': lng, 'type': ptype})
+        pin = {'name': name, 'lat': lat, 'lng': lng, 'type': ptype}
+        color = p.get('color')
+        if color and _re.match(r'^#[0-9a-fA-F]{6}$', str(color)):
+            pin['color'] = str(color)
+        pins.append(pin)
     ok = update_plan_custom_pins(plan_id, session.get('user_id'), pins)
     if not ok:
         return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}

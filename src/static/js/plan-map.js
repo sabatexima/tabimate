@@ -123,9 +123,12 @@
   const _TYPE_CAT = { spot: 'spot', restaurant: 'restaurant', accommodation: 'accommodation', memo: 'custom' };
   function _typeCat(type) { return CATEGORIES[_TYPE_CAT[type] || 'custom'] || CATEGORIES.custom; }
 
-  // しずく型ピン（種類の色＋中央の丸）。ユーザー設置のカスタムピン用。
-  function customIcon(type) {
-    const fill = _typeCat(type).fill;
+  // ユーザーが選べるピンの色パレット（選ばなければ種類の色）
+  const PIN_COLORS = ['#4fa83a', '#e8883a', '#4a90d9', '#9b6dd6', '#f08ba0', '#f4607a', '#2bb3a3', '#e0a93b'];
+
+  // しずく型ピン（中央の丸）。color 指定があればその色、なければ種類の色。
+  function customIcon(type, color) {
+    const fill = color || _typeCat(type).fill;
     const svg = `<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">`
       + `<path d="M16 2C8.8 2 3 7.8 3 15c0 9.2 13 24 13 24s13-14.8 13-24C29 7.8 23.2 2 16 2Z" fill="${fill}" stroke="#fff" stroke-width="2.5"/>`
       + `<circle cx="16" cy="15" r="4.5" fill="#fff9ec"/></svg>`;
@@ -146,7 +149,7 @@
     markers.forEach(m => map.removeLayer(m));
     markers.length = 0;
     pins.forEach((p, idx) => {
-      const m = L.marker([p.lat, p.lng], { icon: customIcon(p.type), draggable: !!editing }).addTo(map);
+      const m = L.marker([p.lat, p.lng], { icon: customIcon(p.type, p.color), draggable: !!editing }).addTo(map);
       m.bindPopup(customPopup(p, editing));
       m.on('popupopen', (e) => {
         const btn = e.popup.getElement().querySelector('.pin-del');
@@ -244,8 +247,13 @@
     // 地図クリック時：未配置スポット配置待ちならそれを置く。なければ入力フォームを開く。
     function openAddForm(latlng) {
       const opts = PIN_TYPES.map(t => `<option value="${t}">${_typeCat(t).label}</option>`).join('');
-      const html = `<div class="pin-form"><input class="pin-name" type="text" placeholder="ピンの名前" maxlength="60">`
-        + `<select class="pin-type">${opts}</select><button type="button" class="pin-add">追加</button></div>`;
+      const swatches = `<button type="button" class="pin-color sel" data-color="" title="種類の色">自動</button>`
+        + PIN_COLORS.map(c => `<button type="button" class="pin-color" data-color="${c}" style="background:${c}" aria-label="${c}"></button>`).join('');
+      const html = `<div class="pin-form"><div class="pin-form-top">`
+        + `<input class="pin-name" type="text" placeholder="ピンの名前" maxlength="60">`
+        + `<select class="pin-type">${opts}</select></div>`
+        + `<div class="pin-colors">${swatches}</div>`
+        + `<button type="button" class="pin-add">追加</button></div>`;
       const popup = L.popup({ closeButton: true, autoPan: true }).setLatLng(latlng).setContent(html).openOn(map);
       setTimeout(() => {
         const el = popup.getElement();
@@ -253,11 +261,19 @@
         L.DomEvent.disableClickPropagation(el);
         const nameEl = el.querySelector('.pin-name');
         if (nameEl) nameEl.focus();
+        let color = '';  // '' = 種類の色（自動）
+        el.querySelectorAll('.pin-color').forEach(sw => sw.onclick = () => {
+          color = sw.dataset.color || '';
+          el.querySelectorAll('.pin-color').forEach(s => s.classList.remove('sel'));
+          sw.classList.add('sel');
+        });
         const addBtn = el.querySelector('.pin-add');
         if (addBtn) addBtn.onclick = () => {
           const name = (nameEl.value || '').trim();
           if (!name) { nameEl.focus(); return; }
-          pins.push({ name, type: el.querySelector('.pin-type').value || 'memo', lat: latlng.lat, lng: latlng.lng });
+          const pin = { name, type: el.querySelector('.pin-type').value || 'memo', lat: latlng.lat, lng: latlng.lng };
+          if (color) pin.color = color;
+          pins.push(pin);
           map.closePopup(popup);
           rerender();
         };

@@ -32,7 +32,7 @@ def _format_plan(state: dict) -> str:
     logger.debug("フォーマット開始: destination=%s, status=%s", state.get("destination"), status)
 
     _total = state.get("total_per_person")
-    _cost_line = (f"💴 かかる金額: {_total:,}円/人"
+    _cost_line = (f"💴 費用の目安: {_total:,}円/人"
                   if _total else f"💴 予算上限: {state['budget_limit']:,}円/人")
     header = f"""<div class="plan-card">
   <div class="plan-summary-block">

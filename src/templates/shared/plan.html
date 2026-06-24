@@ -31,7 +31,7 @@
       <span>📍 出発地: {{ plan.departure_location or '—' }}</span>
       <span>⏱️ 期間: {{ plan.duration or '—' }}</span>
       <span>👥 人数: {% if plan.num_people is not none %}{{ plan.num_people }}人{% else %}—{% endif %}</span>
-      <span>{% if plan.total_per_person %}💴 かかる金額: {{ "{:,}".format(plan.total_per_person) }}円/人{% elif plan.budget_limit is not none %}💴 予算上限: {{ "{:,}".format(plan.budget_limit) }}円/人{% else %}💴 予算上限: —{% endif %}</span>
+      <span>{% if plan.total_per_person %}💴 費用の目安: {{ "{:,}".format(plan.total_per_person) }}円/人{% elif plan.budget_limit is not none %}💴 予算上限: {{ "{:,}".format(plan.budget_limit) }}円/人{% else %}💴 予算上限: —{% endif %}</span>
     </div>
   </div>
   {% if weather_days %}

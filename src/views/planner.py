@@ -18,7 +18,7 @@ from collections import defaultdict
 
 from flask import Blueprint, Response, abort, render_template, request, session, stream_with_context
 
-from chat.chat import chat
+from chat.chat import chat as _ai_chat
 from chat.logger import get_logger
 from views.auth import login_required
 
@@ -203,7 +203,7 @@ def send_message():
 
     def run_chat():
         try:
-            result['response'] = chat(
+            result['response'] = _ai_chat(
                 user_message,
                 messages_history=messages,
                 request_id=request_id,

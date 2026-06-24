@@ -1,13 +1,13 @@
 /* 旅行プランのスポット地図（保存プラン／共有プランで共用） */
 .plan-map-section {
-  padding: 0 16px 16px;
+  padding: 10px 16px 16px;
 }
 .plan-map-btn {
   background: none;
   border: 1px solid rgba(79, 168, 58, 0.5);
   color: var(--primary-color);
   border-radius: 20px;
-  padding: 4px 16px;
+  padding: 6px 16px;
   font-size: 0.85em;
   font-weight: 600;
   cursor: pointer;

@@ -1,4 +1,16 @@
-.share-banner {
+.shared-weather {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+    margin: 0 16px 12px; padding: 10px 14px; border-radius: 14px;
+    background: linear-gradient(135deg, #eef6ff 0%, #f3f9ff 100%);
+    border: 1px solid #dceaf6;
+  }
+  .shared-weather .sw-label { font-size: 0.85em; font-weight: 700; color: #4a7aa8; white-space: nowrap; }
+  .shared-weather .sw-day { display: flex; flex-direction: column; align-items: center; font-size: 0.8em; line-height: 1.3; color: var(--text-main); }
+  .shared-weather .sw-day b { font-size: 0.95em; color: var(--text-muted); font-weight: 600; }
+  .shared-weather .sw-emoji { font-size: 1.3em; }
+  .shared-weather .sw-temp { font-size: 0.85em; white-space: nowrap; }
+
+  .share-banner {
     background: #eef6ec; border: 1px solid rgba(79,168,58,0.25);
     color: var(--text-main); border-radius: 10px; padding: 10px 14px;
     font-size: 0.88em; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 8px;

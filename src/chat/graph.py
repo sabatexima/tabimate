@@ -91,17 +91,31 @@ def generate_travel_plan(inputs: dict):
     inputs.setdefault("spot_candidates", [])
     inputs.setdefault("accommodation_candidates", [])
     inputs.setdefault("restaurant_candidates", [])
+    inputs.setdefault("weather", "")
 
-    # 互いに独立な「交通費の試算」と「観光候補の抽出」を並列に先行実行して数秒短縮する。
-    # どちらも inputs を読むだけで書き換えないためスレッド共有して安全。
+    def _compute_weather():
+        # 旅行日の天気予報を取得して屋内/屋外調整のヒントにする（取得不可なら空）。
+        try:
+            import weather as wx
+            return wx.generation_hint(
+                inputs.get("destination"), inputs.get("travel_date"), inputs.get("duration"))
+        except Exception:
+            log.debug("天気ヒントの取得に失敗", exc_info=True)
+            return ""
+
+    # 互いに独立な「交通費の試算」「観光候補の抽出」「天気予報」を並列に先行実行して短縮する。
+    # いずれも inputs を読むだけで書き換えないためスレッド共有して安全。
     # transport_agent は予算超過時に ValueError を投げるので result() で伝播させる。
-    with ThreadPoolExecutor(max_workers=2) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         f_transport = ex.submit(transport_agent, inputs)
         f_sightseeing = ex.submit(sightseeing_candidates, inputs)
+        f_weather = ex.submit(_compute_weather)
         transport_out = f_transport.result()
         sightseeing_out = f_sightseeing.result()
+        weather_hint = f_weather.result()
     inputs.update(transport_out)
     inputs.update(sightseeing_out)
+    inputs["weather"] = weather_hint
 
     # トークン使用量を集計してコストを概算ログ（事前並列分の2呼び出しは集計対象外）
     config = {"recursion_limit": 60}

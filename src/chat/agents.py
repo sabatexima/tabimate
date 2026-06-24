@@ -81,6 +81,12 @@ def _pref(state) -> str:
     )
 
 
+def _weather(state) -> str:
+    """旅行日の天気予報ヒントをプロンプトに添える（屋内/屋外の調整用・取得時のみ）。"""
+    w = state.get("weather")
+    return f"\n{w}\n" if w else ""
+
+
 def _directive(state=None) -> str:
     """全エージェント共通の指示（出力言語・本日の日付・実在性）。各プロンプト末尾に付与する。"""
     return (
@@ -225,6 +231,7 @@ def sightseeing_expert(state: TravelPlanState):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映してスポットを選ぶこと。"
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
+    prompt += _weather(state)
     prompt += _pref(state)
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(SightseeingOutput)
@@ -564,6 +571,11 @@ def timekeeper(state: TravelPlanState):
             "＋徒歩で組み、各移動に路線・所要時間を明記すること。レンタカー・自家用車の運転を前提にしないこと。"
         )
 
+    if state.get("weather"):
+        prompt += (
+            _weather(state)
+            + "・天気が崩れる日は屋外スポットの滞在を短めにし、雨でも楽しめる屋内の時間帯を挟むこと。\n"
+        )
     prompt += _pref(state)
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(TimekeeperOutput)

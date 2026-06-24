@@ -493,37 +493,12 @@ def export_plan_ics(plan_id):
     })
 
 
-def _weather_desc(code):
-    """Open-Meteo(WMO) の天気コードを絵文字とラベルに変換する。"""
-    table = [
-        ({0}, '☀️', '快晴'),
-        ({1, 2}, '🌤️', '晴れ'),
-        ({3}, '☁️', 'くもり'),
-        ({45, 48}, '🌫️', '霧'),
-        ({51, 53, 55, 56, 57}, '🌦️', '霧雨'),
-        ({61, 63, 65, 66, 67}, '🌧️', '雨'),
-        ({71, 73, 75, 77}, '❄️', '雪'),
-        ({80, 81, 82}, '🌦️', 'にわか雨'),
-        ({85, 86}, '🌨️', 'にわか雪'),
-        ({95, 96, 99}, '⛈️', '雷雨'),
-    ]
-    for codes, emoji, label in table:
-        if code in codes:
-            return emoji, label
-    return '❓', '—'
-
-
 @planner.route('/api/plan_weather/<int:plan_id>')
 @login_required
 def plan_weather(plan_id):
-    """保存プランの目的地・旅行日の天気予報を返す（Open-Meteo・APIキー不要）。
-
-    位置は最初のスポット座標、期間は travel_date〜duration から決める。
-    予報の取れる範囲（概ね当日〜16日先）外なら days を空で返す。
-    """
-    import requests as req
-    from datetime import date, datetime, timedelta
+    """保存プランの目的地・旅行日の天気予報を返す（Open-Meteo・APIキー不要・本人のみ）。"""
     from db import get_travel_plan_by_id
+    import weather
 
     plan = get_travel_plan_by_id(plan_id)
     if not plan or plan.get('google_user_id') != session.get('user_id'):
@@ -531,54 +506,7 @@ def plan_weather(plan_id):
     if _geo_rate_limited(session.get('user_id')):
         return json.dumps({'status': 'OK', 'days': []}), 200, {'Content-Type': 'application/json'}
 
-    coords = plan.get('spot_coords') or []
-    loc = next((c for c in coords if c.get('lat') is not None and c.get('lng') is not None), None)
-    if not loc:
-        return json.dumps({'status': 'OK', 'days': [], 'reason': 'no_location'}), 200, {'Content-Type': 'application/json'}
-
-    import re
-    m = re.search(r'(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})', str(plan.get('travel_date') or ''))
-    if not m:
-        return json.dumps({'status': 'OK', 'days': [], 'reason': 'no_date'}), 200, {'Content-Type': 'application/json'}
-    try:
-        start = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    except ValueError:
-        return json.dumps({'status': 'OK', 'days': [], 'reason': 'no_date'}), 200, {'Content-Type': 'application/json'}
-    nm = re.search(r'(\d+)\s*泊', str(plan.get('duration') or ''))
-    end = start + timedelta(days=(int(nm.group(1)) if nm else 0))
-
-    today = date.today()
-    # Open-Meteo の予報は概ね当日〜16日先まで。範囲外は予報なしで返す。
-    if end < today or start > today + timedelta(days=16):
-        return json.dumps({'status': 'OK', 'days': [], 'reason': 'out_of_range'}), 200, {'Content-Type': 'application/json'}
-    start = max(start, today)
-
-    try:
-        resp = req.get('https://api.open-meteo.com/v1/forecast', params={
-            'latitude': loc['lat'], 'longitude': loc['lng'],
-            'daily': 'weathercode,temperature_2m_max,temperature_2m_min',
-            'timezone': 'Asia/Tokyo',
-            'start_date': start.strftime('%Y-%m-%d'),
-            'end_date': end.strftime('%Y-%m-%d'),
-        }, timeout=5)
-        d = resp.json().get('daily', {})
-    except Exception as e:
-        logger.warning("天気取得失敗: plan_id=%s, error=%s", plan_id, e)
-        return json.dumps({'status': 'OK', 'days': []}), 200, {'Content-Type': 'application/json'}
-
-    days = []
-    times = d.get('time', []) or []
-    codes = d.get('weathercode', []) or []
-    tmax = d.get('temperature_2m_max', []) or []
-    tmin = d.get('temperature_2m_min', []) or []
-    for i, t in enumerate(times):
-        code = codes[i] if i < len(codes) else None
-        emoji, label = _weather_desc(code)
-        days.append({
-            'date': t, 'emoji': emoji, 'label': label,
-            'tmax': round(tmax[i]) if i < len(tmax) and tmax[i] is not None else None,
-            'tmin': round(tmin[i]) if i < len(tmin) and tmin[i] is not None else None,
-        })
+    days = weather.plan_forecast(plan)
     return json.dumps({'status': 'OK', 'days': days}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
 
 

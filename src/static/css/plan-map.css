@@ -15,6 +15,8 @@
   transition: background 0.15s, color 0.15s;
 }
 .plan-map-btn:hover { background: var(--primary-color); color: #fff; }
+a.plan-map-btn { text-decoration: none; display: inline-block; }
+.plan-map-btn + .plan-map-btn { margin-left: 8px; }
 .plan-map-container {
   height: 280px;
   border-radius: 12px;

@@ -34,6 +34,18 @@
       <span>💴 予算上限: {% if plan.budget_limit is not none %}{{ "{:,}".format(plan.budget_limit) }}円/人{% else %}—{% endif %}</span>
     </div>
   </div>
+  {% if weather_days %}
+  <div class="shared-weather">
+    <span class="sw-label">🌤 旅行日の天気</span>
+    {% for d in weather_days %}
+    <span class="sw-day">
+      <b>{{ d.date[5:7]|int }}/{{ d.date[8:10]|int }}</b>
+      <span class="sw-emoji">{{ d.emoji }}</span>
+      <span class="sw-temp">{% if d.tmax is not none %}{{ d.tmax }}°{% else %}–{% endif %}/{% if d.tmin is not none %}{{ d.tmin }}°{% else %}–{% endif %}</span>
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
   <div class="plan-accordion">
     {{ accordion('✨', '主要観光地', plan.spots) }}
     {{ accordion('🍱', 'グルメ', plan.restaurants) }}
@@ -41,12 +53,13 @@
     {{ accordion('📅', 'スケジュール', plan.schedule) }}
     {{ accordion('💰', '費用見積もり', plan.budget_estimate) }}
   </div>
-  {% if plan.spots %}
   <div class="plan-map-section">
+    {% if plan.spots %}
     <button class="plan-map-btn" type="button" id="shared-map-btn">🗺 地図で見る</button>
+    {% endif %}
+    <a class="plan-map-btn" href="{{ url_for('share.shared_plan_ics', resource_id=plan.id) }}{% if share_token %}?token={{ share_token }}{% endif %}">📅 カレンダーに追加</a>
     <div class="plan-map-container" id="shared-plan-map" hidden></div>
   </div>
-  {% endif %}
 </div>
 
 {% if plan.spots %}

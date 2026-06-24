@@ -14,7 +14,7 @@
   - 写真実体は本番では GCS 署名付きURL（時間制限つき）で配信されるため、
     共有閲覧者でも追加の認証なしに表示できる。
 """
-from flask import (Blueprint, abort, jsonify, redirect, render_template,
+from flask import (Blueprint, Response, abort, jsonify, redirect, render_template,
                    request, session, url_for)
 
 import db
@@ -228,6 +228,23 @@ def shared_view(resource_type: str, resource_id: int):
     return _render_shared(resource_type, resource_id, can_edit=can_edit, share_token=None)
 
 
+@share.route("/shared/plan/<int:resource_id>/ics")
+def shared_plan_ics(resource_id: int):
+    """共有プランをカレンダー(.ics)で書き出す。公開トークン or メール共有で閲覧できる人のみ。"""
+    token = request.args.get("token")
+    perm = _resolve_permission("plan", resource_id, token)
+    if perm is None:
+        abort(404)
+    plan = db.get_travel_plan_by_id(resource_id)
+    if not plan:
+        abort(404)
+    from views.planner import _build_plan_ics
+    ics = _build_plan_ics(plan)
+    return Response(ics, mimetype="text/calendar; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="tabimate_plan_{resource_id}.ics"',
+    })
+
+
 def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_token: str | None):
     """共有閲覧ページを描画する（trip / plan 共通の入口）。"""
     if resource_type == "trip":
@@ -254,7 +271,11 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
         # 地図座標が未取得なら今ここで取得してキャッシュ（共有閲覧でも地図が出るように）
         from geocoding import ensure_plan_coords
         ensure_plan_coords(plan)
-        return render_template("shared/plan.html", plan=plan)
+        # 旅行日の天気予報も共有閲覧に表示する（本人プランと体験を揃える）
+        import weather
+        weather_days = weather.plan_forecast(plan)
+        return render_template("shared/plan.html", plan=plan,
+                               weather_days=weather_days, share_token=share_token)
     abort(404)
 
 

@@ -191,5 +191,20 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
 }
 
 @media (max-width: 600px) {
-  .plan-map-container { height: 240px; }
+  /* スマホは地図を広めにして、ピンを置く/触る余白を確保 */
+  .plan-map-container { height: 320px; }
+
+  /* 編集UIをタップしやすい大きさに（指で押せる目安44px前後） */
+  .plan-map-editbar { max-width: 88vw; padding: 8px 10px; gap: 8px; }
+  .plan-map-editbar .pin-edit-btn { padding: 9px 16px; font-size: 14px; }
+  .plan-map-editbar .pin-edit-hint { font-size: 12px; }
+  .plan-map-editbar .pin-chip { padding: 7px 12px; font-size: 13px; }
+
+  /* ポップアップ内のフォーム・削除ボタンも大きく */
+  .leaflet-popup-content .pin-form .pin-name { padding: 9px 10px; font-size: 15px; }
+  .leaflet-popup-content .pin-form .pin-type { padding: 9px 8px; font-size: 14px; }
+  .leaflet-popup-content .pin-form .pin-add { padding: 9px 16px; font-size: 14px; }
+  .leaflet-popup-content .pin-color { width: 26px; height: 26px; }
+  .leaflet-popup-content .pin-color[data-color=""] { padding: 5px 12px; font-size: 13px; }
+  .leaflet-popup-content .pin-del { padding: 7px 18px; font-size: 14px; }
 }

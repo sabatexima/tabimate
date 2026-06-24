@@ -16,7 +16,7 @@ import time
 import uuid
 from collections import defaultdict
 
-from flask import Blueprint, Response, render_template, request, session, stream_with_context
+from flask import Blueprint, Response, abort, render_template, request, session, stream_with_context
 
 from chat.chat import chat
 from chat.logger import get_logger
@@ -544,6 +544,19 @@ def save_plan_pins(plan_id):
     if not ok:
         return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
     return json.dumps({'status': 'OK', 'pins': pins}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+
+
+@planner.route('/plan/<int:plan_id>/print')
+@login_required
+def plan_print(plan_id):
+    """プランを「旅のしおり」として印刷／PDF保存できる専用ページ（本人のみ）。"""
+    from db import get_travel_plan_by_id
+    import weather
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan or plan.get('google_user_id') != session.get('user_id'):
+        abort(404)
+    weather_days = weather.plan_forecast(plan)
+    return render_template('shiori.html', plan=plan, weather_days=weather_days)
 
 
 @planner.route('/api/plan_geo/<int:plan_id>')

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅のしおり — {{ plan.destination }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/mate-head.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --green: #4fa83a; --ink: #4a4540; --muted: #8a817a; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px 16px;
+      font-family: 'Zen Maru Gothic', sans-serif; color: var(--ink);
+      background: linear-gradient(180deg, #fdfaf2 0%, #f1f7e9 100%);
+      line-height: 1.7;
+    }
+    .toolbar { max-width: 720px; margin: 0 auto 16px; display: flex; gap: 10px; justify-content: flex-end; }
+    .btn {
+      font-family: inherit; font-size: 0.95em; font-weight: 700; cursor: pointer;
+      border-radius: 20px; padding: 10px 20px; border: none;
+    }
+    .btn.print { background: var(--green); color: #fff; }
+    .btn.back { background: #fff; color: #6b6358; border: 1px solid #d9cfbe; text-decoration: none; display: inline-flex; align-items: center; }
+    .sheet {
+      max-width: 720px; margin: 0 auto; background: #fffdf8;
+      border: 1px solid #ece3d0; border-radius: 18px; padding: 32px 32px 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .head { text-align: center; border-bottom: 2px dashed #d9e6c8; padding-bottom: 18px; margin-bottom: 22px; }
+    .head img { width: 64px; height: 64px; }
+    .head .label { color: var(--green); font-weight: 700; letter-spacing: 0.15em; font-size: 0.9em; margin-top: 4px; }
+    .head h1 { margin: 4px 0 0; font-size: 1.7em; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin-bottom: 22px; font-size: 0.95em; }
+    .meta .cost { color: #a9772f; font-weight: 700; }
+    .weather { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #eef6ff; border: 1px solid #dceaf6; border-radius: 12px; padding: 10px 14px; margin-bottom: 22px; font-size: 0.9em; }
+    .weather .wlabel { color: #4a7aa8; font-weight: 700; }
+    .weather .wday { display: flex; flex-direction: column; align-items: center; line-height: 1.3; }
+    .weather .wday b { color: var(--muted); font-weight: 600; font-size: 0.95em; }
+    .weather .wday .e { font-size: 1.3em; }
+    section { margin-bottom: 20px; break-inside: avoid; }
+    section h2 { font-size: 1.1em; margin: 0 0 8px; padding-bottom: 4px; border-bottom: 1px solid #ece3d0; }
+    ul { margin: 0; padding-left: 1.3em; }
+    li { margin: 3px 0; }
+    .sched li { list-style: none; margin: 0; padding: 3px 0; border-bottom: 1px dashed #efe7d6; }
+    .sched { padding-left: 0; }
+    .foot { text-align: center; color: var(--muted); font-size: 0.82em; margin-top: 24px; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .toolbar { display: none; }
+      .sheet { box-shadow: none; border: none; border-radius: 0; max-width: 100%; padding: 0; }
+      @page { margin: 16mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a class="btn back" href="{{ url_for('planner.saved_plans') }}">‹ 戻る</a>
+    <button class="btn print" onclick="window.print()">🖨 印刷 / PDFで保存</button>
+  </div>
+
+  <div class="sheet">
+    <div class="head">
+      <img src="{{ url_for('static', filename='img/mate-head.png') }}" alt="">
+      <div class="label">旅のしおり</div>
+      <h1>{{ plan.destination }}</h1>
+    </div>
+
+    <div class="meta">
+      <span>📍 出発地: {{ plan.departure_location or '—' }}</span>
+      <span>📅 旅行日: {{ plan.travel_date or '—' }}</span>
+      <span>⏱️ 期間: {{ plan.duration or '—' }}</span>
+      <span>👥 人数: {% if plan.num_people is not none %}{{ plan.num_people }}人{% else %}—{% endif %}</span>
+      <span class="cost">{% if plan.total_per_person %}💴 費用の目安: {{ "{:,}".format(plan.total_per_person) }}円/人{% elif plan.budget_limit is not none %}💴 予算上限: {{ "{:,}".format(plan.budget_limit) }}円/人{% endif %}</span>
+    </div>
+
+    {% if weather_days %}
+    <div class="weather">
+      <span class="wlabel">🌤 旅行日の天気</span>
+      {% for d in weather_days %}
+      <span class="wday"><b>{{ d.date[5:7]|int }}/{{ d.date[8:10]|int }}</b><span class="e">{{ d.emoji }}</span><span>{% if d.tmax is not none %}{{ d.tmax }}°{% endif %}/{% if d.tmin is not none %}{{ d.tmin }}°{% endif %}</span></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% macro listsec(icon, label, items, cls='') %}
+      {% if items %}
+      <section>
+        <h2>{{ icon }} {{ label }}</h2>
+        <ul class="{{ cls }}">{% for i in items %}<li>{{ i }}</li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    {% endmacro %}
+
+    {{ listsec('📅', 'スケジュール', plan.schedule, 'sched') }}
+    {{ listsec('✨', '主要観光地', plan.spots) }}
+    {{ listsec('🍱', 'グルメ', plan.restaurants) }}
+    {{ listsec('🏨', '宿泊施設', plan.accommodation) }}
+    {{ listsec('💰', '費用見積もり', plan.budget_estimate) }}
+
+    <div class="foot">🍀 たびメイト で作成した旅のしおり</div>
+  </div>
+</body>
+</html>

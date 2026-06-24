@@ -272,7 +272,8 @@ def upload_photos(trip_id: int):
         if not f or not f.filename:
             continue
         ext = os.path.splitext(f.filename)[1].lower()
-        if ext and ext not in _ALLOWED_EXT:
+        # 許可拡張子のみ受け入れる（拡張子なしも拒否。MIMEだけに頼らない）。
+        if ext not in _ALLOWED_EXT:
             logger.debug("非対応拡張子をスキップ: %s", f.filename)
             continue
         data = f.read()

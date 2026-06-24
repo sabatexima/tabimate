@@ -108,6 +108,11 @@ def ensure_plan_coords(plan: dict) -> dict:
     キャッシュを使う。保存処理をブロックしないための遅延取得。
     観光は名前のみ、グルメ/宿は目的地を文脈にして精度を上げる。
     """
+    # 既に一度ジオコーディング済み（geo_done）なら何もしない。失敗カテゴリの
+    # 毎回再取得（地図を開くたびに数秒）を防ぐ。編集時は geo_done が 0 に戻る。
+    if plan.get("geo_done"):
+        return plan
+
     dest = plan.get("destination")
     changed = False
 
@@ -139,10 +144,16 @@ def ensure_plan_coords(plan: dict) -> dict:
 
     if changed and plan.get("id"):
         from db import update_plan_coords
+        # 1件でも取得できたら done として以後スキップ。全滅なら done にせず次回再試行
+        # （Nominatim の一時的な不調を救う。OSM未登録だらけの場合は毎回試行になる）。
+        found = bool((plan.get("spot_coords") or []) or (plan.get("restaurant_coords") or [])
+                     or (plan.get("accommodation_coords") or []))
         update_plan_coords(
             plan["id"],
             plan.get("spot_coords") or [],
             plan.get("restaurant_coords") or [],
             plan.get("accommodation_coords") or [],
+            geo_done=1 if found else 0,
         )
+        plan["geo_done"] = 1 if found else 0
     return plan

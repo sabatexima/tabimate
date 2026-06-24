@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS travel_plans (
     accommodation_coords JSON,
     budget_estimate  JSON,
     custom_pins      JSON,
+    geo_done         TINYINT NOT NULL DEFAULT 0,
     rating           INT NULL,
     rating_comment   TEXT NULL,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -145,7 +146,8 @@ def _ensure_plan_columns(conn) -> None:
         return
     for col, ddl in (("rating", "INT NULL"), ("rating_comment", "TEXT NULL"),
                      ("spot_coords", "JSON NULL"), ("restaurant_coords", "JSON NULL"),
-                     ("accommodation_coords", "JSON NULL"), ("custom_pins", "JSON NULL")):
+                     ("accommodation_coords", "JSON NULL"), ("custom_pins", "JSON NULL"),
+                     ("geo_done", "TINYINT NOT NULL DEFAULT 0")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -173,41 +175,54 @@ def _row_to_dict(row) -> dict:
     return dict(row._mapping)
 
 
+# プランの JSON 列（パース対象）。列追加時はここだけ直せば両取得関数に反映される。
+_PLAN_JSON_COLS = (
+    "themes", "special_requirements", "spots", "spot_coords",
+    "restaurants", "restaurant_coords", "schedule_items",
+    "accommodation", "accommodation_coords", "budget_estimate", "custom_pins",
+)
+# 取得時に SELECT する列（id / google_user_id は呼び出し側で付け足す）
+_PLAN_SELECT_COLS = (
+    "destination, travel_date, duration, num_people, budget_limit, "
+    "departure_location, transport_cost, remaining_budget, status, feedback, "
+    "themes, special_requirements, spots, spot_coords, restaurants, restaurant_coords, "
+    "schedule_items, accommodation, accommodation_coords, budget_estimate, custom_pins, "
+    "geo_done, rating, rating_comment, created_at"
+)
+
+
+def _normalize_plan_row(d: dict) -> dict:
+    """DB行(dict)の JSON 列をパースし、schedule_items→schedule・created_atを文字列化する。
+
+    get_travel_plans / get_travel_plan_by_id で共用（パース漏れによる不整合を防ぐ）。
+    """
+    for col in _PLAN_JSON_COLS:
+        if isinstance(d.get(col), str):
+            try:
+                d[col] = json.loads(d[col])
+            except Exception:
+                d[col] = []
+        elif d.get(col) is None:
+            d[col] = []
+    d["schedule"] = d.pop("schedule_items", [])
+    if d.get("created_at"):
+        d["created_at"] = str(d["created_at"])
+    return d
+
+
 def get_travel_plans(google_user_id: str) -> list:
     with _get_engine().connect() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
         _ensure_plan_columns(conn)
         rows = conn.execute(
             text(
-                "SELECT id, destination, travel_date, duration, num_people, "
-                "budget_limit, departure_location, transport_cost, remaining_budget, "
-                "status, feedback, themes, special_requirements, "
-                "spots, spot_coords, restaurants, restaurant_coords, schedule_items, "
-                "accommodation, accommodation_coords, budget_estimate, custom_pins, "
-                "rating, rating_comment, created_at "
+                f"SELECT id, {_PLAN_SELECT_COLS} "
                 "FROM travel_plans WHERE google_user_id = :uid ORDER BY created_at DESC"
             ),
             {"uid": google_user_id},
         ).fetchall()
 
-    result = []
-    for row in rows:
-        d = _row_to_dict(row)
-        for col in ("themes", "special_requirements", "spots", "spot_coords",
-                    "restaurants", "restaurant_coords", "schedule_items",
-                    "accommodation", "accommodation_coords", "budget_estimate", "custom_pins"):
-            if isinstance(d.get(col), str):
-                try:
-                    d[col] = json.loads(d[col])
-                except Exception:
-                    d[col] = []
-            elif d.get(col) is None:
-                d[col] = []
-        d["schedule"] = d.pop("schedule_items", [])
-        if d.get("created_at"):
-            d["created_at"] = str(d["created_at"])
-        result.append(d)
-    return result
+    return [_normalize_plan_row(_row_to_dict(row)) for row in rows]
 
 
 def get_travel_plan_by_id(plan_id: int) -> dict | None:
@@ -222,33 +237,14 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
         _ensure_plan_columns(conn)
         row = conn.execute(
             text(
-                "SELECT id, google_user_id, destination, travel_date, duration, num_people, "
-                "budget_limit, departure_location, transport_cost, remaining_budget, "
-                "status, feedback, themes, special_requirements, "
-                "spots, spot_coords, restaurants, restaurant_coords, schedule_items, "
-                "accommodation, accommodation_coords, budget_estimate, custom_pins, "
-                "rating, rating_comment, created_at "
+                f"SELECT id, google_user_id, {_PLAN_SELECT_COLS} "
                 "FROM travel_plans WHERE id = :id"
             ),
             {"id": plan_id},
         ).fetchone()
     if not row:
         return None
-    d = _row_to_dict(row)
-    for col in ("themes", "special_requirements", "spots", "spot_coords",
-                "restaurants", "restaurant_coords", "schedule_items",
-                "accommodation", "accommodation_coords", "budget_estimate", "custom_pins"):
-        if isinstance(d.get(col), str):
-            try:
-                d[col] = json.loads(d[col])
-            except Exception:
-                d[col] = []
-        elif d.get(col) is None:
-            d[col] = []
-    d["schedule"] = d.pop("schedule_items", [])
-    if d.get("created_at"):
-        d["created_at"] = str(d["created_at"])
-    return d
+    return _normalize_plan_row(_row_to_dict(row))
 
 
 def rate_travel_plan(plan_id: int, google_user_id: str, rating: int, comment: str = "") -> bool:
@@ -322,7 +318,8 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                     schedule_items = :schedule_items,
                     accommodation = :accommodation,
                     accommodation_coords = :accommodation_coords,
-                    budget_estimate = :budget_estimate
+                    budget_estimate = :budget_estimate,
+                    geo_done = 0
                 WHERE id = :id AND google_user_id = :uid
             """),
             {
@@ -353,20 +350,26 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
         return result.rowcount > 0
 
 
-def update_plan_coords(plan_id: int, spot_coords, restaurant_coords, accommodation_coords) -> bool:
-    """プランの地図座標列だけを更新する（地図初回表示時の遅延ジオコーディング用）。"""
+def update_plan_coords(plan_id: int, spot_coords, restaurant_coords,
+                       accommodation_coords, geo_done: int = 1) -> bool:
+    """プランの地図座標列だけを更新する（地図初回表示時の遅延ジオコーディング用）。
+
+    geo_done=1 なら以後の再取得をスキップさせる。何も取得できなかった場合は
+    呼び出し側が geo_done=0 を渡し、次回（Nominatim一時不調等）に再試行させる。
+    """
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
         _ensure_plan_columns(conn)
         result = conn.execute(
             text(
                 "UPDATE travel_plans SET spot_coords = :s, restaurant_coords = :r, "
-                "accommodation_coords = :a WHERE id = :id"
+                "accommodation_coords = :a, geo_done = :gd WHERE id = :id"
             ),
             {
                 "s": json.dumps(spot_coords or [], ensure_ascii=False),
                 "r": json.dumps(restaurant_coords or [], ensure_ascii=False),
                 "a": json.dumps(accommodation_coords or [], ensure_ascii=False),
+                "gd": 1 if geo_done else 0,
                 "id": plan_id,
             },
         )

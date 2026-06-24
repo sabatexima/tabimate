@@ -208,9 +208,9 @@
     }
     map.on('click', (e) => {
       if (!editing) return;
-      const name = prompt('ピンの名前（例: お気に入りのカフェ）');
-      if (name === null) return;
-      pins.push({ name: (name || '').trim(), lat: e.latlng.lat, lng: e.latlng.lng });
+      const name = (prompt('ピンの名前（例: お気に入りのカフェ）') || '').trim();
+      if (!name) return;  // 名前なし／キャンセルは追加しない
+      pins.push({ name, lat: e.latlng.lat, lng: e.latlng.lng });
       rerender();
     });
     rerender();

@@ -104,6 +104,23 @@ def _is_rate_limited(user_id: str) -> bool:
         return False
 
 
+# 地図・座標・天気など外部API（Nominatim/Open-Meteo）を叩く系のゆるいレート制限。
+# 連打で外部APIに負荷をかけたり制限/banされるのを防ぐ保険（通常利用では超えない）。
+_geo_rate_log: dict[str, list[float]] = defaultdict(list)
+_GEO_RATE_LIMIT = 40
+
+
+def _geo_rate_limited(user_id: str) -> bool:
+    now = time.time()
+    with _rate_lock:
+        ts = _geo_rate_log[user_id]
+        ts[:] = [t for t in ts if now - t < _RATE_WINDOW]
+        if len(ts) >= _GEO_RATE_LIMIT:
+            return True
+        ts.append(now)
+        return False
+
+
 @planner.route("/")
 def home():
     logger.debug("ホームアクセス")
@@ -511,6 +528,8 @@ def plan_weather(plan_id):
     plan = get_travel_plan_by_id(plan_id)
     if not plan or plan.get('google_user_id') != session.get('user_id'):
         return json.dumps({'status': 'OK', 'days': []}), 200, {'Content-Type': 'application/json'}
+    if _geo_rate_limited(session.get('user_id')):
+        return json.dumps({'status': 'OK', 'days': []}), 200, {'Content-Type': 'application/json'}
 
     coords = plan.get('spot_coords') or []
     loc = next((c for c in coords if c.get('lat') is not None and c.get('lng') is not None), None)
@@ -603,6 +622,12 @@ def plan_geo(plan_id):
     plan = get_travel_plan_by_id(plan_id)
     if not plan or plan.get('google_user_id') != session.get('user_id'):
         return json.dumps(empty), 200, {'Content-Type': 'application/json'}
+    # 既にジオコーディング済みなら制限対象外（座標を返すだけ）。未処理のみ throttle。
+    if not plan.get('geo_done') and _geo_rate_limited(session.get('user_id')):
+        return json.dumps({**empty, 'reason': 'rate_limited',
+                           'spot_coords': plan.get('spot_coords') or [],
+                           'restaurant_coords': plan.get('restaurant_coords') or [],
+                           'accommodation_coords': plan.get('accommodation_coords') or []}), 200, {'Content-Type': 'application/json'}
     ensure_plan_coords(plan)
     return json.dumps({
         'spot_coords': plan.get('spot_coords') or [],
@@ -633,7 +658,9 @@ def geocode():
     """
     from geocoding import geocode_one
     q = request.args.get('q', '').strip()
-    coords = geocode_one(q) if q else None
+    if not q or _geo_rate_limited(session.get('user_id')):
+        return json.dumps([]), 200, {'Content-Type': 'application/json'}
+    coords = geocode_one(q)
     if coords:
         return json.dumps([{'lat': coords['lat'], 'lon': coords['lng']}]), 200, {'Content-Type': 'application/json'}
     return json.dumps([]), 200, {'Content-Type': 'application/json'}

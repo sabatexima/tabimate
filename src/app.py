@@ -49,7 +49,27 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=_IS_PROD,
     STADIA_API_KEY=os.environ.get('STADIA_API_KEY', ''),
+    # リクエスト全体のサイズ上限。巨大アップロードによるメモリ枯渇/DoSを防ぐ。
+    # 写真は複数枚まとめて送るため余裕を持たせつつ、青天井は避ける（既定100MB）。
+    MAX_CONTENT_LENGTH=int(os.getenv('MAX_CONTENT_LENGTH_MB', '100')) * 1024 * 1024,
 )
+
+
+@app.errorhandler(413)
+def _too_large(_e):
+    """アップロードが上限超過のとき、クラッシュではなく分かりやすいエラーを返す。"""
+    from flask import jsonify
+    return jsonify({"error": "アップロードできるサイズを超えています。枚数を減らすか分けてお試しください。"}), 413
+
+
+@app.after_request
+def _security_headers(resp):
+    """基本的なセキュリティヘッダを付与する（MIMEスニッフ抑止・クリックジャッキング対策等）。"""
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    return resp
+
 
 app.register_blueprint(planner, url_prefix='/')
 app.register_blueprint(auth)

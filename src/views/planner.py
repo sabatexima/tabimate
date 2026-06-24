@@ -123,7 +123,15 @@ def _geo_rate_limited(user_id: str) -> bool:
 
 @planner.route("/")
 def home():
+    """世界観を伝えるホーム（ハブ）。プラン作成チャットへは /chat から。"""
     logger.debug("ホームアクセス")
+    return render_template("welcome.html")
+
+
+@planner.route("/chat")
+def chat():
+    """旅行プラン作成チャット画面（旧ホーム）。"""
+    logger.debug("チャットアクセス")
     return render_template("home.html")
 
 

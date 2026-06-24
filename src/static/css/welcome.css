@@ -1,0 +1,55 @@
+.welcome { max-width: 880px; margin: 0 auto; padding: 8px 0 48px; }
+
+.welcome-hero { position: relative; text-align: center; padding: 28px 16px 8px; }
+.welcome-hero .mascot {
+  width: auto; height: 150px; object-fit: contain;
+  filter: drop-shadow(0 6px 14px rgba(120, 110, 90, 0.18));
+}
+.welcome-hero h1 { margin: 14px 0 6px; font-size: 1.7em; color: var(--text-main); font-weight: 700; }
+.welcome-hero p.lead { margin: 0 0 22px; color: var(--text-muted); font-size: 1.02em; line-height: 1.7; }
+
+.cta {
+  display: inline-block; background: var(--primary-color); color: #fff;
+  text-decoration: none; font-weight: 700; font-size: 1.05em;
+  padding: 14px 32px; border-radius: 28px;
+  box-shadow: 0 6px 16px rgba(79, 168, 58, 0.3);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 168, 58, 0.38); }
+
+.inspo { margin: 36px auto 10px; text-align: center; }
+.inspo .ttl { font-size: 0.95em; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
+.inspo-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.chip {
+  background: #fff; border: 1px solid #e6dcc8; border-radius: 20px;
+  padding: 9px 16px; font-size: 0.9em; color: var(--text-main); text-decoration: none;
+  transition: background 0.12s, transform 0.12s;
+}
+.chip:hover { background: #f3f8ee; transform: translateY(-1px); }
+
+.quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-top: 36px; }
+.quick a {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: #fffdf8; border: 1px solid #ece3d0; border-radius: 16px;
+  padding: 20px 14px; text-decoration: none; color: var(--text-main); text-align: center;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.quick a:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06); }
+.quick a .ic { font-size: 1.8em; }
+.quick a .nm { font-weight: 700; font-size: 0.95em; }
+.quick a .ds { font-size: 0.8em; color: var(--text-muted); }
+
+.drift {
+  position: absolute; font-size: 1.4em; opacity: 0.5; pointer-events: none;
+  animation: drift 7s ease-in-out infinite;
+}
+@keyframes drift {
+  0%, 100% { transform: translateY(0) rotate(-8deg); }
+  50% { transform: translateY(-12px) rotate(8deg); }
+}
+
+@media (max-width: 600px) {
+  .welcome-hero h1 { font-size: 1.4em; }
+  .welcome-hero .mascot { height: 120px; }
+  .cta { width: 100%; box-sizing: border-box; }
+}

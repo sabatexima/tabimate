@@ -57,5 +57,17 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+<script>
+  // ホームの「こんな旅はどう？」から ?q= で来たら、入力欄に下書きして送信待ちにする
+  (function () {
+    var q = new URLSearchParams(location.search).get('q');
+    if (!q) return;
+    var input = document.getElementById('message-input');
+    if (!input) return;
+    input.value = q;
+    input.focus();
+    history.replaceState(null, '', location.pathname);  // URLからqを消す（再読込時の二重入力防止）
+  })();
+</script>
 {% endif %}
 {% endblock %}

@@ -48,6 +48,18 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
 }
 .plan-map-pin:hover { transform: scale(1.15) translateY(-2px); }
 
+/* ポップアップ内の写真サムネ（Wikipedia 由来・無ければ非表示） */
+.leaflet-popup-content .pin-thumb:empty { display: none; }
+.leaflet-popup-content .pin-thumb img {
+  width: 100%;
+  max-width: 240px;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  margin-bottom: 6px;
+}
+
 /* ポップアップ内の Google マップ経路リンク */
 .plan-map-nav {
   display: inline-block;

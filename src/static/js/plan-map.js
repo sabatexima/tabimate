@@ -91,18 +91,56 @@
     return L.divIcon({ className: 'plan-map-pin', html: svg, iconSize: [32, 42], iconAnchor: [16, 39], popupAnchor: [0, -36] });
   }
 
+  // 観光地名から Wikipedia(日本語) の代表画像サムネを取得（無ければ null）。結果はキャッシュ。
+  const _thumbCache = {};
+  async function wikiThumb(name) {
+    if (!name) return null;
+    if (name in _thumbCache) return _thumbCache[name];
+    try {
+      const url = `https://ja.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=thumbnail`
+        + `&pithumbsize=260&redirects=1&format=json&origin=*&titles=${encodeURIComponent(name)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const pages = (data && data.query && data.query.pages) || {};
+      let thumb = null;
+      for (const k in pages) { if (pages[k].thumbnail && pages[k].thumbnail.source) { thumb = pages[k].thumbnail.source; break; } }
+      _thumbCache[name] = thumb;
+      return thumb;
+    } catch (e) {
+      _thumbCache[name] = null;
+      return null;
+    }
+  }
+
+  // ポップアップが開いたら写真サムネを遅延読み込みして差し込む。
+  async function loadThumb(popup, name) {
+    const el = popup.getElement();
+    if (!el) return;
+    const holder = el.querySelector('.pin-thumb');
+    if (!holder || holder.dataset.loaded) return;
+    holder.dataset.loaded = '1';
+    const src = await wikiThumb(name);
+    if (!src || !popup.isOpen()) return;
+    holder.innerHTML = '<img alt="" loading="lazy">';
+    const img = holder.querySelector('img');
+    img.onload = () => { if (popup.isOpen()) popup.update(); };  // 画像分の高さに再配置
+    img.src = src;
+    popup.update();
+  }
+
   function popupHtml(p) {
-    // 各ピンから Google マップの経路ナビへ飛べるようにする。
+    // 各ピンから Google マップの経路ナビへ飛べるようにする。写真は開いたとき遅延読込。
     const dest = encodeURIComponent(`${p.lat},${p.lng}`);
     const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
-    return `<strong>${esc(p.name)}</strong><br>`
+    return `<div class="pin-thumb"></div><strong>${esc(p.name)}</strong><br>`
       + `<a href="${url}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
   }
 
   function addMarkers(map, points, cat) {
     points.forEach((p, i) => {
       const icon = makeIcon(cat.glyph || (i + 1), cat);
-      L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml(p));
+      const m = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml(p));
+      m.on('popupopen', (e) => loadThumb(e.popup, p.name));
     });
   }
 
@@ -141,7 +179,7 @@
     const cat = _typeCat(p.type);
     const tag = `<span class="pin-type-tag" style="color:${cat.text || '#5e3a99'}">${cat.label}</span>`;
     const del = editing ? `<br><button type="button" class="pin-del">削除</button>` : '';
-    return `<strong>${esc(p.name || 'ピン')}</strong> ${tag}<br>${nav}${del}`;
+    return `<div class="pin-thumb"></div><strong>${esc(p.name || 'ピン')}</strong> ${tag}<br>${nav}${del}`;
   }
 
   // カスタムピンを描き直す。編集モードではドラッグ移動＋ポップアップに削除を出す。
@@ -154,6 +192,7 @@
       m.on('popupopen', (e) => {
         const btn = e.popup.getElement().querySelector('.pin-del');
         if (btn) btn.addEventListener('click', () => onDelete(idx));
+        loadThumb(e.popup, p.name);
       });
       if (editing && onMove) m.on('dragend', () => onMove(idx, m.getLatLng()));
       markers.push(m);

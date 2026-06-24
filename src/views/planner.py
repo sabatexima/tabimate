@@ -121,11 +121,41 @@ def _geo_rate_limited(user_id: str) -> bool:
         return False
 
 
+def _seasonal_ideas():
+    """今の月に合った「こんな旅はどう？」のチップを返す（季節外れの提案を防ぐ）。
+
+    各要素は (emoji, ラベル, チャットに送る文) のタプル。
+    """
+    from datetime import date
+    m = date.today().month
+    if m in (3, 4, 5):
+        seasonal = [("🌸", "桜・お花見めぐり", "桜やお花見が楽しめる春の旅がしたい"),
+                    ("🍓", "いちご狩り", "いちご狩りが楽しめる日帰り旅がしたい")]
+    elif m == 6:
+        seasonal = [("💠", "紫陽花の名所", "紫陽花が見頃の名所をめぐる旅がしたい"),
+                    ("🌊", "海辺でのんびり", "海の見える場所でのんびりする旅がしたい")]
+    elif m in (7, 8):
+        seasonal = [("🏖️", "海・ビーチ", "海やビーチで遊ぶ夏の旅がしたい"),
+                    ("🎆", "夏祭り・花火", "夏祭りや花火大会を楽しむ旅がしたい")]
+    elif m in (9, 10, 11):
+        seasonal = [("🍁", "紅葉狩り", "紅葉狩りが楽しめる秋の旅がしたい"),
+                    ("🍇", "秋の味覚狩り", "ぶどう狩りなど秋の味覚狩りの旅がしたい")]
+    else:  # 12, 1, 2
+        seasonal = [("♨️", "温泉でほっこり", "温泉でゆっくり過ごす冬の旅がしたい"),
+                    ("✨", "イルミネーション", "イルミネーションを楽しむ旅がしたい")]
+    evergreen = [
+        ("🍡", "食べ歩き日帰り", "近場で食べ歩きの日帰り旅がしたい"),
+        ("👨‍👩‍👧", "家族でおでかけ", "子連れで安心して楽しめる家族旅行"),
+        ("🎨", "ひとり美術館めぐり", "一人でゆっくり美術館をめぐる旅がしたい"),
+    ]
+    return seasonal + evergreen
+
+
 @planner.route("/")
 def home():
     """世界観を伝えるホーム（ハブ）。プラン作成チャットへは /chat から。"""
     logger.debug("ホームアクセス")
-    return render_template("welcome.html")
+    return render_template("welcome.html", ideas=_seasonal_ideas())
 
 
 @planner.route("/chat")

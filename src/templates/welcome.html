@@ -21,11 +21,9 @@
   <div class="inspo">
     <div class="ttl">こんな旅はどう？<span class="ttl-sub">タップでAIに相談スタート</span></div>
     <div class="inspo-chips">
-      <a class="chip" href="{{ url_for('planner.chat', q='週末に京都で紅葉狩りがしたい') }}">🍁 京都で紅葉狩り</a>
-      <a class="chip" href="{{ url_for('planner.chat', q='海の見える温泉でのんびりしたい') }}">♨️ 海の見える温泉</a>
-      <a class="chip" href="{{ url_for('planner.chat', q='東京で食べ歩きの日帰り旅がしたい') }}">🍡 東京で食べ歩き</a>
-      <a class="chip" href="{{ url_for('planner.chat', q='子連れで安心して楽しめる家族旅行') }}">👨‍👩‍👧 家族でおでかけ</a>
-      <a class="chip" href="{{ url_for('planner.chat', q='一人でゆっくり美術館をめぐる旅') }}">🎨 ひとり美術館めぐり</a>
+      {% for emoji, label, q in ideas %}
+      <a class="chip" href="{{ url_for('planner.chat', q=q) }}">{{ emoji }} {{ label }}</a>
+      {% endfor %}
     </div>
   </div>
 

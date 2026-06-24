@@ -58,18 +58,23 @@
 
 <script src="{{ url_for('static', filename='js/home.js') }}"></script>
 <script>
-  // ホームの「こんな旅はどう？」から ?q= で来たら、その文をそのまま送信して
-  // AIとの相談を開始する（入力欄に置くだけだと「何も起きない」誤解を生むため）。
+  // ホームの「こんな旅はどう？」から ?q= で来たら、チャット履歴をリセットしてから
+  // その文を送信して新しい相談を開始する。既存ログが残っていると AI が文脈を引き継いで
+  // しまうため、送信前に必ずリセットする。
   (function () {
     var q = new URLSearchParams(location.search).get('q');
     if (!q) return;
     var input = document.getElementById('message-input');
     var form = document.getElementById('message-form');
+    var chatBox = document.getElementById('chat-box');
     if (!input || !form) return;
     history.replaceState(null, '', location.pathname);  // 再読込時の二重送信を防ぐ
-    input.value = q;
-    if (form.requestSubmit) form.requestSubmit();
-    else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    fetch('/reset_chat', { method: 'POST' }).finally(function () {
+      if (chatBox) chatBox.innerHTML = '';
+      input.value = q;
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    });
   })();
 </script>
 {% endif %}

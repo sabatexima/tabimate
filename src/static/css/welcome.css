@@ -28,6 +28,28 @@
 }
 .chip:hover { background: #f3f8ee; transform: translateY(-1px); }
 
+.memory { margin: 28px 16px 0; }
+.memory-inner {
+  background: linear-gradient(135deg, #fdf6e8 0%, #fef0dc 100%);
+  border: 1px solid #f0d8b0;
+  border-radius: 20px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.memory-ttl { font-size: 1.0em; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+.memory-desc { margin: 0; font-size: 0.88em; color: var(--text-muted); line-height: 1.6; }
+.memory-cta {
+  display: inline-block; background: #e8883a; color: #fff;
+  text-decoration: none; font-weight: 700; font-size: 0.92em;
+  padding: 10px 20px; border-radius: 20px; white-space: nowrap;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.memory-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(232, 136, 58, 0.35); }
+
 .quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-top: 36px; }
 .quick a {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -53,4 +75,7 @@
   .welcome-hero h1 { font-size: 1.4em; }
   .welcome-hero .mascot { height: 120px; }
   .cta { width: 100%; box-sizing: border-box; }
+  .memory { margin: 28px 0 0; }
+  .memory-inner { flex-direction: column; align-items: stretch; }
+  .memory-cta { text-align: center; }
 }

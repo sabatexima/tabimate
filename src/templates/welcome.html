@@ -27,6 +27,16 @@
     </div>
   </div>
 
+  <div class="memory">
+    <div class="memory-inner">
+      <div class="memory-text">
+        <div class="memory-ttl">📷 旅から帰ったら</div>
+        <p class="memory-desc">写真をアップするだけで、AIが旅の思い出を付箋にしてくれる。</p>
+      </div>
+      <a class="memory-cta" href="{{ url_for('reflection.index') }}">思い出を振り返る →</a>
+    </div>
+  </div>
+
   <div class="quick">
     <a href="{{ url_for('planner.saved_plans') }}"><span class="ic">🗂️</span><span class="nm">保存プラン</span><span class="ds">作った旅を見る</span></a>
     <a href="{{ url_for('reflection.index') }}"><span class="ic">📷</span><span class="nm">旅の振り返り</span><span class="ds">写真から付箋を作る</span></a>

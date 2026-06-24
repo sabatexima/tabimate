@@ -353,6 +353,18 @@ def accommodation_agent(state: TravelPlanState):
     return {"accommodation": response.accommodation}
 
 
+def _weekday_hint(travel_date: str) -> str:
+    """旅行日が具体的な日付なら『（火曜日）』のような曜日ヒントを返す（定休日判断用）。"""
+    m = re.search(r'(\d{4})\D+(\d{1,2})\D+(\d{1,2})', str(travel_date or ''))
+    if not m:
+        return ""
+    try:
+        d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return ""
+    return f"（{['月', '火', '水', '木', '金', '土', '日'][d.weekday()]}曜日）"
+
+
 def gourmet_candidates(state: TravelPlanState):
     """選定済みスポット周辺の飲食店候補（4〜6件）を抽出する。"""
     if _skip(state, "gourmet"):
@@ -379,6 +391,9 @@ def gourmet_candidates(state: TravelPlanState):
 参加人数: {state['num_people']}人
 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
 {search_context}
+
+【方針】
+・{state['travel_date']}{_weekday_hint(state['travel_date'])} に営業している店を優先し、その曜日が定休日に当たりそうな店は候補から外すこと
 
 【出力】
 厳密に4個以上6個以下の飲食店名のみを返してください。
@@ -418,6 +433,7 @@ def gourmet_hunter(state: TravelPlanState):
 
 【選定の基準】
 ・期間中に必要な食事の回数分をカバーすること（{state['duration']} = {"昼食×1" if is_day_trip(state["duration"]) else f"昼食×{num_nights + 1} + 夕食×{num_nights}"}）
+・{state['travel_date']}{_weekday_hint(state['travel_date'])} の営業日・定休日を考慮し、当日に営業している店のみを選ぶこと（その曜日が定休日に当たる店は選ばない。定休日が不明なら定休日の少ない業態を優先）
 ・各日程のスポット周辺にある店を選び、日別に「〇日目 昼食」「〇日目 夕食」と明記すること
 ・{state['destination']}ならではの地元名物・郷土料理が味わえる店を優先すること
 ・食事の合計が食費の目安上限（{int(state['remaining_budget'] * FOOD_BUDGET_RATIO):,}円/人）以内に収まる価格帯の店を選び、最初から予算内に収めること（後の差し戻しを避ける）

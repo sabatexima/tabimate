@@ -35,11 +35,18 @@ def _query_nominatim(q: str) -> dict | None:
     return None
 
 
+# 末尾に付くと Nominatim でヒットしにくくなる総称（失敗時のみ外して再検索する）。
+# 例: 「城崎温泉街」→「城崎温泉」 / 「祇園周辺」→「祇園」
+_TRIM_SUFFIXES = ("街", "エリア", "周辺", "付近", "一帯", "地区", "地域", "界隈", "あたり")
+
+
 def geocode_one(query: str, context: str | None = None) -> dict | None:
     """スポット名1件を緯度経度に変換する。失敗時は None。
 
-    context を渡すと、名前単独でヒットしなかった場合に「名前, context」で再検索する
-    （店名など単独では当たりにくいグルメ/宿の精度を上げる。観光は context なしで使う）。
+    段階的にゆるめて再検索する（いずれも前段が失敗したときだけ実行）:
+      1. 名前そのまま
+      2. 「名前, context」（context 指定時。店名など単独では当たりにくいグルメ/宿向け）
+      3. 末尾の総称（〜街/〜周辺 等）を外した名前（「城崎温泉街」→「城崎温泉」）
     返り値: {"lat": float, "lng": float} もしくは None
     """
     query = (query or "").strip()
@@ -48,6 +55,14 @@ def geocode_one(query: str, context: str | None = None) -> dict | None:
     hit = _query_nominatim(query)
     if hit is None and context:
         hit = _query_nominatim(f"{query}, {context}")
+    if hit is None:
+        for suf in _TRIM_SUFFIXES:
+            if query.endswith(suf) and len(query) > len(suf) + 1:
+                trimmed = query[: -len(suf)]
+                hit = _query_nominatim(trimmed)
+                if hit is None and context:
+                    hit = _query_nominatim(f"{trimmed}, {context}")
+                break  # 末尾に該当する総称は1つだけなので1回試せば十分
     return hit
 
 
@@ -99,7 +114,8 @@ def ensure_plan_coords(plan: dict) -> dict:
         plan[coord_field] = geocode_spots(names, context=context)
         changed = True
 
-    fill("spot_coords", "spots")
+    # context は「名前単独で失敗したとき」だけ使う（観光も含め、化けを防ぎつつ精度を上げる）
+    fill("spot_coords", "spots", context=dest)
     fill("restaurant_coords", "restaurants", context=dest)
     fill("accommodation_coords", "accommodation", context=dest)
 

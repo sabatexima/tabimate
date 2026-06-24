@@ -59,8 +59,7 @@
 <script src="{{ url_for('static', filename='js/home.js') }}"></script>
 <script>
   // ホームの「こんな旅はどう？」から ?q= で来たら、チャット履歴をリセットしてから
-  // その文を送信して新しい相談を開始する。既存ログが残っていると AI が文脈を引き継いで
-  // しまうため、送信前に必ずリセットする。
+  // その文を送信して新しい相談を開始する。既存ログがある場合は確認を挟む。
   (function () {
     var q = new URLSearchParams(location.search).get('q');
     if (!q) return;
@@ -69,11 +68,24 @@
     var chatBox = document.getElementById('chat-box');
     if (!input || !form) return;
     history.replaceState(null, '', location.pathname);  // 再読込時の二重送信を防ぐ
-    fetch('/reset_chat', { method: 'POST' }).finally(function () {
-      if (chatBox) chatBox.innerHTML = '';
-      input.value = q;
-      if (form.requestSubmit) form.requestSubmit();
-      else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+    function doReset() {
+      fetch('/reset_chat', { method: 'POST' }).finally(function () {
+        if (chatBox) chatBox.innerHTML = '';
+        input.value = q;
+        if (form.requestSubmit) form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      });
+    }
+
+    // 既存ログの有無を確認してから判断する
+    fetch('/get_messages').then(function (r) { return r.json(); }).then(function (msgs) {
+      if (msgs.length > 0) {
+        if (!confirm('今のチャット履歴をリセットして、新しい旅の相談を始めますか？')) return;
+      }
+      doReset();
+    }).catch(function () {
+      doReset();  // 取得失敗時はそのまま進む
     });
   })();
 </script>

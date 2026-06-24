@@ -58,15 +58,18 @@
 
 <script src="{{ url_for('static', filename='js/home.js') }}"></script>
 <script>
-  // ホームの「こんな旅はどう？」から ?q= で来たら、入力欄に下書きして送信待ちにする
+  // ホームの「こんな旅はどう？」から ?q= で来たら、その文をそのまま送信して
+  // AIとの相談を開始する（入力欄に置くだけだと「何も起きない」誤解を生むため）。
   (function () {
     var q = new URLSearchParams(location.search).get('q');
     if (!q) return;
     var input = document.getElementById('message-input');
-    if (!input) return;
+    var form = document.getElementById('message-form');
+    if (!input || !form) return;
+    history.replaceState(null, '', location.pathname);  // 再読込時の二重送信を防ぐ
     input.value = q;
-    input.focus();
-    history.replaceState(null, '', location.pathname);  // URLからqを消す（再読込時の二重入力防止）
+    if (form.requestSubmit) form.requestSubmit();
+    else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
   })();
 </script>
 {% endif %}

@@ -19,6 +19,7 @@
 
 .inspo { margin: 36px auto 10px; text-align: center; }
 .inspo .ttl { font-size: 0.95em; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
+.inspo .ttl-sub { display: block; font-size: 0.82em; font-weight: 400; opacity: 0.8; margin-top: 2px; }
 .inspo-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .chip {
   background: #fff; border: 1px solid #e6dcc8; border-radius: 20px;

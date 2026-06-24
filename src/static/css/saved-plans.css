@@ -382,6 +382,7 @@
   }
 
   /* 旅行日の天気予報ストリップ */
+  .plan-weather[hidden] { display: none; }
   .plan-weather {
     display: flex;
     align-items: center;

@@ -35,10 +35,14 @@
 - **Time preferences** (e.g., "I want to be home by evening", "take it easy in the morning") are detected from the conversation and applied to the schedule with top priority.
 - **Day trips make full use of the day**: the number of spots scales with the trip length, and the schedule is built by working *backward from a reasonable return-home time* (departure time = home time − return travel time) instead of ending in the early afternoon.
 - A Balancer (reviewer) detects budget overruns, schedule conflicts, theme mismatches, etc., and automatically rejects & triggers regeneration (with a capped number of retries).
+- **Weather-aware generation**: the forecast for the travel date (Open-Meteo, no API key) is fetched at generation start. On rainy/snowy days the sightseeing and schedule agents are nudged toward indoor spots and shorter outdoor stays. Out-of-range/unknown dates simply skip the weather influence.
+- **Business-day awareness for dining**: the gourmet agent considers the travel date's day-of-week and avoids restaurants likely closed on that day (e.g., a café on its regular day off).
 - **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for most steps, and a stronger model (`gemini-3.5-flash`) for cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
 - Generated plans can be saved, viewed, and deleted from the saved plans list.
-- **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles) that plots each sightseeing spot as a numbered teardrop pin (with a four-leaf-clover accent matching the mascot) connected in route order. Spot coordinates are geocoded server-side (Nominatim, restricted to Japan with `countrycodes=jp`) and stored alongside the plan **when it is saved/edited**, so the map renders instantly. Plans saved before this feature fall back to on-demand geocoding via the `/api/geocode` proxy.
+- **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles). Sightseeing spots are numbered green teardrop pins (with a four-leaf-clover accent matching the mascot) connected in route order, while restaurants (orange) and accommodation (blue) are shown as color-coded pins with a legend. Each pin's popup links to Google Maps navigation. Coordinates are geocoded **lazily on first map open** and cached (`geo_done`); geocoding is biased to the destination area (`viewbox`) and falls back through `name → "name, destination" → trimmed suffix` to improve hit rate. The shared-plan view and the photo "footprints" map reuse the same component.
+- **User-placed custom pins**: on your own plan's map you can drop pins by tapping, give each a name/type (sightseeing/dining/lodging/memo) and a color, drag to reposition, and delete them — useful for places Nominatim can't find. Spots that failed to geocode are listed as "unplaced" chips for one-tap placement. Custom pins persist (`custom_pins`) and are visible on the shared view too.
+- **Travel-date weather & calendar export**: saved (and shared) plans show the forecast for the travel date as a small strip, and can be exported to an `.ics` calendar file (Google Calendar, etc.).
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
 - **Saved plans can also be edited via chat** directly on the card. The result is shown as a preview first and is only persisted when the user confirms ("update").
 - **Rating-based personalization**: users can rate a saved plan with ★1–5 plus a short comment (one rating per plan, overwrite-style; revisable via an "edit" button to fix mistakes). Highly-rated (★4+) and poorly-rated (★2−) plans and their comments are summarized into a preference hint that is softly applied to future plan generation (explicit requests still take priority; disliked tendencies are avoided).
@@ -50,6 +54,7 @@
 - Feed summarized features and representative photos to Gemini to generate 3 to 6 virtual sticky notes. Notes are re-pinned upon regeneration.
 - SNS-style feed on the home page. Each trip card features a large thumbnail and sticky note badges.
 - In trip details, tap photos to open in a lightbox. Supports navigation (prev/next buttons, arrow keys, and swipe gestures).
+- **Trip footprints map**: photos that carry GPS (EXIF) are plotted in shoot-time order and connected as a dashed "footprints" route. A trip can be **linked to a saved plan** so the planned sightseeing spots (green) are overlaid on the actual photo locations (pink) for a planned-vs-actual comparison.
 - Trip titles can be edited later. Deleting a trip or photo cleans up the underlying storage to prevent orphaned files.
 
 ### 3. Sharing
@@ -103,7 +108,8 @@ tabimate/
     ├── db.py                 # DAO for travel_plans / chat_messages + shared engine
     ├── db_reflection.py      # DAO for trips / photos / stickers etc.
     ├── db_sharing.py         # DAO for sharing links / email grants
-    ├── geocoding.py          # Spot name -> lat/lng via Nominatim (countrycodes=jp); batch + single
+    ├── geocoding.py          # Spot name -> lat/lng via Nominatim (countrycodes=jp, viewbox, fallbacks); lazy cache
+    ├── weather.py            # Travel-date forecast (Open-Meteo); display strip + generation hint
     ├── chat/                 # Travel plan generation (LLM/Agents)
     │   ├── chat.py           #  Orchestrates conversation (extract conditions -> question or plan)
     │   ├── graph.py          #  LangGraph workflow definitions & execution
@@ -242,9 +248,9 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 
 | Table | Purpose |
 |----------|------|
-| `travel_plans` | Saved travel plans (conditions and results stored in JSON columns; `spot_coords` caches the geocoded lat/lng of each spot for the map) |
+| `travel_plans` | Saved travel plans (conditions/results in JSON columns). `spot_coords` / `restaurant_coords` / `accommodation_coords` cache geocoded lat/lng for the map; `custom_pins` stores user-placed pins; `geo_done` flags that lazy geocoding has run |
 | `chat_messages` | Chat history (role/content/request_id) |
-| `trips` | Trips (title, dates, owner user) |
+| `trips` | Trips (title, dates, owner user). `linked_plan_id` optionally links a trip to a saved plan for the footprints overlay |
 | `photos` | Uploaded photos (storage_path, shoot time, GPS) |
 | `stickers` | Virtual sticky notes (text = display text, basis = internal logic generation basis) |
 | `share_links` | Public sharing links (token/resource_type/resource_id/permission) |
@@ -277,7 +283,11 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 | POST | `/edit_saved_plan/<id>` | Chat-edits a saved plan and streams the proposed result via SSE (no save yet; owner or edit-grant recipient) |
 | POST | `/apply_saved_plan/<id>` | Persists the previewed edit (overwrites the owner's plan) |
 | POST | `/rate_plan/<id>` | Records a ★1–5 rating and comment for the user's own plan (used to personalize future generation) |
-| GET | `/api/geocode` | Geocoding proxy (Nominatim, `countrycodes=jp`) used as a fallback for plans without stored spot coordinates (login required) |
+| POST | `/save_plan_pins/<id>` | Saves user-placed custom pins (name/type/color, validated; owner only) |
+| GET | `/api/plan_geo/<id>` | Returns map coordinates; geocodes & caches lazily on first call (owner only, geo-throttled) |
+| GET | `/api/plan_weather/<id>` | Travel-date forecast for the plan via Open-Meteo (owner only, geo-throttled) |
+| GET | `/export_plan_ics/<id>` | Exports the plan as an `.ics` calendar file (owner only) |
+| GET | `/api/geocode` | Geocoding proxy (Nominatim, `countrycodes=jp`) fallback for older plans without stored coordinates (login required, geo-throttled) |
 
 ### auth (`/auth`) — `views/auth.py`
 
@@ -301,6 +311,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 | POST | `/reflection/trips/<id>/stickers/generate` | Generates sticky notes (photos required) |
 | GET | `/reflection/trips/<id>/stickers` | Lists sticky notes |
 | DELETE | `/reflection/trips/<id>/stickers/<sid>` | Deletes a sticky note |
+| PATCH | `/reflection/trips/<id>/linked-plan` | Links/unlinks a saved plan to the trip (for the footprints overlay) |
 
 ### sharing (`/share`) — `views/sharing.py`
 
@@ -315,6 +326,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 | GET | `/s/<token>` | Accesses public share link (no login required) |
 | GET | `/shared` | List of items shared with me |
 | GET | `/shared/trip\|plan/<id>` | Accesses email-shared item |
+| GET | `/shared/plan/<id>/ics` | Exports a shared plan as `.ics` (public-token or grant viewers) |
 | POST | `/shared/trip/<id>/photos` | Adds photos to a shared trip |
 | DELETE | `/shared/trip/<id>/photos/<photo_id>` | Deletes a photo from a shared trip |
 | POST | `/shared/trip/<id>/stickers/generate` | Generates sticky notes for a shared trip |
@@ -386,8 +398,9 @@ pytest tests/                       # Runs all tests
 - **Access Control**: Trips, photos, stickers, plans, and sharing links are validated against `user_id` to block cross-user data access.
 - **XSS Protection**: HTML formatting for travel plans escapes user-controlled strings.
 - **Path Traversal Protection**: Directory boundary checks for local photo serving/deletion prevent access outside the upload directory.
-- **Rate Limiting**: Plan generation is limited to 5 requests / 60 seconds per user.
-- **Upload Restrictions**: Max 50 files per request, validated against an extension whitelist.
+- **Rate Limiting**: Plan generation is limited to 5 requests / 60 seconds per user; map/geocoding/weather endpoints (which call external APIs) have a separate ~40 req/60s throttle.
+- **Upload Restrictions**: Max 50 files per request, an extension whitelist (extension-less files rejected), and a request body size cap (`MAX_CONTENT_LENGTH`, default 100 MB; oversized uploads return a friendly 413).
+- **Security Headers**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy` are applied to all responses.
 - **Proxy Trust**: Uses `ProxyFix` to parse headers forwarded by Cloud Run, ensuring correct scheme/host formatting for OAuth callbacks.
 - **Unpredictable Token Keys**: Sharing links use sufficiently long random tokens.
 

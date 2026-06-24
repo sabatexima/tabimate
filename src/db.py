@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS travel_plans (
     accommodation    JSON,
     accommodation_coords JSON,
     budget_estimate  JSON,
+    custom_pins      JSON,
     rating           INT NULL,
     rating_comment   TEXT NULL,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -144,7 +145,7 @@ def _ensure_plan_columns(conn) -> None:
         return
     for col, ddl in (("rating", "INT NULL"), ("rating_comment", "TEXT NULL"),
                      ("spot_coords", "JSON NULL"), ("restaurant_coords", "JSON NULL"),
-                     ("accommodation_coords", "JSON NULL")):
+                     ("accommodation_coords", "JSON NULL"), ("custom_pins", "JSON NULL")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -182,7 +183,7 @@ def get_travel_plans(google_user_id: str) -> list:
                 "budget_limit, departure_location, transport_cost, remaining_budget, "
                 "status, feedback, themes, special_requirements, "
                 "spots, spot_coords, restaurants, restaurant_coords, schedule_items, "
-                "accommodation, accommodation_coords, budget_estimate, "
+                "accommodation, accommodation_coords, budget_estimate, custom_pins, "
                 "rating, rating_comment, created_at "
                 "FROM travel_plans WHERE google_user_id = :uid ORDER BY created_at DESC"
             ),
@@ -194,7 +195,7 @@ def get_travel_plans(google_user_id: str) -> list:
         d = _row_to_dict(row)
         for col in ("themes", "special_requirements", "spots", "spot_coords",
                     "restaurants", "restaurant_coords", "schedule_items",
-                    "accommodation", "accommodation_coords", "budget_estimate"):
+                    "accommodation", "accommodation_coords", "budget_estimate", "custom_pins"):
             if isinstance(d.get(col), str):
                 try:
                     d[col] = json.loads(d[col])
@@ -225,7 +226,7 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
                 "budget_limit, departure_location, transport_cost, remaining_budget, "
                 "status, feedback, themes, special_requirements, "
                 "spots, spot_coords, restaurants, restaurant_coords, schedule_items, "
-                "accommodation, accommodation_coords, budget_estimate, "
+                "accommodation, accommodation_coords, budget_estimate, custom_pins, "
                 "rating, rating_comment, created_at "
                 "FROM travel_plans WHERE id = :id"
             ),
@@ -236,7 +237,7 @@ def get_travel_plan_by_id(plan_id: int) -> dict | None:
     d = _row_to_dict(row)
     for col in ("themes", "special_requirements", "spots", "spot_coords",
                 "restaurants", "restaurant_coords", "schedule_items",
-                "accommodation", "accommodation_coords", "budget_estimate"):
+                "accommodation", "accommodation_coords", "budget_estimate", "custom_pins"):
         if isinstance(d.get(col), str):
             try:
                 d[col] = json.loads(d[col])
@@ -370,6 +371,24 @@ def update_plan_coords(plan_id: int, spot_coords, restaurant_coords, accommodati
             },
         )
         return result.rowcount > 0
+
+
+def update_plan_custom_pins(plan_id: int, google_user_id: str, custom_pins) -> bool:
+    """ユーザーが手動設置したカスタムピンを保存する（本人のプランのみ）。"""
+    with _get_engine().begin() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
+        exists = conn.execute(
+            text("SELECT 1 FROM travel_plans WHERE id = :id AND google_user_id = :uid"),
+            {"id": plan_id, "uid": google_user_id},
+        ).fetchone()
+        if not exists:
+            return False
+        conn.execute(
+            text("UPDATE travel_plans SET custom_pins = :p WHERE id = :id AND google_user_id = :uid"),
+            {"p": json.dumps(custom_pins or [], ensure_ascii=False), "id": plan_id, "uid": google_user_id},
+        )
+    return True
 
 
 def delete_travel_plan(plan_id: int, google_user_id: str) -> bool:

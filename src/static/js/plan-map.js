@@ -8,6 +8,7 @@
     spot:          { fill: '#4fa83a', text: '#3b8a2c', clover: true,  label: '観光' },
     restaurant:    { fill: '#e8883a', text: '#9a4e16', clover: false, label: 'グルメ', glyph: '食' },
     accommodation: { fill: '#4a90d9', text: '#23598f', clover: false, label: '宿',     glyph: '宿' },
+    custom:        { fill: '#9b6dd6', text: '#5e3a99', clover: false, label: 'メモ' },
   };
 
   function esc(s) {
@@ -117,8 +118,109 @@
     legend.addTo(map);
   }
 
-  // plan: { spots, spot_coords, restaurants, restaurant_coords, accommodation, accommodation_coords }
-  window.initPlanMap = async function (containerId, planId, plan) {
+  // 紫のしずく型ピン（ユーザーが手動設置したメモピン）
+  function customIcon() {
+    const svg = `<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">`
+      + `<path d="M16 2C8.8 2 3 7.8 3 15c0 9.2 13 24 13 24s13-14.8 13-24C29 7.8 23.2 2 16 2Z" fill="#9b6dd6" stroke="#fff" stroke-width="2.5"/>`
+      + `<circle cx="16" cy="15" r="4.5" fill="#fff9ec"/></svg>`;
+    return L.divIcon({ className: 'plan-map-pin', html: svg, iconSize: [32, 42], iconAnchor: [16, 39], popupAnchor: [0, -36] });
+  }
+
+  function customPopup(p, editing) {
+    const dest = encodeURIComponent(`${p.lat},${p.lng}`);
+    const nav = `<a href="https://www.google.com/maps/dir/?api=1&destination=${dest}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
+    const del = editing ? `<br><button type="button" class="pin-del">削除</button>` : '';
+    return `<strong>${esc(p.name || 'ピン')}</strong><br>${nav}${del}`;
+  }
+
+  // カスタムピンを描き直す（編集モード時はポップアップに削除ボタンを出す）
+  function renderCustomMarkers(map, pins, markers, editing, onDelete) {
+    markers.forEach(m => map.removeLayer(m));
+    markers.length = 0;
+    pins.forEach((p, idx) => {
+      const m = L.marker([p.lat, p.lng], { icon: customIcon() }).addTo(map);
+      m.bindPopup(customPopup(p, editing));
+      m.on('popupopen', (e) => {
+        const btn = e.popup.getElement().querySelector('.pin-del');
+        if (btn) btn.addEventListener('click', () => onDelete(idx));
+      });
+      markers.push(m);
+    });
+  }
+
+  // 地図クリックで名前付きピンを追加・削除・保存できる編集UI（自分のプランのみ）
+  function addPinEditor(map, planId, pins, markers) {
+    let editing = false;
+    let backup = null;
+    const ctl = L.control({ position: 'bottomleft' });
+    ctl.onAdd = function () {
+      const div = L.DomUtil.create('div', 'plan-map-editbar');
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      ctl._div = div;
+      return div;
+    };
+    ctl.addTo(map);
+
+    function rerender() {
+      renderCustomMarkers(map, pins, markers, editing, (i) => { pins.splice(i, 1); rerender(); });
+      paint();
+    }
+    function paint() {
+      const div = ctl._div;
+      if (!div) return;
+      if (!editing) {
+        div.innerHTML = `<button type="button" class="pin-edit-btn">📍 ピンを追加</button>`;
+        div.querySelector('.pin-edit-btn').onclick = enter;
+      } else {
+        div.innerHTML = `<span class="pin-edit-hint">地図をタップで追加</span>`
+          + `<button type="button" class="pin-edit-btn save">💾 保存</button>`
+          + `<button type="button" class="pin-edit-btn cancel">やめる</button>`;
+        div.querySelector('.save').onclick = save;
+        div.querySelector('.cancel').onclick = cancel;
+      }
+    }
+    function enter() {
+      editing = true;
+      backup = JSON.parse(JSON.stringify(pins));
+      map.getContainer().style.cursor = 'crosshair';
+      rerender();
+    }
+    function exit() {
+      editing = false;
+      map.getContainer().style.cursor = '';
+      rerender();
+    }
+    function cancel() {
+      pins.length = 0;
+      (backup || []).forEach(p => pins.push(p));  // 未保存の変更を破棄
+      exit();
+    }
+    function save() {
+      fetch(`/save_plan_pins/${planId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pins }),
+      }).then(r => r.json()).then(d => {
+        if (d.status === 'OK') exit();
+        else alert(d.message || '保存に失敗しました');
+      }).catch(() => alert('通信エラーが発生しました。もう一度お試しください。'));
+    }
+    map.on('click', (e) => {
+      if (!editing) return;
+      const name = prompt('ピンの名前（例: お気に入りのカフェ）');
+      if (name === null) return;
+      pins.push({ name: (name || '').trim(), lat: e.latlng.lat, lng: e.latlng.lng });
+      rerender();
+    });
+    rerender();
+  }
+
+  // plan: { spots, spot_coords, restaurants, restaurant_coords, accommodation,
+  //         accommodation_coords, custom_pins }
+  // opts: { editable }  自分のプランなら editable=true でピン編集UIを出す
+  window.initPlanMap = async function (containerId, planId, plan, opts) {
+    opts = opts || {};
     const el = document.getElementById(containerId);
     if (!el || el.dataset.initialized) return;
     el.dataset.initialized = '1';
@@ -129,9 +231,11 @@
     const spotPoints = await resolveSpotPoints(planId, plan.spots, plan.spot_coords);
     const restPoints = mapStored(plan.restaurant_coords);
     const accPoints = mapStored(plan.accommodation_coords);
-    const all = [...spotPoints, ...restPoints, ...accPoints];
+    const customPins = mapStored(plan.custom_pins);
+    const all = [...spotPoints, ...restPoints, ...accPoints, ...customPins];
 
-    if (all.length === 0) {
+    // 自動ピンが全滅でも、自分のプランなら手動ピンを置けるよう地図は出す。
+    if (all.length === 0 && !opts.editable) {
       el.innerHTML = '<div class="plan-map-loading">スポットの位置を特定できませんでした</div>';
       return;
     }
@@ -150,12 +254,25 @@
     addMarkers(map, restPoints, CATEGORIES.restaurant);
     addMarkers(map, accPoints, CATEGORIES.accommodation);
 
+    // カスタムピン：自分のプランは編集UI付き、それ以外（共有閲覧）は表示のみ
+    const customMarkers = [];
+    if (opts.editable) {
+      addPinEditor(map, planId, customPins, customMarkers);
+    } else {
+      renderCustomMarkers(map, customPins, customMarkers, false, () => {});
+    }
+
     const present = [];
     if (spotPoints.length) present.push('spot');
     if (restPoints.length) present.push('restaurant');
     if (accPoints.length) present.push('accommodation');
+    if (customPins.length) present.push('custom');
     if (present.length > 1) addLegend(map, present);
 
-    map.fitBounds(L.latLngBounds(all.map(p => [p.lat, p.lng])).pad(0.2));
+    if (all.length > 0) {
+      map.fitBounds(L.latLngBounds(all.map(p => [p.lat, p.lng])).pad(0.2));
+    } else {
+      map.setView([36.2, 138.2], 5);  // ピン未設置の編集時は日本全体を表示
+    }
   };
 })();

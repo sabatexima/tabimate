@@ -563,6 +563,32 @@ def plan_weather(plan_id):
     return json.dumps({'status': 'OK', 'days': days}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
 
 
+@planner.route('/save_plan_pins/<int:plan_id>', methods=['POST'])
+@login_required
+def save_plan_pins(plan_id):
+    """ユーザーが地図上に手動設置したカスタムピンを保存する（本人のプランのみ）。"""
+    from db import update_plan_custom_pins
+    data = request.get_json(silent=True) or {}
+    raw = data.get('pins')
+    if not isinstance(raw, list):
+        return json.dumps({'status': 'ERROR', 'message': 'ピンの形式が不正です'}), 400, {'Content-Type': 'application/json'}
+    # 値域を検証して安全な形だけ保存する（名前は60字まで）
+    pins = []
+    for p in raw[:50]:
+        try:
+            lat = float(p['lat']); lng = float(p['lng'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            continue
+        name = str(p.get('name') or '').strip()[:60]
+        pins.append({'name': name, 'lat': lat, 'lng': lng})
+    ok = update_plan_custom_pins(plan_id, session.get('user_id'), pins)
+    if not ok:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+    return json.dumps({'status': 'OK', 'pins': pins}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+
+
 @planner.route('/api/plan_geo/<int:plan_id>')
 @login_required
 def plan_geo(plan_id):

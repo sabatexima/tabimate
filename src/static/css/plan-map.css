@@ -78,6 +78,43 @@
   border: 1.5px solid #fff;
 }
 
+/* カスタムピンの編集バー（地図左下） */
+.plan-map-editbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 252, 245, 0.95);
+  border: 1px solid #e6dcc8;
+  border-radius: 12px;
+  padding: 5px 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.plan-map-editbar .pin-edit-btn {
+  border: 1px solid #b58fdc;
+  background: #fff;
+  color: #6e44b0;
+  border-radius: 14px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.plan-map-editbar .pin-edit-btn.save { border-color: #4fa83a; color: #fff; background: #4fa83a; }
+.plan-map-editbar .pin-edit-btn.cancel { border-color: #ccc; color: #777; }
+.plan-map-editbar .pin-edit-hint { font-size: 11px; color: #8a817a; white-space: nowrap; }
+.leaflet-popup-content .pin-del {
+  margin-top: 4px;
+  border: 1px solid #f43f5e;
+  background: #fff;
+  color: #f43f5e;
+  border-radius: 10px;
+  padding: 2px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 /* プラン紐付けセレクタ（旅の足あと） */
 .link-plan-row {
   display: flex;

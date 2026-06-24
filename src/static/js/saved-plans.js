@@ -328,7 +328,7 @@ function esc(str) {
             .then(r => r.json())
             .then(geo => { Object.assign(plan, geo); })
             .catch(() => { /* 失敗時はスポットのオンデマンド取得にフォールバック */ })
-            .finally(() => window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, plan));
+            .finally(() => window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, plan, { editable: !shared }));
         }
       });
     }

@@ -60,7 +60,8 @@
       restaurants: {{ (plan.restaurants or []) | tojson }},
       restaurant_coords: {{ (plan.restaurant_coords or []) | tojson }},
       accommodation: {{ (plan.accommodation or []) | tojson }},
-      accommodation_coords: {{ (plan.accommodation_coords or []) | tojson }}
+      accommodation_coords: {{ (plan.accommodation_coords or []) | tojson }},
+      custom_pins: {{ (plan.custom_pins or []) | tojson }}
     };
     var btn = document.getElementById('shared-map-btn');
     var box = document.getElementById('shared-plan-map');

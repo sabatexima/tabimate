@@ -321,7 +321,14 @@ function esc(str) {
         container.hidden = !opening;
         mapBtn.textContent = opening ? '🗺 地図を閉じる' : '🗺 地図で見る';
         if (opening) {
-          window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, plan);
+          // 座標は初回オープン時にサーバーでまとめて取得＆キャッシュ（保存は即時のまま）
+          const cont = document.getElementById(mapBtn.dataset.mapId);
+          if (cont) cont.innerHTML = '<div class="plan-map-loading">地図を読み込み中…</div>';
+          fetch(`/api/plan_geo/${plan.id}`)
+            .then(r => r.json())
+            .then(geo => { Object.assign(plan, geo); })
+            .catch(() => { /* 失敗時はスポットのオンデマンド取得にフォールバック */ })
+            .finally(() => window.initPlanMap(mapBtn.dataset.mapId, mapBtn.dataset.planId, plan));
         }
       });
     }
@@ -383,7 +390,19 @@ function esc(str) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
     return m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}` : esc(s);
   }
+  // 旅行日が予報の取れる範囲（当日〜16日先）かをクライアントで判定し、
+  // 範囲外のプランは無駄なリクエストを投げない（N+1 リクエストの抑制）。
+  function withinForecast(travelDate) {
+    const m = /(\d{4})\D+(\d{1,2})\D+(\d{1,2})/.exec(travelDate || '');
+    if (!m) return false;
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const min = new Date(today); min.setDate(min.getDate() - 7);   // 旅行中（数日前開始）も拾う
+    const max = new Date(today); max.setDate(max.getDate() + 16);
+    return d >= min && d <= max;
+  }
   async function loadWeather(plan) {
+    if (!withinForecast(plan.travel_date)) return;
     try {
       const res = await fetch(`/api/plan_weather/${plan.id}`);
       const data = await res.json();

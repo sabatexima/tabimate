@@ -229,11 +229,8 @@ def save_plan():
     try:
         plan = request.get_json(force=True)
         from db import save_travel_plan
-        from geocoding import geocode_spots
-        # 保存時に観光・グルメ・宿の緯度経度を取得して一緒に保存する（地図表示を即時・確実にする）。
-        plan['spot_coords'] = geocode_spots(plan.get('spots', []))
-        plan['restaurant_coords'] = geocode_spots(plan.get('restaurants', []))
-        plan['accommodation_coords'] = geocode_spots(plan.get('accommodation', []))
+        # 座標は保存時には取らない（保存を即時に保つ）。地図を初めて開いたときに
+        # /api/plan_geo がまとめてジオコーディングしDBにキャッシュする。
         plan_id = save_travel_plan(
             plan,
             google_user_id=session.get('user_id'),
@@ -380,14 +377,11 @@ def apply_saved_plan(plan_id):
     if not isinstance(new_plan, dict):
         return json.dumps({'status': 'ERROR', 'message': '更新内容が不正です'}), 400, {'Content-Type': 'application/json'}
 
-    # 観光・グルメ・宿が変わった可能性があるので座標を取り直す。変更のない項目は
-    # 既存の座標を流用し、Nominatim への不要な再問い合わせを避ける。
-    from geocoding import geocode_spots
-    def _known(field):
-        return {c['name']: c for c in (plan.get(field) or []) if c.get('name')}
-    new_plan['spot_coords'] = geocode_spots(new_plan.get('spots', []), known=_known('spot_coords'))
-    new_plan['restaurant_coords'] = geocode_spots(new_plan.get('restaurants', []), known=_known('restaurant_coords'))
-    new_plan['accommodation_coords'] = geocode_spots(new_plan.get('accommodation', []), known=_known('accommodation_coords'))
+    # 座標はここでは取らない（スポットが変わり得るので一旦クリアし、次に地図を
+    # 開いたとき /api/plan_geo が取り直してキャッシュする）。保存を即時に保つ。
+    new_plan['spot_coords'] = []
+    new_plan['restaurant_coords'] = []
+    new_plan['accommodation_coords'] = []
 
     # 共有編集でも書き換える対象は所有者の行（共同編集＝上書き）
     update_travel_plan(plan_id, plan.get('google_user_id'), new_plan)
@@ -567,6 +561,28 @@ def plan_weather(plan_id):
             'tmin': round(tmin[i]) if i < len(tmin) and tmin[i] is not None else None,
         })
     return json.dumps({'status': 'OK', 'days': days}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+
+
+@planner.route('/api/plan_geo/<int:plan_id>')
+@login_required
+def plan_geo(plan_id):
+    """プランの地図座標（観光/グルメ/宿）を返す。未取得なら今ここで取得しキャッシュする。
+
+    保存をブロックしないため、地図を初めて開いたこのリクエスト中に1回だけ
+    ジオコーディングする（以後はDBキャッシュを返すので即時）。本人のプランのみ。
+    """
+    from db import get_travel_plan_by_id
+    from geocoding import ensure_plan_coords
+    empty = {'spot_coords': [], 'restaurant_coords': [], 'accommodation_coords': []}
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan or plan.get('google_user_id') != session.get('user_id'):
+        return json.dumps(empty), 200, {'Content-Type': 'application/json'}
+    ensure_plan_coords(plan)
+    return json.dumps({
+        'spot_coords': plan.get('spot_coords') or [],
+        'restaurant_coords': plan.get('restaurant_coords') or [],
+        'accommodation_coords': plan.get('accommodation_coords') or [],
+    }, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_my_plans')

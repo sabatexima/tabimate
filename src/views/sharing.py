@@ -251,6 +251,9 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
         plan = db.get_travel_plan_by_id(resource_id)
         if not plan:
             abort(404)
+        # 地図座標が未取得なら今ここで取得してキャッシュ（共有閲覧でも地図が出るように）
+        from geocoding import ensure_plan_coords
+        ensure_plan_coords(plan)
         return render_template("shared/plan.html", plan=plan)
     abort(404)
 

@@ -352,6 +352,26 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
         return result.rowcount > 0
 
 
+def update_plan_coords(plan_id: int, spot_coords, restaurant_coords, accommodation_coords) -> bool:
+    """プランの地図座標列だけを更新する（地図初回表示時の遅延ジオコーディング用）。"""
+    with _get_engine().begin() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
+        result = conn.execute(
+            text(
+                "UPDATE travel_plans SET spot_coords = :s, restaurant_coords = :r, "
+                "accommodation_coords = :a WHERE id = :id"
+            ),
+            {
+                "s": json.dumps(spot_coords or [], ensure_ascii=False),
+                "r": json.dumps(restaurant_coords or [], ensure_ascii=False),
+                "a": json.dumps(accommodation_coords or [], ensure_ascii=False),
+                "id": plan_id,
+            },
+        )
+        return result.rowcount > 0
+
+
 def delete_travel_plan(plan_id: int, google_user_id: str) -> bool:
     with _get_engine().begin() as conn:
         result = conn.execute(

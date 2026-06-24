@@ -126,6 +126,9 @@ def trip_detail(trip_id: int):
     if linked_plan_id:
         lp = get_travel_plan_by_id(linked_plan_id)
         if lp and lp.get("google_user_id") == _uid():
+            # 旧プランで座標未取得でも重ね合わせが出るよう、ここで取得・キャッシュ
+            from geocoding import ensure_plan_coords
+            ensure_plan_coords(lp)
             planned = lp.get("spot_coords") or []
         else:
             linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化

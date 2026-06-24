@@ -31,6 +31,9 @@ def _format_plan(state: dict) -> str:
     status = state.get("status")
     logger.debug("フォーマット開始: destination=%s, status=%s", state.get("destination"), status)
 
+    _total = state.get("total_per_person")
+    _cost_line = (f"💴 かかる金額: {_total:,}円/人"
+                  if _total else f"💴 予算上限: {state['budget_limit']:,}円/人")
     header = f"""<div class="plan-card">
   <div class="plan-summary-block">
     <div class="plan-title">🗾 旅行プラン：{esc(state['destination'])}</div>
@@ -38,7 +41,7 @@ def _format_plan(state: dict) -> str:
       <span>📍 出発地: {esc(state['departure_location'])}</span>
       <span>⏱️ 期間: {esc(state['duration'])}</span>
       <span>👥 人数: {esc(state['num_people'])}人</span>
-      <span>💴 予算上限: {state['budget_limit']:,}円/人</span>
+      <span>{_cost_line}</span>
     </div>
   </div>"""
 
@@ -60,6 +63,7 @@ def _format_plan(state: dict) -> str:
         "departure_location":   state.get("departure_location"),
         "transport_cost":       state.get("transport_cost"),
         "remaining_budget":     state.get("remaining_budget"),
+        "total_per_person":     state.get("total_per_person"),
         "status":               state.get("status"),
         "feedback":             state.get("feedback"),
         "themes":               state.get("themes", []),

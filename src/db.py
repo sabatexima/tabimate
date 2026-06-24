@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS travel_plans (
     departure_location VARCHAR(255),
     transport_cost   INT,
     remaining_budget INT,
+    total_per_person INT,
     status           VARCHAR(50),
     feedback         TEXT,
     themes           JSON,
@@ -147,7 +148,8 @@ def _ensure_plan_columns(conn) -> None:
     for col, ddl in (("rating", "INT NULL"), ("rating_comment", "TEXT NULL"),
                      ("spot_coords", "JSON NULL"), ("restaurant_coords", "JSON NULL"),
                      ("accommodation_coords", "JSON NULL"), ("custom_pins", "JSON NULL"),
-                     ("geo_done", "TINYINT NOT NULL DEFAULT 0")):
+                     ("geo_done", "TINYINT NOT NULL DEFAULT 0"),
+                     ("total_per_person", "INT NULL")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -184,7 +186,7 @@ _PLAN_JSON_COLS = (
 # 取得時に SELECT する列（id / google_user_id は呼び出し側で付け足す）
 _PLAN_SELECT_COLS = (
     "destination, travel_date, duration, num_people, budget_limit, "
-    "departure_location, transport_cost, remaining_budget, status, feedback, "
+    "departure_location, transport_cost, remaining_budget, total_per_person, status, feedback, "
     "themes, special_requirements, spots, spot_coords, restaurants, restaurant_coords, "
     "schedule_items, accommodation, accommodation_coords, budget_estimate, custom_pins, "
     "geo_done, rating, rating_comment, created_at"
@@ -307,6 +309,7 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                     departure_location = :departure_location,
                     transport_cost = :transport_cost,
                     remaining_budget = :remaining_budget,
+                    total_per_person = :total_per_person,
                     status = :status,
                     feedback = :feedback,
                     themes = :themes,
@@ -333,6 +336,7 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                 "departure_location":   state.get("departure_location"),
                 "transport_cost":       state.get("transport_cost"),
                 "remaining_budget":     state.get("remaining_budget"),
+                "total_per_person":     state.get("total_per_person"),
                 "status":               state.get("status"),
                 "feedback":             state.get("feedback"),
                 "themes":               json.dumps(state.get("themes", []), ensure_ascii=False),
@@ -455,7 +459,7 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                     google_user_id, user_email,
                     destination, travel_date, duration, num_people,
                     budget_limit, departure_location, transport_cost,
-                    remaining_budget, status, feedback,
+                    remaining_budget, total_per_person, status, feedback,
                     themes, special_requirements, spots, spot_coords,
                     restaurants, restaurant_coords,
                     schedule_items, accommodation, accommodation_coords, budget_estimate
@@ -463,7 +467,7 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                     :google_user_id, :user_email,
                     :destination, :travel_date, :duration, :num_people,
                     :budget_limit, :departure_location, :transport_cost,
-                    :remaining_budget, :status, :feedback,
+                    :remaining_budget, :total_per_person, :status, :feedback,
                     :themes, :special_requirements, :spots, :spot_coords,
                     :restaurants, :restaurant_coords,
                     :schedule_items, :accommodation, :accommodation_coords, :budget_estimate
@@ -480,6 +484,7 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                 "departure_location":   state.get("departure_location"),
                 "transport_cost":       state.get("transport_cost"),
                 "remaining_budget":     state.get("remaining_budget"),
+                "total_per_person":     state.get("total_per_person"),
                 "status":               state.get("status"),
                 "feedback":             state.get("feedback"),
                 "themes":               json.dumps(state.get("themes", []), ensure_ascii=False),

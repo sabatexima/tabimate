@@ -299,6 +299,7 @@ def _plan_to_view_dict(state: dict, plan_id: int, created_at) -> dict:
         'departure_location': state.get('departure_location'),
         'transport_cost': state.get('transport_cost'),
         'remaining_budget': state.get('remaining_budget'),
+        'total_per_person': state.get('total_per_person'),
         'status': state.get('status'),
         'feedback': state.get('feedback'),
         'themes': state.get('themes', []),

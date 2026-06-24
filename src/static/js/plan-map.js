@@ -118,10 +118,16 @@
     legend.addTo(map);
   }
 
-  // 紫のしずく型ピン（ユーザーが手動設置したメモピン）
-  function customIcon() {
+  // ピンの種類 → カテゴリ（色）。memo/未指定は紫。
+  const PIN_TYPES = ['memo', 'spot', 'restaurant', 'accommodation'];
+  const _TYPE_CAT = { spot: 'spot', restaurant: 'restaurant', accommodation: 'accommodation', memo: 'custom' };
+  function _typeCat(type) { return CATEGORIES[_TYPE_CAT[type] || 'custom'] || CATEGORIES.custom; }
+
+  // しずく型ピン（種類の色＋中央の丸）。ユーザー設置のカスタムピン用。
+  function customIcon(type) {
+    const fill = _typeCat(type).fill;
     const svg = `<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">`
-      + `<path d="M16 2C8.8 2 3 7.8 3 15c0 9.2 13 24 13 24s13-14.8 13-24C29 7.8 23.2 2 16 2Z" fill="#9b6dd6" stroke="#fff" stroke-width="2.5"/>`
+      + `<path d="M16 2C8.8 2 3 7.8 3 15c0 9.2 13 24 13 24s13-14.8 13-24C29 7.8 23.2 2 16 2Z" fill="${fill}" stroke="#fff" stroke-width="2.5"/>`
       + `<circle cx="16" cy="15" r="4.5" fill="#fff9ec"/></svg>`;
     return L.divIcon({ className: 'plan-map-pin', html: svg, iconSize: [32, 42], iconAnchor: [16, 39], popupAnchor: [0, -36] });
   }
@@ -129,29 +135,34 @@
   function customPopup(p, editing) {
     const dest = encodeURIComponent(`${p.lat},${p.lng}`);
     const nav = `<a href="https://www.google.com/maps/dir/?api=1&destination=${dest}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
+    const cat = _typeCat(p.type);
+    const tag = `<span class="pin-type-tag" style="color:${cat.text || '#5e3a99'}">${cat.label}</span>`;
     const del = editing ? `<br><button type="button" class="pin-del">削除</button>` : '';
-    return `<strong>${esc(p.name || 'ピン')}</strong><br>${nav}${del}`;
+    return `<strong>${esc(p.name || 'ピン')}</strong> ${tag}<br>${nav}${del}`;
   }
 
-  // カスタムピンを描き直す（編集モード時はポップアップに削除ボタンを出す）
-  function renderCustomMarkers(map, pins, markers, editing, onDelete) {
+  // カスタムピンを描き直す。編集モードではドラッグ移動＋ポップアップに削除を出す。
+  function renderCustomMarkers(map, pins, markers, editing, onDelete, onMove) {
     markers.forEach(m => map.removeLayer(m));
     markers.length = 0;
     pins.forEach((p, idx) => {
-      const m = L.marker([p.lat, p.lng], { icon: customIcon() }).addTo(map);
+      const m = L.marker([p.lat, p.lng], { icon: customIcon(p.type), draggable: !!editing }).addTo(map);
       m.bindPopup(customPopup(p, editing));
       m.on('popupopen', (e) => {
         const btn = e.popup.getElement().querySelector('.pin-del');
         if (btn) btn.addEventListener('click', () => onDelete(idx));
       });
+      if (editing && onMove) m.on('dragend', () => onMove(idx, m.getLatLng()));
       markers.push(m);
     });
   }
 
-  // 地図クリックで名前付きピンを追加・削除・保存できる編集UI（自分のプランのみ）
-  function addPinEditor(map, planId, pins, markers) {
+  // 地図クリックで名前＋種類付きピンを追加・ドラッグ移動・削除・保存できる編集UI。
+  // 未配置スポット（自動で立たなかった観光/グルメ/宿）をワンタップで配置もできる。
+  function addPinEditor(map, planId, plan, pins, markers) {
     let editing = false;
     let backup = null;
+    let pending = null;  // 未配置スポットの配置待ち {name, type}
     const ctl = L.control({ position: 'bottomleft' });
     ctl.onAdd = function () {
       const div = L.DomUtil.create('div', 'plan-map-editbar');
@@ -162,32 +173,55 @@
     };
     ctl.addTo(map);
 
+    // 自動ジオコーディングで立たなかった項目（座標が無く、まだ手動配置もしていない）
+    function unplaced() {
+      const taken = new Set(pins.map(p => p.name));
+      const out = [];
+      [['spots', 'spot_coords', 'spot'], ['restaurants', 'restaurant_coords', 'restaurant'],
+       ['accommodation', 'accommodation_coords', 'accommodation']].forEach(([nf, cf, type]) => {
+        const placed = new Set((plan[cf] || []).map(c => c && c.name));
+        (plan[nf] || []).forEach(n => { if (n && !placed.has(n) && !taken.has(n)) out.push({ name: n, type }); });
+      });
+      return out;
+    }
+
     function rerender() {
-      renderCustomMarkers(map, pins, markers, editing, (i) => { pins.splice(i, 1); rerender(); });
+      renderCustomMarkers(map, pins, markers, editing,
+        (i) => { pins.splice(i, 1); rerender(); },
+        (i, ll) => { pins[i].lat = ll.lat; pins[i].lng = ll.lng; });
       paint();
     }
     function paint() {
       const div = ctl._div;
       if (!div) return;
       if (!editing) {
-        div.innerHTML = `<button type="button" class="pin-edit-btn">📍 ピンを追加</button>`;
-        div.querySelector('.pin-edit-btn').onclick = enter;
+        div.innerHTML = `<button type="button" class="pin-edit-btn" data-act="enter">📍 ピンを編集</button>`;
       } else {
-        div.innerHTML = `<span class="pin-edit-hint">地図をタップで追加</span>`
-          + `<button type="button" class="pin-edit-btn save">💾 保存</button>`
-          + `<button type="button" class="pin-edit-btn cancel">やめる</button>`;
-        div.querySelector('.save').onclick = save;
-        div.querySelector('.cancel').onclick = cancel;
+        const ups = unplaced();
+        const hint = pending ? `タップして「${esc(pending.name)}」を配置` : '地図をタップで追加 / ピンはドラッグで移動';
+        const chips = ups.length
+          ? `<div class="pin-unplaced"><span class="pin-unplaced-label">未配置:</span>`
+            + ups.map((u, i) => `<button type="button" class="pin-chip" data-chip="${i}">${esc(u.name)}</button>`).join('')
+            + `</div>`
+          : '';
+        div.innerHTML = `<div class="pin-edit-row"><span class="pin-edit-hint">${hint}</span>`
+          + `<button type="button" class="pin-edit-btn save" data-act="save">💾 保存</button>`
+          + `<button type="button" class="pin-edit-btn cancel" data-act="cancel">やめる</button></div>` + chips;
+        div.querySelectorAll('.pin-chip').forEach(b => b.onclick = () => { pending = ups[+b.dataset.chip]; paint(); });
       }
+      div.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+        const a = b.dataset.act;
+        if (a === 'enter') enter(); else if (a === 'save') save(); else if (a === 'cancel') cancel();
+      });
     }
     function enter() {
-      editing = true;
+      editing = true; pending = null;
       backup = JSON.parse(JSON.stringify(pins));
       map.getContainer().style.cursor = 'crosshair';
       rerender();
     }
     function exit() {
-      editing = false;
+      editing = false; pending = null;
       map.getContainer().style.cursor = '';
       rerender();
     }
@@ -206,12 +240,38 @@
         else alert(d.message || '保存に失敗しました');
       }).catch(() => alert('通信エラーが発生しました。もう一度お試しください。'));
     }
+
+    // 地図クリック時：未配置スポット配置待ちならそれを置く。なければ入力フォームを開く。
+    function openAddForm(latlng) {
+      const opts = PIN_TYPES.map(t => `<option value="${t}">${_typeCat(t).label}</option>`).join('');
+      const html = `<div class="pin-form"><input class="pin-name" type="text" placeholder="ピンの名前" maxlength="60">`
+        + `<select class="pin-type">${opts}</select><button type="button" class="pin-add">追加</button></div>`;
+      const popup = L.popup({ closeButton: true, autoPan: true }).setLatLng(latlng).setContent(html).openOn(map);
+      setTimeout(() => {
+        const el = popup.getElement();
+        if (!el) return;
+        L.DomEvent.disableClickPropagation(el);
+        const nameEl = el.querySelector('.pin-name');
+        if (nameEl) nameEl.focus();
+        const addBtn = el.querySelector('.pin-add');
+        if (addBtn) addBtn.onclick = () => {
+          const name = (nameEl.value || '').trim();
+          if (!name) { nameEl.focus(); return; }
+          pins.push({ name, type: el.querySelector('.pin-type').value || 'memo', lat: latlng.lat, lng: latlng.lng });
+          map.closePopup(popup);
+          rerender();
+        };
+      }, 0);
+    }
     map.on('click', (e) => {
       if (!editing) return;
-      const name = (prompt('ピンの名前（例: お気に入りのカフェ）') || '').trim();
-      if (!name) return;  // 名前なし／キャンセルは追加しない
-      pins.push({ name, lat: e.latlng.lat, lng: e.latlng.lng });
-      rerender();
+      if (pending) {
+        pins.push({ name: pending.name, type: pending.type, lat: e.latlng.lat, lng: e.latlng.lng });
+        pending = null;
+        rerender();
+        return;
+      }
+      openAddForm(e.latlng);
     });
     rerender();
   }
@@ -257,7 +317,7 @@
     // カスタムピン：自分のプランは編集UI付き、それ以外（共有閲覧）は表示のみ
     const customMarkers = [];
     if (opts.editable) {
-      addPinEditor(map, planId, customPins, customMarkers);
+      addPinEditor(map, planId, plan, customPins, customMarkers);
     } else {
       renderCustomMarkers(map, customPins, customMarkers, false, () => {});
     }

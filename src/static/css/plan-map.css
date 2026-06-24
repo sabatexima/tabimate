@@ -83,15 +83,18 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
 /* カスタムピンの編集バー（地図左下） */
 .plan-map-editbar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
-  background: rgba(255, 252, 245, 0.95);
+  max-width: 260px;
+  background: rgba(255, 252, 245, 0.96);
   border: 1px solid #e6dcc8;
   border-radius: 12px;
-  padding: 5px 8px;
+  padding: 6px 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   font-family: 'Zen Maru Gothic', sans-serif;
 }
+.plan-map-editbar .pin-edit-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .plan-map-editbar .pin-edit-btn {
   border: 1px solid #b58fdc;
   background: #fff;
@@ -105,7 +108,19 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
 }
 .plan-map-editbar .pin-edit-btn.save { border-color: #4fa83a; color: #fff; background: #4fa83a; }
 .plan-map-editbar .pin-edit-btn.cancel { border-color: #ccc; color: #777; }
-.plan-map-editbar .pin-edit-hint { font-size: 11px; color: #8a817a; white-space: nowrap; }
+.plan-map-editbar .pin-edit-hint { font-size: 11px; color: #8a817a; }
+.plan-map-editbar .pin-unplaced { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.plan-map-editbar .pin-unplaced-label { font-size: 11px; color: #8a817a; }
+.plan-map-editbar .pin-chip {
+  border: 1px dashed #c79a4e;
+  background: #fffaf0;
+  color: #a9772f;
+  border-radius: 12px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
 .leaflet-popup-content .pin-del {
   margin-top: 4px;
   border: 1px solid #f43f5e;
@@ -115,6 +130,20 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   padding: 2px 12px;
   font-size: 12px;
   cursor: pointer;
+}
+.leaflet-popup-content .pin-type-tag { font-size: 11px; font-weight: 700; }
+.leaflet-popup-content .pin-form { display: flex; align-items: center; gap: 4px; }
+.leaflet-popup-content .pin-form .pin-name {
+  width: 120px; padding: 4px 8px; border: 1px solid #d9cfbe; border-radius: 8px;
+  font-size: 13px; font-family: 'Zen Maru Gothic', sans-serif;
+}
+.leaflet-popup-content .pin-form .pin-type {
+  padding: 4px 6px; border: 1px solid #d9cfbe; border-radius: 8px; font-size: 12px;
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.leaflet-popup-content .pin-form .pin-add {
+  border: none; background: #4fa83a; color: #fff; border-radius: 8px;
+  padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
 }
 
 /* プラン紐付けセレクタ（旅の足あと） */

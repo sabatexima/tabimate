@@ -53,12 +53,6 @@
     <a class="cta" href="{{ url_for('auth.login') }}">🍀 Googleでログインして始める</a>
     {% if session.get('login_error') %}<p style="color:#c0392b; margin-top:12px;">{{ session.get('login_error') }}</p>{% endif %}
   </div>
-
-  <div class="quick">
-    <a href="{{ url_for('auth.login') }}"><span class="ic">🗺️</span><span class="nm">プランをつくる</span><span class="ds">条件を話すだけ</span></a>
-    <a href="{{ url_for('auth.login') }}"><span class="ic">📷</span><span class="nm">旅を振り返る</span><span class="ds">写真からAI付箋</span></a>
-    <a href="{{ url_for('auth.login') }}"><span class="ic">🤝</span><span class="nm">みんなと共有</span><span class="ds">リンクで簡単</span></a>
-  </div>
 {% endif %}
 </div>
 {% endblock %}

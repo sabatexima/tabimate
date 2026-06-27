@@ -50,18 +50,6 @@
 }
 .memory-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(232, 136, 58, 0.35); }
 
-.quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-top: 36px; }
-.quick a {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  background: #fffdf8; border: 1px solid #ece3d0; border-radius: 16px;
-  padding: 20px 14px; text-decoration: none; color: var(--text-main); text-align: center;
-  transition: transform 0.12s, box-shadow 0.12s;
-}
-.quick a:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06); }
-.quick a .ic { font-size: 1.8em; }
-.quick a .nm { font-weight: 700; font-size: 0.95em; }
-.quick a .ds { font-size: 0.8em; color: var(--text-muted); }
-
 .drift {
   position: absolute; font-size: 1.4em; opacity: 0.5; pointer-events: none;
   animation: drift 7s ease-in-out infinite;

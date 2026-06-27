@@ -151,11 +151,7 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
 
     logger.debug("会話状態を解析しました: is_complete=%s, next_question=%s", state.is_complete, state.next_question)
 
-    if not state.is_complete:
-        return state.next_question, None
-
-    # is_complete=true でも必須項目が欠けている場合（LLMの取りこぼし）は、生成に進まず聞き直す。
-    # 欠けたまま生成するとエージェント側で None 参照のエラーになるため、ここで防ぐ。
+    # 必須7項目の充足状況。進捗表示（ゴール感）と、取りこぼし防止の両方に共用する。
     _required = {
         "旅行先": state.destination,
         "旅行日程": state.travel_date,
@@ -166,9 +162,23 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         "旅行テーマ": state.themes,
     }
     _missing = [label for label, val in _required.items() if val in (None, "", [])]
+    _filled = len(_required) - len(_missing)
+
+    def _with_progress(q: str) -> str:
+        """必須項目を集めている間だけ「あと◯つで完成」を質問に添えてゴール感を出す。"""
+        if _missing and q:
+            dots = "🍀" * _filled + "・" * len(_missing)
+            return f"あと{len(_missing)}つで完成！ {dots}\n\n{q}"
+        return q
+
+    if not state.is_complete:
+        return _with_progress(state.next_question), None
+
+    # is_complete=true でも必須項目が欠けている場合（LLMの取りこぼし）は、生成に進まず聞き直す。
+    # 欠けたまま生成するとエージェント側で None 参照のエラーになるため、ここで防ぐ。
     if _missing:
         logger.warning("is_complete=trueだが必須項目が不足のため聞き直し: %s", _missing)
-        return f"恐れ入りますが、{_missing[0]}を教えていただけますか？", None
+        return _with_progress(f"恐れ入りますが、{_missing[0]}を教えていただけますか？"), None
 
     if request_id and active_requests and request_id not in active_requests:
         logger.info("リクエストがキャンセルされました: request_id=%s", request_id)

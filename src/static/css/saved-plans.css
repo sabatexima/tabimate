@@ -110,22 +110,11 @@
     flex-wrap: wrap;
     gap: 8px;
   }
-  .share-btn {
+  /* 二次操作（共有/しおり/カレンダー/チャット修正）は控えめな共通アウトラインに統一 */
+  .share-btn, .cal-btn {
     background: none;
-    border: 1px solid var(--primary-color);
-    color: var(--primary-color);
-    border-radius: 20px;
-    padding: 6px 16px;
-    font-size: 0.85em;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-  .share-btn:hover { background: var(--primary-color); color: white; }
-  .cal-btn {
-    background: none;
-    border: 1px solid #c79a4e;
-    color: #a9772f;
+    border: 1px solid #d9cfbe;
+    color: #6b6358;
     border-radius: 20px;
     padding: 6px 16px;
     font-size: 0.85em;
@@ -134,7 +123,7 @@
     text-decoration: none;
     transition: background 0.15s, color 0.15s;
   }
-  .cal-btn:hover { background: #c79a4e; color: white; }
+  .share-btn:hover, .cal-btn:hover { background: #f3efe6; color: var(--text-main); }
   .delete-btn {
     background: none;
     border: 1px solid #f43f5e;
@@ -160,12 +149,12 @@
   }
   .unshare-btn:hover { background: #f43f5e; color: white; }
 
-  /* チャットで修正 */
+  /* チャットで修正（二次操作なので控えめな共通スタイル） */
   .edit-btn {
     margin-right: auto;  /* 左寄せ（共有・削除は右側に残す）*/
     background: none;
-    border: 1px solid rgba(79,168,58,0.5);
-    color: var(--primary-color);
+    border: 1px solid #d9cfbe;
+    color: #6b6358;
     border-radius: 20px;
     padding: 6px 16px;
     font-size: 0.85em;
@@ -173,7 +162,7 @@
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
   }
-  .edit-btn:hover { background: var(--primary-color); color: white; }
+  .edit-btn:hover { background: #f3efe6; color: var(--text-main); }
   .plan-edit {
     display: flex;
     gap: 8px;
@@ -243,14 +232,42 @@
   .empty-state {
     text-align: center;
     color: var(--text-muted);
-    padding: 60px 0;
+    padding: 48px 16px;
     font-size: 1.05em;
   }
   .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state .empty-mate {
+    width: auto; height: 130px; object-fit: contain;
+    filter: drop-shadow(0 6px 14px rgba(120, 110, 90, 0.18));
+    margin-bottom: 8px;
+  }
+  .empty-state p { margin: 4px 0 18px; }
+  .empty-state .empty-cta {
+    display: inline-block; background: var(--primary-color); color: #fff;
+    text-decoration: none; font-weight: 700; font-size: 0.95em;
+    padding: 12px 26px; border-radius: 24px;
+    box-shadow: 0 6px 16px rgba(79, 168, 58, 0.3);
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 168, 58, 0.38); }
 
-  #loading {
-    color: var(--text-muted);
-    padding: 40px 0;
+  #loading { padding: 8px 0; }
+  /* 読み込み中のスケルトン（待たされ感を減らす） */
+  .skeleton-card {
+    background: #fffdf8; border: 1px solid #ece3d0; border-radius: 16px;
+    padding: 16px; margin-bottom: 14px; overflow: hidden;
+  }
+  .skeleton-bar {
+    height: 14px; border-radius: 7px; margin-bottom: 10px;
+    background: linear-gradient(90deg, #eee6d6 25%, #f6f1e6 37%, #eee6d6 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+  }
+  .skeleton-bar.title { height: 20px; width: 55%; margin-bottom: 16px; }
+  .skeleton-bar.short { width: 40%; }
+  @keyframes skeleton-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0 0; }
   }
 
   /* ★評価エリア（次回のプラン生成に好みとして活かす） */

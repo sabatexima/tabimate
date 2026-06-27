@@ -139,7 +139,11 @@
     {% endfor %}
 
     {% if not trips and not shared_trips %}
-      <div class="empty-state" id="empty"><div class="icon">🧳</div>まだ旅がありません。最初の旅を作ってみましょう。</div>
+      <div class="empty-state" id="empty">
+        <img class="empty-mate" src="{{ url_for('static', filename='img/mate.png') }}" alt="">
+        <p>まだ旅がありません。<br>写真をまとめて、思い出の付箋をつくろう🍀</p>
+        <button class="empty-cta" type="button" onclick="document.getElementById('new-trip-toggle').click()">🧳 最初の旅を作る</button>
+      </div>
     {% endif %}
   </div>
 </div>

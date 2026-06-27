@@ -259,6 +259,10 @@ const chatBox = document.getElementById('chat-box');
       if (result.status === 'OK') {
         btn.textContent = '✓ 保存しました';
         btn.classList.add('saved');
+        if (window.cloverBurst) {
+          const r = btn.getBoundingClientRect();
+          window.cloverBurst(r.left + r.width / 2, r.top);
+        }
       } else {
         btn.textContent = '保存に失敗しました';
         btn.disabled = false;

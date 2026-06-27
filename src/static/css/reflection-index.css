@@ -169,8 +169,21 @@
   }
   .menu-del:hover { background: #fff5f5; }
 
-  .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
+  .empty-state { text-align: center; color: var(--text-muted); padding: 40px 16px; }
   .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state .empty-mate {
+    width: auto; height: 130px; object-fit: contain;
+    filter: drop-shadow(0 6px 14px rgba(120, 110, 90, 0.18)); margin-bottom: 8px;
+  }
+  .empty-state p { margin: 4px 0 18px; }
+  .empty-state .empty-cta {
+    display: inline-block; background: var(--primary-color); color: #fff; border: none;
+    font-family: inherit; font-weight: 700; font-size: 0.95em; cursor: pointer;
+    padding: 12px 26px; border-radius: 24px;
+    box-shadow: 0 6px 16px rgba(79, 168, 58, 0.3);
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 168, 58, 0.38); }
 
   /* PC版: 幅を広げてカードを2〜3列のグリッドに（モバイルは1列のまま）*/
   @media (min-width: 768px) {

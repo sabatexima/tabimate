@@ -171,3 +171,18 @@
         padding-top: 60px; /* ハンバーガーボタン分 */
       }
     }
+
+    /* 保存成功などで舞う🍀（cloverBurst が要素を生成） */
+    .clover-burst {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      font-size: 1.6rem;
+      transform: translate(-50%, -50%);
+      animation: cloverFloat 1.4s ease-out forwards;
+    }
+    @keyframes cloverFloat {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(0); }
+      20% { opacity: 1; }
+      100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% - 130px)) scale(1.1) rotate(var(--rot, 0)); }
+    }

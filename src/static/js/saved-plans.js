@@ -84,6 +84,7 @@ function esc(str) {
           plan.rating = current; plan.rating_comment = comment;
           box.outerHTML = ratedRateHtml(current, comment);
           mountRate(card, plan);
+          if (window.cloverBurst) window.cloverBurst();
         } else {
           alert(result.message || '記録に失敗しました');
           saveBtn.disabled = false;
@@ -420,7 +421,12 @@ function esc(str) {
 
   function showEmpty() {
     const container = document.getElementById('plans-container');
-    container.innerHTML = `<div class="empty-state"><div class="icon">🗂️</div>保存済みのプランはありません</div>`;
+    container.style.display = 'block';
+    container.innerHTML = `<div class="empty-state">
+      <img class="empty-mate" src="/static/img/mate.png" alt="">
+      <p>まだ保存した旅はありません。<br>みつばと一緒に、最初の旅をつくろう🍀</p>
+      <a class="empty-cta" href="/chat">✨ 最初の旅をつくる</a>
+    </div>`;
   }
 
   async function loadPlans() {

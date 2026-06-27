@@ -30,7 +30,7 @@
       + `<circle cx="16" cy="15" r="8.5" fill="#fff9ec"/>`
       + `<text x="16" y="${ty}" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${textFill}" font-family="'Zen Maru Gothic',sans-serif">${esc(s)}</text>`
       + `</svg>`;
-    return L.divIcon({ className: 'plan-map-pin', html: svg, iconSize: [32, 42], iconAnchor: [16, 39], popupAnchor: [0, -36] });
+    return L.divIcon({ className: 'plan-map-pin', html: `<span class="pin-i">${svg}</span>`, iconSize: [32, 42], iconAnchor: [16, 39], popupAnchor: [0, -36] });
   }
   const footIcon = (n) => pin(n, '#f08ba0', '#c25274');
   const planIcon = (n) => pin(n, '#4fa83a', '#3b8a2c');

@@ -203,13 +203,15 @@ def send_message():
 
     def run_chat():
         try:
-            result['response'] = _ai_chat(
+            response, plan = _ai_chat(
                 user_message,
                 messages_history=messages,
                 request_id=request_id,
                 active_requests=active_requests,
                 user_id=user_id,
             )
+            result['response'] = response
+            result['plan'] = plan  # プラン生成時のみ構造化データ。メッセージと一緒に保存する
         except Exception:
             logger.exception("メッセージ処理中にエラーが発生しました: request_id=%s", request_id)
             result['error'] = True
@@ -235,7 +237,7 @@ def send_message():
                 yield f"data: {json.dumps({'status': 'ABORTED', 'id': request_id})}\n\n"
                 return
 
-            save_chat_message(user_id, 'ai', ai_response, request_id)
+            save_chat_message(user_id, 'ai', ai_response, request_id, plan_json=result.get('plan'))
             logger.info("メッセージ処理完了: request_id=%s", request_id)
             yield f"data: {json.dumps({'status': 'OK', 'id': request_id})}\n\n"
         finally:

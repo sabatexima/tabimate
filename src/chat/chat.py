@@ -12,14 +12,12 @@ import nest_asyncio
 # 既存イベントループのネストを許可する
 nest_asyncio.apply()
 
-import json
-import re
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from chat.llm import llm, invoke_with_retry
 from chat.graph import generate_travel_plan
-from chat.formatter import _format_plan
+from chat.formatter import _format_plan, plan_payload
 from chat.logger import get_logger
 
 logger = get_logger("chat")
@@ -84,26 +82,6 @@ class ConversationState(BaseModel):
     next_question: str = Field("", description="is_complete=Falseのときにユーザーへ返す文（次に聞く質問、または雑談への自然な返答）。is_complete=Trueなら空文字")
 
 
-def _extract_prev_plan(messages_history: list) -> dict | None:
-    """直近のプランHTML（保存ボタンの data-plan）から前回プランの構造化データを復元する。
-
-    部分編集で、変更しない領域（観光/宿泊など）の成果物を引き継ぐために使う。
-    formatter が data-plan に JSON を埋め込む際の置換（" → &quot;, ' → &#39;）を逆変換する。
-    """
-    for m in reversed(messages_history or []):
-        content = m.get("content")
-        if m.get("role") == "ai" and isinstance(content, str) and "data-plan=" in content:
-            mt = re.search(r'data-plan="([^"]*)"', content)
-            if not mt:
-                return None
-            raw = mt.group(1).replace("&quot;", '"').replace("&#39;", "'")
-            try:
-                return json.loads(raw)
-            except (ValueError, TypeError):
-                return None
-    return None
-
-
 def _build_user_preferences(user_id: str) -> str:
     """過去の★評価＋コメントから、生成時に参照する「好み」テキストを作る。"""
     if not user_id:
@@ -147,20 +125,21 @@ def _build_lc_messages(messages_history: list) -> list:
     return lc_messages
 
 
-def chat(user_message: str, messages_history=None, request_id=None, active_requests=None, user_id=None) -> str | None:
-    """1回のユーザー発話を処理し、応答テキストまたはプランHTMLを返す。
+def chat(user_message: str, messages_history=None, request_id=None, active_requests=None, user_id=None) -> tuple:
+    """1回のユーザー発話を処理し、(応答, プラン構造化データ) のタプルを返す。
 
     Args:
         user_message: 今回のユーザー発話（履歴にも含まれる想定）。
         messages_history: これまでの会話履歴（role/content の辞書リスト）。
         request_id: リクエスト識別子。キャンセル判定に使う。
         active_requests: 現在処理中のリクエストIDの集合。ここに request_id が
-            なくなっていればキャンセルされたとみなし None を返す。
+            なくなっていればキャンセルされたとみなし (None, None) を返す。
 
     Returns:
-        - 条件が未充足: 次にユーザーへ聞く質問文（str）
-        - 条件が充足  : 整形済みプランHTML（str）
-        - キャンセル時: None
+        (response, plan) のタプル。
+        - response: 質問文 or 整形済みプランHTML（str）。キャンセル時は None
+        - plan: プランを生成したときだけ、その構造化データ（dict）。それ以外は None
+          呼び出し側はこれをメッセージ行と一緒にDB保存し、次回の部分編集で読み戻す。
     """
     lc_messages = _build_lc_messages(messages_history or [])
 
@@ -168,12 +147,12 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         state = invoke_with_retry(llm.with_structured_output(ConversationState), lc_messages)
     except Exception as e:
         logger.exception("会話状態の解析に失敗しました: request_id=%s", request_id)
-        return f"申し訳ありません、処理中にエラーが発生しました: {e}"
+        return f"申し訳ありません、処理中にエラーが発生しました: {e}", None
 
     logger.debug("会話状態を解析しました: is_complete=%s, next_question=%s", state.is_complete, state.next_question)
 
     if not state.is_complete:
-        return state.next_question
+        return state.next_question, None
 
     # is_complete=true でも必須項目が欠けている場合（LLMの取りこぼし）は、生成に進まず聞き直す。
     # 欠けたまま生成するとエージェント側で None 参照のエラーになるため、ここで防ぐ。
@@ -189,11 +168,11 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     _missing = [label for label, val in _required.items() if val in (None, "", [])]
     if _missing:
         logger.warning("is_complete=trueだが必須項目が不足のため聞き直し: %s", _missing)
-        return f"恐れ入りますが、{_missing[0]}を教えていただけますか？"
+        return f"恐れ入りますが、{_missing[0]}を教えていただけますか？", None
 
     if request_id and active_requests and request_id not in active_requests:
         logger.info("リクエストがキャンセルされました: request_id=%s", request_id)
-        return None
+        return None, None
 
     inputs = {
         "destination":          state.destination,
@@ -217,7 +196,10 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 前回の成果物を引き継いで対象領域だけを再生成する（指定外はそのまま保持）。
     # 変更要望はあるが対象が空の場合は、全体作り直し(["all"])として扱う。
     targets = state.edit_targets or (["all"] if state.plan_change_request else [])
-    prev = _extract_prev_plan(messages_history) if state.plan_change_request else None
+    # 前回プランは、HTMLを正規表現で読み戻す代わりにDBの構造化データから取得する
+    # （直近のAIプランメッセージと一緒に保存した plan_json）。
+    from db import get_last_plan
+    prev = get_last_plan(user_id) if (state.plan_change_request and user_id) else None
     if state.plan_change_request and prev and targets and "all" not in targets:
         for key in ("spots", "restaurants", "accommodation", "schedule", "budget_estimate"):
             inputs[key] = prev.get(key, [])
@@ -230,15 +212,16 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         final_state = generate_travel_plan(inputs)
     except ValueError as e:
         logger.error("プラン生成で値域エラー: request_id=%s, error=%s", request_id, e)
-        return str(e)
+        return str(e), None
 
     if request_id and active_requests and request_id not in active_requests:
         logger.info("プラン生成後にリクエストがキャンセルされました: request_id=%s", request_id)
-        return None
+        return None, None
 
     formatted = _format_plan(final_state)
     logger.info("プラン生成が完了しました: request_id=%s, status=%s", request_id, final_state.get("status"))
-    return formatted
+    # プランの構造化データも返し、呼び出し側でメッセージ行と一緒にDB保存させる
+    return formatted, plan_payload(final_state)
 
 
 class _PlanEditIntent(BaseModel):

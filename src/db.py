@@ -168,9 +168,29 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     role           VARCHAR(10)   NOT NULL,
     content        MEDIUMTEXT    NOT NULL,
     request_id     VARCHAR(255),
+    plan_json      MEDIUMTEXT    NULL,
     created_at     TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3)
 ) CHARACTER SET utf8mb4
 """
+
+# 既存DBに plan_json 列が無い場合に遅延追加する（一度確認したらキャッシュ）。
+# plan_json は、AIがプランを提示したメッセージ行に、その構造化データ（再編集用）を持たせる列。
+_chat_columns_ensured = False
+
+
+def _ensure_chat_columns(conn) -> None:
+    global _chat_columns_ensured
+    if _chat_columns_ensured:
+        return
+    exists = conn.execute(
+        text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = 'chat_messages' AND column_name = 'plan_json'"
+        )
+    ).scalar()
+    if not exists:
+        conn.execute(text("ALTER TABLE chat_messages ADD COLUMN plan_json MEDIUMTEXT NULL"))
+    _chat_columns_ensured = True
 
 
 def _row_to_dict(row) -> dict:
@@ -420,15 +440,43 @@ def get_chat_messages(google_user_id: str) -> list:
     return [_row_to_dict(r) for r in rows]
 
 
-def save_chat_message(google_user_id: str, role: str, content: str, request_id: str = None) -> None:
+def get_last_plan(google_user_id: str) -> dict | None:
+    """この会話で直近にAIが提示したプランの構造化データを返す（無ければ None）。
+
+    プランHTMLを正規表現で読み戻す代わりに、メッセージ保存時に一緒に格納した
+    plan_json をそのまま読む。reset_chat 等で履歴が消えれば自然に消える。
+    """
+    with _get_engine().connect() as conn:
+        conn.execute(text(_CREATE_CHAT_TABLE))
+        _ensure_chat_columns(conn)
+        row = conn.execute(
+            text(
+                "SELECT plan_json FROM chat_messages "
+                "WHERE google_user_id = :uid AND plan_json IS NOT NULL "
+                "ORDER BY id DESC LIMIT 1"
+            ),
+            {"uid": google_user_id},
+        ).fetchone()
+    if not row or not row[0]:
+        return None
+    try:
+        return json.loads(row[0])
+    except (ValueError, TypeError):
+        return None
+
+
+def save_chat_message(google_user_id: str, role: str, content: str, request_id: str = None,
+                      plan_json: dict = None) -> None:
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_CHAT_TABLE))
+        _ensure_chat_columns(conn)
         conn.execute(
             text(
-                "INSERT INTO chat_messages (google_user_id, role, content, request_id) "
-                "VALUES (:uid, :role, :content, :rid)"
+                "INSERT INTO chat_messages (google_user_id, role, content, request_id, plan_json) "
+                "VALUES (:uid, :role, :content, :rid, :plan)"
             ),
-            {"uid": google_user_id, "role": role, "content": content, "rid": request_id},
+            {"uid": google_user_id, "role": role, "content": content, "rid": request_id,
+             "plan": json.dumps(plan_json, ensure_ascii=False) if plan_json is not None else None},
         )
 
 

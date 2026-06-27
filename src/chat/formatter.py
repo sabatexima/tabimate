@@ -7,6 +7,33 @@ from chat.logger import get_logger
 logger = get_logger("formatter")
 
 
+# プラン状態のうち、保存・再編集に必要なフィールドだけを取り出した辞書を作る。
+# 用途は2つで、両方がこの同じ関数を使うことで定義が1か所に集約される:
+#   1) data-plan 埋め込み（フロントの「保存する」ボタンが読む）
+#   2) チャット編集時の「前回プラン」としてDBへ保存（chat.py）
+def plan_payload(state: dict) -> dict:
+    return {
+        "destination":          state.get("destination"),
+        "travel_date":          state.get("travel_date"),
+        "duration":             state.get("duration"),
+        "num_people":           state.get("num_people"),
+        "budget_limit":         state.get("budget_limit"),
+        "departure_location":   state.get("departure_location"),
+        "transport_cost":       state.get("transport_cost"),
+        "remaining_budget":     state.get("remaining_budget"),
+        "total_per_person":     state.get("total_per_person"),
+        "status":               state.get("status"),
+        "feedback":             state.get("feedback"),
+        "themes":               state.get("themes", []),
+        "special_requirements": state.get("special_requirements", []),
+        "spots":                state.get("spots", []),
+        "restaurants":          state.get("restaurants", []),
+        "schedule":             state.get("schedule", []),
+        "accommodation":        state.get("accommodation", []),
+        "budget_estimate":      state.get("budget_estimate", []),
+    }
+
+
 def _format_plan(state: dict) -> str:
     """TravelPlanState をプランカードのHTML文字列に変換する。
 
@@ -54,26 +81,7 @@ def _format_plan(state: dict) -> str:
   </div>
 </div>"""
 
-    plan_json = json.dumps({
-        "destination":          state.get("destination"),
-        "travel_date":          state.get("travel_date"),
-        "duration":             state.get("duration"),
-        "num_people":           state.get("num_people"),
-        "budget_limit":         state.get("budget_limit"),
-        "departure_location":   state.get("departure_location"),
-        "transport_cost":       state.get("transport_cost"),
-        "remaining_budget":     state.get("remaining_budget"),
-        "total_per_person":     state.get("total_per_person"),
-        "status":               state.get("status"),
-        "feedback":             state.get("feedback"),
-        "themes":               state.get("themes", []),
-        "special_requirements": state.get("special_requirements", []),
-        "spots":                state.get("spots", []),
-        "restaurants":          state.get("restaurants", []),
-        "schedule":             state.get("schedule", []),
-        "accommodation":        state.get("accommodation", []),
-        "budget_estimate":      state.get("budget_estimate", []),
-    }, ensure_ascii=False).replace("'", "&#39;").replace('"', "&quot;")
+    plan_json = json.dumps(plan_payload(state), ensure_ascii=False).replace("'", "&#39;").replace('"', "&quot;")
 
     save_button = f'<div class="plan-save-area"><button class="plan-save-btn" data-plan="{plan_json}">このプランを保存する</button></div>'
 

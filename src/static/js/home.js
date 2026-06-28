@@ -8,10 +8,16 @@ const chatBox = document.getElementById('chat-box');
   let abortController = null;
   let currentRequestId = null;
 
-  // 生成中の「考え中」表示：段階メッセージを巡回させて待ち時間を楽しく見せる
+  // 生成中の段階表示。先頭(ご希望の読み取り)は条件の質問など短い応答もカバーし、
+  // 長い生成のときだけ交通→観光→…と前へ進め、最後で止める（ループしない＝進捗に見える）。
   const THINKING_STAGES = [
-    '行き先を調べています', '交通を手配しています', '観光スポットを探しています',
-    '宿を選んでいます', 'グルメを探しています', 'スケジュールを組んでいます', '仕上げています',
+    '🍀 ご希望を読み取っています',
+    '🚄 交通を調べています',
+    '🗺 観光スポットを選んでいます',
+    '🏨 宿を選んでいます',
+    '🍱 グルメを探しています',
+    '📅 スケジュールを組み立て中',
+    '✨ 仕上げています',
   ];
   let thinkingTimer = null;
 
@@ -21,10 +27,18 @@ const chatBox = document.getElementById('chat-box');
     if (el) el.textContent = THINKING_STAGES[0];
     typingIndicator.style.display = 'flex';
     if (thinkingTimer) clearInterval(thinkingTimer);
+    // 約5秒ごとに次の段階へ前進。最後（仕上げ）に達したら止める。
+    // 条件の質問など短い応答は最初の段階のまま終わるので、誤った段階を見せない。
     thinkingTimer = setInterval(() => {
-      i = (i + 1) % THINKING_STAGES.length;
-      if (el) el.textContent = THINKING_STAGES[i];
-    }, 2500);
+      if (i < THINKING_STAGES.length - 1) {
+        i++;
+        if (el) el.textContent = THINKING_STAGES[i];
+      }
+      if (i >= THINKING_STAGES.length - 1) {
+        clearInterval(thinkingTimer);
+        thinkingTimer = null;
+      }
+    }, 5000);
   }
 
   function stopThinking() {
@@ -43,9 +57,24 @@ const chatBox = document.getElementById('chat-box');
     chatBox.appendChild(el);
   }
 
-  // エラーや接続断をユーザーに知らせる（無反応で止まったように見せない）
-  function showSystemMessage(text) {
-    chatBox.appendChild(createMessageElement('ai', text));
+  // エラーや接続断をユーザーに知らせる（無反応で止まったように見せない）。
+  // retryMessage を渡すと「もう一度ためす」ボタンを添え、その文をそのまま再送する。
+  function showSystemMessage(text, retryMessage) {
+    const el = createMessageElement('ai', text);
+    if (retryMessage) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'retry-btn';
+      btn.textContent = '🍀 もう一度ためす';
+      btn.addEventListener('click', () => {
+        btn.disabled = true;
+        messageInput.value = retryMessage;
+        if (messageForm.requestSubmit) messageForm.requestSubmit();
+        else messageForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      });
+      el.appendChild(btn);
+    }
+    chatBox.appendChild(el);
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
@@ -201,9 +230,9 @@ const chatBox = document.getElementById('chat-box');
           } else if (data.status === 'ERROR') {
             settled = true;
             showSystemMessage(
-              'うまくプランを作れませんでした。\n\n'
-              + 'お手数ですが、もう一度「送信」ボタンを押してやり直してください（入力した内容はそのまま残してあります）。\n\n'
-              + '繰り返し失敗するときは、行き先・日程・人数などをもう少し具体的に書き換えると通りやすくなります🍀'
+              'うまくプランを作れませんでした…ごめんなさい🍀\n\n'
+              + '下のボタンからもう一度お試しください。繰り返すときは、行き先・日程・人数などを少し具体的に書き換えると通りやすくなります。',
+              message
             );
             restoreInput(message);
           }
@@ -214,8 +243,8 @@ const chatBox = document.getElementById('chat-box');
       if (!settled) {
         showSystemMessage(
           '完了までに時間がかかりすぎたか、通信が途切れたようです。\n\n'
-          + 'もう一度「送信」ボタンを押してお試しください（入力した内容はそのまま残してあります）。電波の良い場所だと安定します。\n\n'
-          + 'それでも続くときは、少し時間をおいてからお試しください🍀'
+          + '電波の良い場所で、下のボタンからもう一度お試しください🍀',
+          message
         );
         restoreInput(message);
       }
@@ -224,8 +253,8 @@ const chatBox = document.getElementById('chat-box');
         console.error('Error:', error);
         showSystemMessage(
           '通信エラーが発生しました。\n\n'
-          + 'ネットワーク接続を確認して、もう一度「送信」ボタンを押してください（入力した内容はそのまま残してあります）。\n\n'
-          + 'Wi-Fiやモバイル回線が安定した場所だと成功しやすいです🍀'
+          + 'ネットワークを確認して、下のボタンからもう一度お試しください🍀',
+          message
         );
         restoreInput(message);
       }

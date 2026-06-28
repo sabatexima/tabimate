@@ -6,6 +6,15 @@ function esc(str) {
     return n != null ? Number(n).toLocaleString() : '—';
   }
 
+  // 目的地の宿を楽天トラベルで探すリンク。アフィリエイトID(meta)があれば経由させる。
+  function bookingUrl(destination) {
+    const target = `https://travel.rakuten.co.jp/dsearch/?f_query=${encodeURIComponent((destination || '') + ' 宿')}`;
+    const aid = document.querySelector('meta[name="rakuten-aid"]')?.content;
+    return aid
+      ? `https://hb.afl.rakuten.co.jp/hgc/${aid}/?pc=${encodeURIComponent(target)}&m=${encodeURIComponent(target)}`
+      : target;
+  }
+
   // 評価済みの表示（1プラン1評価・上書き式）。「修正」で再編集できる（誤入力の救済）。
   function ratedRateHtml(rating, comment) {
     const stars = [1, 2, 3, 4, 5]
@@ -138,6 +147,9 @@ function esc(str) {
         ${accordion('🏨', '宿泊施設', plan.accommodation)}
         ${accordion('📅', 'スケジュール', plan.schedule)}
         ${accordion('💰', '費用見積もり', plan.budget_estimate)}
+      </div>
+      <div class="plan-book">
+        <a class="plan-book-btn" href="${bookingUrl(plan.destination)}" target="_blank" rel="noopener">🏨 ${esc(plan.destination)}の宿を探す</a>
       </div>
       ${mapSection}`;
   }

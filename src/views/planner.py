@@ -171,6 +171,18 @@ def saved_plans():
     return render_template("saved_plans.html")
 
 
+@planner.route("/terms")
+def terms():
+    """利用規約（ログイン不要）。"""
+    return render_template("terms.html")
+
+
+@planner.route("/privacy")
+def privacy():
+    """プライバシーポリシー（ログイン不要）。"""
+    return render_template("privacy.html")
+
+
 @planner.route('/send_message', methods=['POST'])
 @login_required
 def send_message():

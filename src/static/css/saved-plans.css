@@ -39,7 +39,7 @@
   }
 
   .plan-summary-block {
-    background: linear-gradient(135deg, #4fa83a 0%, #84d65f 100%);
+    background: var(--header-grad);
     color: white;
     padding: 14px 16px;
   }

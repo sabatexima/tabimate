@@ -11,6 +11,11 @@
 
 
   <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); margin-top: 30px;">
+    <div style="margin-bottom: 12px;">
+      <a href="{{ url_for('planner.terms') }}" style="font-size: 0.78em; opacity: 0.7;">利用規約</a>
+      <span style="opacity: 0.4; font-size: 0.78em;"> · </span>
+      <a href="{{ url_for('planner.privacy') }}" style="font-size: 0.78em; opacity: 0.7;">プライバシー</a>
+    </div>
     {% if session.get('user_name') %}
       <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 8px;">{{ session['user_name'] }}</div>
       <a href="{{ url_for('auth.logout') }}" style="font-size: 0.9em; opacity: 0.8;">ログアウト</a>

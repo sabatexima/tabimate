@@ -50,6 +50,13 @@
 }
 .memory-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(232, 136, 58, 0.35); }
 
+.welcome-foot {
+  text-align: center; margin-top: 36px; font-size: 0.8em;
+}
+.welcome-foot a { color: var(--text-muted); text-decoration: none; }
+.welcome-foot a:hover { text-decoration: underline; }
+.welcome-foot span { color: var(--text-muted); opacity: 0.5; margin: 0 6px; }
+
 .drift {
   position: absolute; font-size: 1.4em; opacity: 0.5; pointer-events: none;
   animation: drift 7s ease-in-out infinite;

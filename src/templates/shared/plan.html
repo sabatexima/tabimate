@@ -53,6 +53,9 @@
     {{ accordion('📅', 'スケジュール', plan.schedule) }}
     {{ accordion('💰', '費用見積もり', plan.budget_estimate) }}
   </div>
+  <div class="plan-book">
+    <a class="plan-book-btn" href="{{ booking_url }}" target="_blank" rel="noopener">🏨 {{ plan.destination }}の宿を探す</a>
+  </div>
   <div class="plan-map-section">
     {% if plan.spots %}
     <button class="plan-map-btn" type="button" id="shared-map-btn">🗺 地図で見る</button>

@@ -14,6 +14,8 @@
       --radius-pill: 20px;        /* ボタン・チップ */
       --shadow-card: 0 4px 16px rgba(120, 110, 90, 0.08);
       --shadow-soft: 0 2px 8px rgba(120, 110, 90, 0.06);
+      /* プランヘッダー等の緑グラデ。ビビッドなライムを避け、落ち着いた葉色に */
+      --header-grad: linear-gradient(135deg, #4a9d3a 0%, #6fb152 100%);
     }
     html, body {
       margin: 0;
@@ -188,6 +190,28 @@
         padding-top: 60px; /* ハンバーガーボタン分 */
       }
     }
+
+    /* 利用規約・プライバシーポリシーなどの文書ページ */
+    .legal { max-width: 760px; margin: 0 auto; padding: 8px 4px 48px; line-height: 1.85; }
+    .legal h1 { font-size: 1.5rem; margin: 0 0 6px; }
+    .legal .updated { color: var(--text-muted); font-size: 0.85em; margin: 0 0 24px; }
+    .legal h2 { font-size: 1.1rem; margin: 28px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+    .legal p, .legal li { font-size: 0.95em; color: var(--text-main); }
+    .legal ul { padding-left: 1.3em; }
+    .legal li { margin: 4px 0; }
+    .legal a { color: var(--primary-dark); }
+    .legal .back { display: inline-block; margin-bottom: 16px; color: var(--primary-dark); text-decoration: none; font-size: 0.9em; }
+    .legal .note { background: #fff7ec; border: 1px solid #f0d8b0; border-radius: 12px; padding: 12px 16px; font-size: 0.9em; }
+
+    /* 宿を探す（アフィリエイト）リンク。旅らしい温かみのある色で全カード共通 */
+    .plan-book { padding: 4px 16px 14px; }
+    .plan-book-btn {
+      display: inline-block; text-decoration: none;
+      background: #fff7ec; border: 1px solid #f0d8b0; color: #a9772f;
+      border-radius: 20px; padding: 8px 16px; font-size: 0.85em; font-weight: 700;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .plan-book-btn:hover { background: #fde6cd; transform: translateY(-1px); }
 
     /* 保存成功などで舞う🍀（cloverBurst が要素を生成） */
     .clover-burst {

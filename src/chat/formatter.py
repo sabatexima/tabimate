@@ -1,10 +1,25 @@
 """完成した旅行プラン状態を、チャットに表示するHTMLカードへ整形するモジュール。"""
 
 import json
+import os
+import urllib.parse
 from chat.logger import get_logger
 
 
 logger = get_logger("formatter")
+
+
+def booking_url(destination: str) -> str:
+    """目的地の宿を楽天トラベルで探すURL。RAKUTEN_AFFILIATE_ID があれば経由させる。
+
+    未設定でも通常の楽天トラベル検索URLとして機能する（収益化は後付け可能）。
+    """
+    target = "https://travel.rakuten.co.jp/dsearch/?f_query=" + urllib.parse.quote((destination or "") + " 宿")
+    aid = os.getenv("RAKUTEN_AFFILIATE_ID", "")
+    if aid:
+        enc = urllib.parse.quote(target, safe="")
+        return f"https://hb.afl.rakuten.co.jp/hgc/{aid}/?pc={enc}&m={enc}"
+    return target
 
 
 # プラン状態のうち、保存・再編集に必要なフィールドだけを取り出した辞書を作る。
@@ -102,6 +117,11 @@ def _format_plan(state: dict) -> str:
         footer = f'<div class="plan-warning"><strong>⚠️ 未承認終了（{esc(status)}）</strong><br>{esc(state.get("feedback", ""))}</div>'
 
     logger.info("フォーマット完了: status=%s", status)
+    book = (
+        f'<div class="plan-book"><a class="plan-book-btn" href="{booking_url(state.get("destination"))}" '
+        f'target="_blank" rel="noopener">🏨 {esc(state.get("destination"))}の宿を探す</a></div>'
+    )
+
     return header + f"""
   <div class="plan-accordion">
     {accordion("✨", "主要観光地", state.get("spots", []))}
@@ -110,6 +130,7 @@ def _format_plan(state: dict) -> str:
     {accordion("📅", "スケジュール", state.get("schedule", []))}
     {accordion("💰", "費用見積もり", state.get("budget_estimate", []))}
   </div>
+  {book}
   {footer}
   {edit_hint}
   {save_button}

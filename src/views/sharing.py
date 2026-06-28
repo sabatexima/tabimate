@@ -273,9 +273,11 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
         ensure_plan_coords(plan)
         # 旅行日の天気予報も共有閲覧に表示する（本人プランと体験を揃える）
         import weather
+        from chat.formatter import booking_url
         weather_days = weather.plan_forecast(plan)
         return render_template("shared/plan.html", plan=plan,
-                               weather_days=weather_days, share_token=share_token)
+                               weather_days=weather_days, share_token=share_token,
+                               booking_url=booking_url(plan.get("destination")))
     abort(404)
 
 

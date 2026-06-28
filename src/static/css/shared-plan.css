@@ -27,7 +27,7 @@
     overflow: hidden; box-shadow: var(--shadow-card); max-width: 860px;
   }
   .plan-summary-block {
-    background: linear-gradient(135deg, #4fa83a 0%, #84d65f 100%);
+    background: var(--header-grad);
     color: white; padding: 14px 16px;
   }
   .plan-title { font-size: 1.05em; font-weight: 700; margin-bottom: 8px; }

@@ -12,7 +12,7 @@
   <div class="welcome-hero">
     <span class="drift" style="left:10%; animation-delay:0s;">🍀</span>
     <span class="drift" style="right:12%; animation-delay:2.5s;">🍀</span>
-    <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="みつば">
+    <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ">
     <h1>{{ session.get('user_name') or 'あなた' }}さん、次はどこへ行く？</h1>
     <p class="lead">AIと話すだけで、旅のしおりができあがる。🍀</p>
     <a class="cta" href="{{ url_for('planner.chat') }}">✨ 新しい旅を計画する</a>
@@ -42,7 +42,7 @@
     <span class="drift" style="left:8%; animation-delay:0s;">🍀</span>
     <span class="drift" style="right:10%; animation-delay:2s;">🍀</span>
     <span class="drift" style="left:24%; animation-delay:4s;">🍀</span>
-    <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="みつば">
+    <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ">
     <h1>旅の「前」と「後」に、そっと寄り添う。</h1>
     <p class="lead">AIと話すだけで旅のプランができて、帰ったら写真が思い出の付箋になる。<br>やさしい旅の相棒「たびメイト」。</p>
     <a class="cta" href="{{ url_for('auth.login') }}">🍀 Googleでログインして始める</a>

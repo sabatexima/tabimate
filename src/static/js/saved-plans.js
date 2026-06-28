@@ -424,7 +424,7 @@ function esc(str) {
     container.style.display = 'block';
     container.innerHTML = `<div class="empty-state">
       <img class="empty-mate" src="/static/img/mate.png" alt="">
-      <p>まだ保存した旅はありません。<br>みつばと一緒に、最初の旅をつくろう🍀</p>
+      <p>まだ保存した旅はありません。<br>ちゃむと一緒に、最初の旅をつくろう🍀</p>
       <a class="empty-cta" href="/chat">✨ 最初の旅をつくる</a>
     </div>`;
   }

@@ -22,7 +22,7 @@
 .inspo .ttl-sub { display: block; font-size: 0.82em; font-weight: 400; opacity: 0.8; margin-top: 2px; }
 .inspo-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .chip {
-  background: #fff; border: 1px solid #e6dcc8; border-radius: 20px;
+  background: #fff; border: 1px solid var(--border); border-radius: var(--radius-pill);
   padding: 9px 16px; font-size: 0.9em; color: var(--text-main); text-decoration: none;
   transition: background 0.12s, transform 0.12s;
 }

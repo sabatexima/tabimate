@@ -1,7 +1,8 @@
+/* 文字色は全ページ共通の暖色トーン（layout.css）に合わせる（寒色グレーをやめて統一） */
 :root {
     --primary-color: #4fa83a;
-    --text-main: #2d3436;
-    --text-muted: #636e72;
+    --text-main: #4a4540;
+    --text-muted: #8a817a;
   }
 
   .page-header {
@@ -30,11 +31,11 @@
     font-size: 0.85em;
   }
   .plan-card {
-    background: #fff;
-    border-radius: 16px;
-    border: 1px solid rgba(79,168,58,0.15);
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
     overflow: hidden;
-    box-shadow: 0 6px 18px rgba(120,110,90,0.10);
+    box-shadow: var(--shadow-card);
   }
 
   .plan-summary-block {

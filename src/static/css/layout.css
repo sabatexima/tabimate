@@ -1,11 +1,19 @@
 :root {
       --primary-color: #4fa83a;
+      --primary-dark: #3b8a2c;    /* 文字・濃いめのアクセント */
       --accent-pink: #f08ba0;     /* みつばの耳のやわらかいピンク */
       --glow-cream: #f6f6a5;      /* 四つ葉まわりの淡い光 */
       --text-main: #4a4540;
       --text-muted: #8a817a;
       /* クリーム→淡い若葉色のやわらかいグラデ（全ページ共通の背景） */
       --bg-gradient: linear-gradient(180deg, #fdfaf2 0%, #f4f6e9 55%, #edf3de 100%);
+      /* 統一感のための共通トークン（面・境界線・角丸・影） */
+      --surface: #fffdf8;         /* カード等の面 */
+      --border: #e7ddca;          /* やわらかい共通の境界線 */
+      --radius: 16px;             /* カードの角丸 */
+      --radius-pill: 20px;        /* ボタン・チップ */
+      --shadow-card: 0 4px 16px rgba(120, 110, 90, 0.08);
+      --shadow-soft: 0 2px 8px rgba(120, 110, 90, 0.06);
     }
     html, body {
       margin: 0;
@@ -15,6 +23,15 @@
         Meiryo, sans-serif;
       color: var(--text-main);
       background: var(--bg-gradient) fixed no-repeat;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    /* キーボード操作時だけ出る、世界観に合うフォーカスリング（アクセシビリティ＋上品さ） */
+    :focus-visible {
+      outline: 2px solid rgba(79, 168, 58, 0.55);
+      outline-offset: 2px;
+      border-radius: 6px;
     }
     /* ページ共通の中央寄せコンテナ（各画面で利用） */
     .container { max-width: 1040px; margin: 0 auto; }

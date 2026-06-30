@@ -58,6 +58,10 @@ def estimate_cost(usage_by_model: dict):
 
 
 def web_search(query: str, min_score: float = 0.3) -> str:
+    """Tavily でウェブ検索し、スコアが min_score 以上の本文を改行連結して返す。
+
+    エージェントが実在スポット選定の根拠にする参考テキスト。失敗時・該当なしは空文字。
+    """
     log.debug("web_search start query=%s min_score=%s", query, min_score)
     try:
         results = _search.invoke(query) or []
@@ -76,6 +80,11 @@ def web_search(query: str, min_score: float = 0.3) -> str:
 
 
 def build_search_context(queries: list[str], min_score: float = 0.3) -> str:
+    """複数クエリの検索結果を1つの「参考情報」プロンプト断片にまとめて返す。
+
+    各クエリを並列検索し、結果のある分だけを見出し付きで連結する。全滅なら空文字。
+    エージェントのプロンプト末尾に添えて、実在確認の根拠として使う。
+    """
     # 複数の検索クエリは互いに独立なので並列実行して待ち時間を短縮する（順序は維持）
     if not queries:
         return ""
@@ -90,6 +99,11 @@ def build_search_context(queries: list[str], min_score: float = 0.3) -> str:
 
 
 def invoke_with_retry(structured_llm, prompt: str):
+    """LLM 呼び出しを最大5回までリトライする。
+
+    レート制限(429/503/quota等)は指数バックオフ、接続エラーは線形バックオフで待機。
+    それ以外のエラー、または上限到達時は最後の例外を送出する。
+    """
     for attempt in range(5):
         try:
             return structured_llm.invoke(prompt)

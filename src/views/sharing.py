@@ -118,6 +118,7 @@ def list_shares(resource_type: str, resource_id: int):
 @share.route("/share/<resource_type>/<int:resource_id>/link", methods=["POST"])
 @login_required
 def create_link(resource_type: str, resource_id: int):
+    """所有者が公開リンク（URLを知れば誰でも閲覧可）を発行する。常に閲覧専用。"""
     if resource_type not in sharing.RESOURCE_TYPES:
         abort(404)
     _require_owner(resource_type, resource_id)
@@ -133,6 +134,7 @@ def create_link(resource_type: str, resource_id: int):
 @share.route("/share/link/<int:link_id>", methods=["DELETE"])
 @login_required
 def revoke_link(link_id: int):
+    """公開リンクを無効化する（所有者のみ）。"""
     ok = sharing.delete_link(link_id, session["user_id"])
     return jsonify({"deleted": ok})
 
@@ -140,6 +142,7 @@ def revoke_link(link_id: int):
 @share.route("/share/<resource_type>/<int:resource_id>/grant", methods=["POST"])
 @login_required
 def add_grant(resource_type: str, resource_id: int):
+    """指定メール宛に閲覧/編集権限を付与する（編集はログイン本人に限定）。"""
     if resource_type not in sharing.RESOURCE_TYPES:
         abort(404)
     _require_owner(resource_type, resource_id)
@@ -161,6 +164,7 @@ def add_grant(resource_type: str, resource_id: int):
 @share.route("/share/grant/<int:grant_id>", methods=["DELETE"])
 @login_required
 def revoke_grant(grant_id: int):
+    """所有者が付与済みのメール共有権限を取り消す。"""
     ok = sharing.delete_grant(grant_id, session["user_id"])
     return jsonify({"deleted": ok})
 
@@ -301,6 +305,7 @@ def _require_trip_edit(trip_id: int):
 
 @share.route("/shared/trip/<int:trip_id>/photos", methods=["POST"])
 def shared_upload_photos(trip_id: int):
+    """編集権限を持つ共有相手が、共有された旅に写真を追加する。"""
     import os
     trip, owner_id = _require_trip_edit(trip_id)
     files = request.files.getlist("photos") or request.files.getlist("photo")
@@ -351,6 +356,7 @@ def shared_upload_photos(trip_id: int):
 
 @share.route("/shared/trip/<int:trip_id>/stickers/generate", methods=["POST"])
 def shared_generate_stickers(trip_id: int):
+    """編集権限を持つ共有相手が、共有された旅の付箋をAI生成する。"""
     _require_trip_edit(trip_id)
     photos = repo.get_photos(trip_id)
     if not photos:

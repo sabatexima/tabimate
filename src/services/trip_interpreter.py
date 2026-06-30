@@ -128,6 +128,7 @@ def _invoke(schema, prompt, tag: str):
 
 
 def _features_block(features: dict) -> str:
+    """集計済み特徴量を、プロンプトに埋め込む読みやすいJSON文字列に整形する。"""
     return json.dumps(features, ensure_ascii=False, indent=2)
 
 

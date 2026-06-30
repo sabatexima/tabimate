@@ -246,6 +246,10 @@ class _PlanEditIntent(BaseModel):
 
 
 def _as_list(value) -> list:
+    """値をリストに正規化する。None/空は []、リストはそのまま、単一値は1要素のリストに。
+
+    保存プランのフィールドが文字列で入っている旧データにも備えるための保険。
+    """
     if isinstance(value, list):
         return value
     if value in (None, ""):

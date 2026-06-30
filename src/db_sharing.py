@@ -61,15 +61,18 @@ CREATE TABLE IF NOT EXISTS share_grants (
 
 
 def _row_to_dict(row) -> dict:
+    """SQLAlchemy の行を素の dict に変換する。"""
     return dict(row._mapping)
 
 
 def _ensure_all(conn) -> None:
+    """共有機能のテーブル（公開リンク・個別権限）を作成する。"""
     conn.execute(text(_CREATE_LINKS_TABLE))
     conn.execute(text(_CREATE_GRANTS_TABLE))
 
 
 def _norm_email(email: str) -> str:
+    """メールを正規化（前後空白除去＋小文字化）して突き合わせの揺れを防ぐ。"""
     return (email or "").strip().lower()
 
 

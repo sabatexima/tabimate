@@ -36,6 +36,7 @@ _SIGN_MAX_WORKERS = 8    # 並列署名のワーカー上限
 
 
 def _get_gcs_client():
+    """GCSクライアントを遅延生成して使い回す（初回アクセス時のみ生成）。"""
     global _gcs_client
     if _gcs_client is None:
         from google.cloud import storage as gcs
@@ -67,10 +68,12 @@ def _get_signing_info():
 
 
 def using_gcs() -> bool:
+    """GCSバケットが設定されていれば True（未設定ならローカルFSにフォールバック）。"""
     return bool(_GCS_BUCKET)
 
 
 def _make_key(user_id: str, trip_id: int, filename: str) -> str:
+    """写真の保存キーを生成する（trips/旅ID/ユーザーID/ランダム.拡張子）。衝突しないようUUID付き。"""
     ext = Path(filename).suffix.lower() or ".bin"
     return f"trips/{trip_id}/{user_id}/{uuid.uuid4().hex}{ext}"
 
@@ -147,6 +150,7 @@ def _cached_url(storage_path: str) -> str | None:
 
 
 def _store_url(storage_path: str, url: str) -> None:
+    """署名付きURLを失効少し手前を期限としてキャッシュする（再署名の頻度を下げる）。"""
     with _url_cache_lock:
         _url_cache[storage_path] = (url, time.time() + max(_SIGNED_URL_TTL - _URL_CACHE_MARGIN, 60))
 

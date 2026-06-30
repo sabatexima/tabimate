@@ -42,6 +42,7 @@ def init_oauth(app):
 
 @auth.route('/login')
 def login():
+    """Google の認証画面へリダイレクトしてOAuthフローを開始する。"""
     redirect_uri = url_for('auth.callback', _external=True)
     logger.info("ログイン開始: redirect_uri=%s", redirect_uri)
     return oauth.google.authorize_redirect(redirect_uri)
@@ -75,6 +76,7 @@ def callback():
 
 @auth.route('/logout')
 def logout():
+    """セッションを破棄してホームへ戻る。"""
     user_email = session.get('user_email')
     session.clear()
     logger.info("ログアウト: email=%s", user_email)

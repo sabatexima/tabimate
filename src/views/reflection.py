@@ -27,6 +27,7 @@ _ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif"}
 
 
 def _uid() -> str:
+    """現在ログイン中のユーザーIDを返す（短縮ヘルパ）。"""
     return session.get("user_id")
 
 
@@ -66,6 +67,7 @@ def _collect_images_for_stickers(photos: list, sample_n: int = 8) -> list:
 @reflection.route("/")
 @login_required
 def index():
+    """旅の振り返り一覧（自分の旅＋共有された旅）を表示する。"""
     trips = repo.get_trips(_uid())
 
     # 自分宛に共有された旅も同じ画面にまとめて表示する
@@ -94,6 +96,7 @@ def index():
 @reflection.route("/trips/<int:trip_id>")
 @login_required
 def trip_detail(trip_id: int):
+    """1つの旅の詳細（写真タイムライン・付箋など）を表示する。"""
     trip = _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     # 配信URLを付与（一覧はサムネイル、拡大は原寸。署名はキャッシュ＋並列でまとめて取得）
@@ -145,6 +148,7 @@ def trip_detail(trip_id: int):
 @reflection.route("/trips", methods=["POST"])
 @login_required
 def create_trip():
+    """新しい旅（振り返り）を作成する。タイトル必須。"""
     data = request.get_json(silent=True) or request.form
     title = (data.get("title") or "").strip()
     if not title:
@@ -260,6 +264,7 @@ def delete_trip(trip_id: int):
 @reflection.route("/trips/<int:trip_id>/photos", methods=["POST"])
 @login_required
 def upload_photos(trip_id: int):
+    """旅に写真を複数アップロードし、保存しつつEXIF（撮影日時・位置）を抽出する。"""
     _require_trip(trip_id)
     files = request.files.getlist("photos") or request.files.getlist("photo")
     if not files:
@@ -330,6 +335,7 @@ def delete_photo(trip_id: int, photo_id: int):
 @reflection.route("/photo/<path:storage_path>")
 @login_required
 def serve_local_photo(storage_path: str):
+    """ローカル保存の写真を本人にのみ配信する（GCS運用時は使わない）。"""
     # storage_path 形式: trips/{trip_id}/{user_id}/{uuid}.ext
     # 本人の写真のみ配信（パスの user_id セグメントで照合）
     parts = storage_path.split("/")
@@ -347,6 +353,7 @@ def serve_local_photo(storage_path: str):
 @reflection.route("/trips/<int:trip_id>/stickers/generate", methods=["POST"])
 @login_required
 def generate_stickers(trip_id: int):
+    """写真から特徴量を集計し、AIで旅の思い出を「付箋」の言葉に生成して保存する。"""
     _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     if not photos:
@@ -364,6 +371,7 @@ def generate_stickers(trip_id: int):
 @reflection.route("/trips/<int:trip_id>/stickers", methods=["GET"])
 @login_required
 def list_stickers(trip_id: int):
+    """旅の付箋一覧をJSONで返す。"""
     _require_trip(trip_id)
     return jsonify({"stickers": repo.get_stickers(trip_id)})
 
@@ -371,6 +379,7 @@ def list_stickers(trip_id: int):
 @reflection.route("/trips/<int:trip_id>/stickers/<int:sticker_id>", methods=["DELETE"])
 @login_required
 def delete_sticker(trip_id: int, sticker_id: int):
+    """旅の付箋を1枚削除する。"""
     _require_trip(trip_id)
     ok = repo.delete_sticker(sticker_id, trip_id)
     return jsonify({"deleted": ok})

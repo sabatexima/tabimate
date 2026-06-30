@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS trip_favorites (
 
 
 def _row_to_dict(row) -> dict:
+    """SQLAlchemy の行を素の dict に変換する。"""
     return dict(row._mapping)
 
 
@@ -130,6 +131,7 @@ def _migrate_favorites_once(conn) -> None:
 
 
 def _ensure_all(conn) -> None:
+    """この機能で使う全テーブルを作成し、既存DBには不足列を遅延追加・移行する。"""
     conn.execute(text(_CREATE_TRIPS_TABLE))
     conn.execute(text(_CREATE_PHOTOS_TABLE))
     conn.execute(text(_CREATE_STICKERS_TABLE))
@@ -146,6 +148,7 @@ def _ensure_all(conn) -> None:
 # trips
 # ----------------------------------------------------------------------
 def create_trip(user_id: str, title: str, start_date=None, end_date=None) -> int:
+    """旅（振り返り）を新規作成し、その id を返す。"""
     with get_engine().begin() as conn:
         _ensure_all(conn)
         result = conn.execute(
@@ -159,6 +162,7 @@ def create_trip(user_id: str, title: str, start_date=None, end_date=None) -> int
 
 
 def get_trip(trip_id: int, user_id: str) -> dict | None:
+    """本人の旅を1件返す（他人の旅は取得不可）。無ければ None。"""
     with get_engine().connect() as conn:
         _ensure_all(conn)
         row = conn.execute(
@@ -368,6 +372,7 @@ def update_trip_dates(trip_id: int, user_id: str, start_date, end_date) -> bool:
 
 
 def delete_trip(trip_id: int, user_id: str) -> bool:
+    """本人の旅を関連データ（写真・付箋・お気に入り）ごと削除する。消せれば True。"""
     with get_engine().begin() as conn:
         _ensure_all(conn)
         # 関連データも掃除
@@ -386,6 +391,7 @@ def delete_trip(trip_id: int, user_id: str) -> bool:
 # ----------------------------------------------------------------------
 def add_photo(trip_id: int, user_id: str, storage_path: str,
               taken_at=None, lat=None, lng=None, caption=None) -> int:
+    """旅に写真メタデータ（保存先・撮影日時・位置等）を1件追加し、その id を返す。"""
     with get_engine().begin() as conn:
         _ensure_all(conn)
         result = conn.execute(
@@ -424,6 +430,7 @@ def delete_photo(photo_id: int, trip_id: int) -> str | None:
 
 
 def get_photos(trip_id: int) -> list:
+    """旅の写真を撮影日時の古い順で返す（タイムライン表示用）。"""
     with get_engine().connect() as conn:
         _ensure_all(conn)
         rows = conn.execute(

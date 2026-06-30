@@ -20,6 +20,11 @@ _RATE_LIMIT_SEC = 1.0
 
 
 def _query_nominatim(q: str, viewbox: str | None = None) -> dict | None:
+    """Nominatim に1回問い合わせ、先頭ヒットの {"lat","lng"} を返す（日本に限定）。
+
+    viewbox 指定時はその範囲を優先（bounded=0 なので範囲外も除外せず順位補正のみ）。
+    失敗・該当なしは None。
+    """
     try:
         params = {"q": q, "format": "json", "limit": 1, "countrycodes": "jp"}
         if viewbox:

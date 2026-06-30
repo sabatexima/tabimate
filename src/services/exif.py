@@ -23,6 +23,7 @@ def _to_degrees(value) -> float:
 
 
 def _parse_dt(raw: str):
+    """EXIF の撮影日時文字列（"YYYY:MM:DD HH:MM:SS" 等）を datetime に変換する。不正なら None。"""
     if not raw:
         return None
     raw = str(raw).strip()

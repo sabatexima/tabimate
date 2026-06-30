@@ -25,4 +25,5 @@ logger.addHandler(_fh)
 
 
 def get_logger(name: str = "") -> logging.Logger:
+    """"travel_planner" 配下の名前空間付きロガーを返す（全モジュール共通の入口）。"""
     return logging.getLogger(f"travel_planner.{name}" if name else "travel_planner")

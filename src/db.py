@@ -41,6 +41,7 @@ _connector = None
 
 
 def _get_connector():
+    """Cloud SQL Connector を遅延生成して使い回す（終了時に自動クローズ登録）。"""
     global _connector
     if _connector is None:
         import atexit
@@ -56,6 +57,7 @@ def get_engine():
 
 
 def _get_engine():
+    """共有エンジンを遅延生成して返す。接続先は環境変数で Cloud SQL / 外部MySQL を切替。"""
     global _engine
     if _engine is not None:
         return _engine
@@ -142,6 +144,7 @@ _plan_columns_ensured = False
 
 
 def _ensure_plan_columns(conn) -> None:
+    """既存DBに後から増えた travel_plans の列を不足分だけ追加する（初回のみ実行）。"""
     global _plan_columns_ensured
     if _plan_columns_ensured:
         return
@@ -179,6 +182,7 @@ _chat_columns_ensured = False
 
 
 def _ensure_chat_columns(conn) -> None:
+    """既存DBの chat_messages に plan_json 列が無ければ追加する（初回のみ実行）。"""
     global _chat_columns_ensured
     if _chat_columns_ensured:
         return
@@ -194,6 +198,7 @@ def _ensure_chat_columns(conn) -> None:
 
 
 def _row_to_dict(row) -> dict:
+    """SQLAlchemy の行オブジェクトを素の dict に変換する。"""
     return dict(row._mapping)
 
 
@@ -233,6 +238,7 @@ def _normalize_plan_row(d: dict) -> dict:
 
 
 def get_travel_plans(google_user_id: str) -> list:
+    """指定ユーザーの保存プランを新しい順で全件返す（JSON列はパース済み）。"""
     with _get_engine().connect() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
         _ensure_plan_columns(conn)
@@ -419,6 +425,7 @@ def update_plan_custom_pins(plan_id: int, google_user_id: str, custom_pins) -> b
 
 
 def delete_travel_plan(plan_id: int, google_user_id: str) -> bool:
+    """本人のプランを削除する。削除できれば True（他人のプランは消せない）。"""
     with _get_engine().begin() as conn:
         result = conn.execute(
             text("DELETE FROM travel_plans WHERE id = :id AND google_user_id = :uid"),
@@ -428,6 +435,7 @@ def delete_travel_plan(plan_id: int, google_user_id: str) -> bool:
 
 
 def get_chat_messages(google_user_id: str) -> list:
+    """指定ユーザーのチャット履歴を古い順（会話順）で返す。"""
     with _get_engine().connect() as conn:
         conn.execute(text(_CREATE_CHAT_TABLE))
         rows = conn.execute(
@@ -467,6 +475,7 @@ def get_last_plan(google_user_id: str) -> dict | None:
 
 def save_chat_message(google_user_id: str, role: str, content: str, request_id: str = None,
                       plan_json: dict = None) -> None:
+    """チャットメッセージを1件保存する。AIプラン提示時は plan_json に構造化データを併せて保存する。"""
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_CHAT_TABLE))
         _ensure_chat_columns(conn)
@@ -481,6 +490,7 @@ def save_chat_message(google_user_id: str, role: str, content: str, request_id: 
 
 
 def clear_chat_messages(google_user_id: str) -> None:
+    """指定ユーザーのチャット履歴を全削除する（「新しいチャット」/リセット用）。"""
     with _get_engine().begin() as conn:
         conn.execute(
             text("DELETE FROM chat_messages WHERE google_user_id = :uid"),
@@ -489,6 +499,7 @@ def clear_chat_messages(google_user_id: str) -> None:
 
 
 def delete_chat_messages_by_request(google_user_id: str, request_id: str) -> None:
+    """特定リクエストのメッセージだけ削除する（生成のキャンセル/失敗時の巻き戻し用）。"""
     with _get_engine().begin() as conn:
         conn.execute(
             text(
@@ -499,6 +510,7 @@ def delete_chat_messages_by_request(google_user_id: str, request_id: str) -> Non
 
 
 def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = None) -> int:
+    """プラン状態を travel_plans に保存し、新規行の id を返す。"""
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
         result = conn.execute(

@@ -16,6 +16,7 @@ logger = get_logger("services.features")
 
 
 def _parse_dt(v):
+    """様々な書式の日時値を datetime に変換する（DB文字列・EXIF形式等）。解釈不能なら None。"""
     if v is None:
         return None
     if isinstance(v, datetime):
@@ -29,6 +30,7 @@ def _parse_dt(v):
 
 
 def _haversine_km(lat1, lng1, lat2, lng2) -> float:
+    """2地点の緯度経度からヒュベニ（haversine）距離をkmで返す（移動量の集計用）。"""
     r = 6371.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp = math.radians(lat2 - lat1)
@@ -38,6 +40,7 @@ def _haversine_km(lat1, lng1, lat2, lng2) -> float:
 
 
 def _time_band(hour: int) -> str:
+    """時刻(0-23)を「早朝/午前/昼/夕方/夜/深夜」の時間帯ラベルに変換する。"""
     if 5 <= hour < 9:
         return "早朝"
     if 9 <= hour < 12:

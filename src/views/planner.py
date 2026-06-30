@@ -111,6 +111,7 @@ _GEO_RATE_LIMIT = 40
 
 
 def _geo_rate_limited(user_id: str) -> bool:
+    """地図・座標・天気など外部API系の連打を抑える。上限超過なら True。"""
     now = time.time()
     with _rate_lock:
         ts = _geo_rate_log[user_id]
@@ -168,6 +169,7 @@ def chat():
 @planner.route("/saved_plans")
 @login_required
 def saved_plans():
+    """保存済みプラン一覧の画面を表示する。"""
     return render_template("saved_plans.html")
 
 
@@ -265,6 +267,7 @@ def send_message():
 @planner.route('/abort_request', methods=['POST'])
 @login_required
 def abort_request():
+    """生成中リクエストの中断シグナルを送り、そのメッセージを削除する。"""
     from db import delete_chat_messages_by_request
 
     user_id = session['user_id']
@@ -279,6 +282,7 @@ def abort_request():
 @planner.route('/reset_chat', methods=['POST'])
 @login_required
 def reset_chat():
+    """チャット履歴を全消去して新しい相談を始められるようにする。"""
     from db import clear_chat_messages
     clear_chat_messages(session['user_id'])
     logger.info("チャット履歴をリセット: user_id=%s", session['user_id'])
@@ -288,6 +292,7 @@ def reset_chat():
 @planner.route('/get_messages')
 @login_required
 def get_messages():
+    """ログイン中ユーザーのチャット履歴をJSONで返す（画面復元用）。"""
     from db import get_chat_messages
     return json.dumps(get_chat_messages(session['user_id'])), 200, {'Content-Type': 'application/json'}
 
@@ -295,6 +300,7 @@ def get_messages():
 @planner.route('/save_plan', methods=['POST'])
 @login_required
 def save_plan():
+    """チャットで作ったプランを保存する（座標は遅延取得のためここでは取らない）。"""
     try:
         plan = request.get_json(force=True)
         from db import save_travel_plan
@@ -315,6 +321,7 @@ def save_plan():
 @planner.route('/delete_plan/<int:plan_id>', methods=['DELETE'])
 @login_required
 def delete_plan(plan_id):
+    """本人の保存プランを削除する。"""
     try:
         from db import delete_travel_plan
         deleted = delete_travel_plan(plan_id, session['user_id'])
@@ -642,6 +649,7 @@ def plan_geo(plan_id):
 @planner.route('/get_my_plans')
 @login_required
 def get_my_plans():
+    """ログイン中ユーザーの保存プラン一覧をJSONで返す。"""
     try:
         from db import get_travel_plans
         plans = get_travel_plans(session['user_id'])

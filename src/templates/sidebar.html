@@ -10,17 +10,17 @@
   <a href="{{ url_for('reflection.index') }}">旅の振り返り</a>
 
 
-  <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); margin-top: 30px;">
-    <div style="margin-bottom: 12px;">
-      <a href="{{ url_for('planner.terms') }}" style="font-size: 0.78em; opacity: 0.7;">利用規約</a>
-      <span style="opacity: 0.4; font-size: 0.78em;"> · </span>
-      <a href="{{ url_for('planner.privacy') }}" style="font-size: 0.78em; opacity: 0.7;">プライバシー</a>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-links">
+      <a href="{{ url_for('planner.terms') }}">利用規約</a>
+      <span> · </span>
+      <a href="{{ url_for('planner.privacy') }}">プライバシー</a>
     </div>
     {% if session.get('user_name') %}
-      <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 8px;">{{ session['user_name'] }}</div>
-      <a href="{{ url_for('auth.logout') }}" style="font-size: 0.9em; opacity: 0.8;">ログアウト</a>
+      <div class="sidebar-user">{{ session['user_name'] }}</div>
+      <a href="{{ url_for('auth.logout') }}" class="sidebar-logout">ログアウト</a>
     {% else %}
-      <a href="{{ url_for('auth.login') }}" style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+      <a href="{{ url_for('auth.login') }}" class="sidebar-login">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 110-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0012.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-.013z"/></svg>
         Googleでログイン
       </a>

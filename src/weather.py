@@ -94,13 +94,21 @@ def forecast(lat, lng, start: date, end: date) -> list:
 
 
 def plan_forecast(plan: dict) -> list:
-    """保存/共有プランの目的地（最初のスポット座標）と旅行日から予報を返す。"""
-    coords = plan.get('spot_coords') or []
-    loc = next((c for c in coords if c.get('lat') is not None and c.get('lng') is not None), None)
-    if not loc:
-        return []
+    """保存/共有プランの目的地と旅行日から予報を返す。
+
+    位置は保存済みスポット座標(spot_coords)の先頭を使うが、座標がまだ無い
+    （地図を一度も開いていない）プランでも天気を出せるよう、無ければ目的地名を
+    ジオコーディングして中心座標を代用する。天気に必要なのは1地点だけ。
+    """
     start = parse_date(plan.get('travel_date'))
     if not start:
+        return []
+    coords = plan.get('spot_coords') or []
+    loc = next((c for c in coords if c.get('lat') is not None and c.get('lng') is not None), None)
+    if not loc and plan.get('destination'):
+        from geocoding import geocode_one
+        loc = geocode_one(plan['destination'])  # {"lat","lng"} もしくは None
+    if not loc:
         return []
     end = start + timedelta(days=_num_days(plan.get('duration')) - 1)
     return forecast(loc['lat'], loc['lng'], start, end)

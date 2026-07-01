@@ -11,11 +11,6 @@
 
 
   <div class="sidebar-footer">
-    <div class="sidebar-footer-links">
-      <a href="{{ url_for('planner.terms') }}">利用規約</a>
-      <span> · </span>
-      <a href="{{ url_for('planner.privacy') }}">プライバシー</a>
-    </div>
     {% if session.get('user_name') %}
       <div class="sidebar-user">{{ session['user_name'] }}</div>
       <a href="{{ url_for('auth.logout') }}" class="sidebar-logout">ログアウト</a>
@@ -25,6 +20,11 @@
         Googleでログイン
       </a>
     {% endif %}
+    <div class="sidebar-footer-links">
+      <a href="{{ url_for('planner.terms') }}">利用規約</a>
+      <span> · </span>
+      <a href="{{ url_for('planner.privacy') }}">プライバシー</a>
+    </div>
   </div>
 </div>
 

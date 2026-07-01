@@ -163,10 +163,11 @@
       border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
+    /* アカウント操作の下に置く、最下部の控えめな法的リンク */
     .sidebar-footer-links {
-      margin-bottom: 12px;
+      margin-top: 14px;
       font-size: 0.78em;
-      opacity: 0.7;
+      opacity: 0.6;
     }
 
     .sidebar-footer-links a {

@@ -163,11 +163,12 @@
       border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
-    /* アカウント操作の下に置く、最下部の控えめな法的リンク */
+    /* 最下部の注記。中央寄せ＋細字で、左寄せのメニュー/アカウントと役割を分ける */
     .sidebar-footer-links {
-      margin-top: 14px;
-      font-size: 0.78em;
-      opacity: 0.6;
+      margin-top: 18px;
+      text-align: center;
+      font-size: 0.72em;
+      opacity: 0.5;
     }
 
     .sidebar-footer-links a {

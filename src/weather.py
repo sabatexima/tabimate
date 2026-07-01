@@ -4,6 +4,8 @@
 予報が取れるのは概ね当日〜16日先まで。範囲外・日付不明・座標不明なら空を返す。
 """
 import re
+import threading
+import time
 from datetime import date, timedelta
 
 import requests
@@ -93,6 +95,28 @@ def forecast(lat, lng, start: date, end: date) -> list:
     return days
 
 
+# 目的地名→中心座標のプロセス内キャッシュ。保存プラン画面は全プランの天気を
+# 並列で取りに来るため、キャッシュ無しだと座標未生成のプランごとに毎回
+# Nominatim（規約1req/s）を叩いてしまう。失敗(None)もキャッシュして連打を防ぐ。
+_DEST_CACHE: dict = {}
+_DEST_CACHE_TTL = 6 * 3600  # 秒。目的地の座標はほぼ不変なので長めでよい
+_dest_lock = threading.Lock()
+
+
+def _dest_center(destination: str) -> dict | None:
+    """目的地名を中心座標に変換する（TTLキャッシュ付き）。"""
+    now = time.time()
+    with _dest_lock:
+        hit = _DEST_CACHE.get(destination)
+        if hit and now - hit[1] < _DEST_CACHE_TTL:
+            return hit[0]
+    from geocoding import geocode_one
+    loc = geocode_one(destination)  # {"lat","lng"} もしくは None
+    with _dest_lock:
+        _DEST_CACHE[destination] = (loc, now)
+    return loc
+
+
 def plan_forecast(plan: dict) -> list:
     """保存/共有プランの目的地と旅行日から予報を返す。
 
@@ -106,8 +130,7 @@ def plan_forecast(plan: dict) -> list:
     coords = plan.get('spot_coords') or []
     loc = next((c for c in coords if c.get('lat') is not None and c.get('lng') is not None), None)
     if not loc and plan.get('destination'):
-        from geocoding import geocode_one
-        loc = geocode_one(plan['destination'])  # {"lat","lng"} もしくは None
+        loc = _dest_center(plan['destination'])
     if not loc:
         return []
     end = start + timedelta(days=_num_days(plan.get('duration')) - 1)

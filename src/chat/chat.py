@@ -67,7 +67,8 @@ _PLAN_PLACEHOLDER = "[旅行プランを生成しました]"
 # 「あと◯つで完成！ 🍀…・」進捗プレフィックス（_with_progress が付与する行）。
 # これがLLMへの履歴に混ざると、LLMが真似て自分の返答にも付け、二重表示になる。
 # そのため LLM入力からは剥がし、生成された質問文にも紛れ込んでいれば剥がす。
-_PROGRESS_PREFIX_RE = re.compile(r'^あと\d+つで完成[！!][^\n]*\n\n')
+# 改行はコード付与時は2つだが、LLMが模倣した行は1つのことがあるため \n+ で許容する。
+_PROGRESS_PREFIX_RE = re.compile(r'^あと\d+つで完成[！!][^\n]*\n+')
 
 
 def _strip_progress(text):

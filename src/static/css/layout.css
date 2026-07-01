@@ -185,16 +185,35 @@
       opacity: 1;
     }
 
+    /* ログイン中アカウント: 名前（左）＋ログアウト（右の小さなアクション）を1行に */
+    .sidebar-account {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 4px;
+    }
+
     .sidebar-user {
-      font-size: 0.85em;
-      opacity: 0.8;
-      margin-bottom: 8px;
-      padding: 0 12px;
+      flex: 1;
+      min-width: 0;
+      font-size: 0.9em;
+      font-weight: 600;
+      opacity: 0.92;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .sidebar-logout {
-      font-size: 0.9em !important;
-      opacity: 0.8;
+      flex-shrink: 0;
+      margin: 0 !important;
+      padding: 4px 10px !important;
+      font-size: 0.78em !important;
+      opacity: 0.75;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .sidebar-logout:hover {
+      opacity: 1;
     }
 
     .sidebar-login {

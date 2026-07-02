@@ -498,12 +498,10 @@ def _build_plan_ics(plan: dict) -> str:
         return (str(s or '').replace('\\', '\\\\').replace(';', '\\;')
                 .replace(',', '\\,').replace('\n', '\\n'))
 
-    # 旅行日の抽出（YYYY-MM-DD / YYYY/MM/DD / YYYY年M月D日）。取れなければ今日。
-    m = re.search(r'(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})', str(plan.get('travel_date') or ''))
-    try:
-        start = date(int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else date.today()
-    except ValueError:
-        start = date.today()
+    # 旅行日の抽出。年なし（7/2等）も含め weather.parse_date に一本化する
+    # （独自の正規表現だと年なし日付が「今日」に化けて誤った予定が作られる）。
+    import weather
+    start = weather.parse_date(plan.get('travel_date')) or date.today()
     # 期間 → 日数（「N泊」→ N+1日、それ以外は1日）
     nm = re.search(r'(\d+)\s*泊', str(plan.get('duration') or ''))
     end = start + timedelta(days=(int(nm.group(1)) + 1 if nm else 1))

@@ -62,6 +62,28 @@ def _too_large(_e):
     return jsonify({"error": "アップロードできるサイズを超えています。枚数を減らすか分けてお試しください。"}), 413
 
 
+@app.errorhandler(404)
+def _not_found(_e):
+    """存在しないURL・削除済みリソース用の、世界観に合わせた404ページ。"""
+    from flask import render_template
+    return render_template(
+        'error.html', code=404,
+        heading='ページが見つかりません',
+        message='お探しのページは、移動したか削除された可能性があります。\n共有リンクの場合は、共有が解除されているかもしれません。',
+    ), 404
+
+
+@app.errorhandler(500)
+def _server_error(_e):
+    """想定外のエラー用の500ページ（詳細はログにのみ出す）。"""
+    from flask import render_template
+    return render_template(
+        'error.html', code=500,
+        heading='エラーが発生しました',
+        message='ごめんなさい、うまく処理できませんでした。\n少し時間をおいて、もう一度お試しください。',
+    ), 500
+
+
 @app.after_request
 def _security_headers(resp):
     """基本的なセキュリティヘッダを付与する（MIMEスニッフ抑止・クリックジャッキング対策等）。"""

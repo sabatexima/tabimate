@@ -485,11 +485,68 @@ def rate_plan(plan_id):
     return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 
+def _fold_ical_line(line: str) -> list:
+    """RFC 5545 の行折りたたみ。1行75オクテット以内に分割し、継続行は先頭に空白を付ける。
+
+    長い日本語の説明文をそのまま出すと仕様違反になり、パーサによっては壊れるため。
+    """
+    out = []
+    cur, octets = '', 0
+    for ch in line:
+        cb = len(ch.encode('utf-8'))
+        if octets + cb > 73:  # 75オクテット制限に対しCRLF分の余裕を持たせる
+            out.append(cur)
+            cur, octets = ' ' + ch, 1 + cb  # 継続行は先頭スペース
+        else:
+            cur += ch
+            octets += cb
+    out.append(cur)
+    return out
+
+
+def _schedule_events(plan: dict, start) -> list:
+    """スケジュール行（「HH:MM 行動内容」＋「N日目」ブロック）を時刻付き予定に変換する。
+
+    返り値: [(開始datetime, 終了datetime, 内容), ...]
+    終了時刻は「同じ日の次の予定の開始」、無ければ+60分とする。
+    時刻の無い行（終日メモ等）はスキップ（全体イベントの説明文には残る）。
+    """
+    import re
+    from datetime import datetime, timedelta
+
+    items = []
+    day = 0
+    for line in plan.get('schedule') or []:
+        s = str(line).strip()
+        dm = re.match(r'[【\[]?\s*(\d+)\s*日目', s)
+        if dm:
+            day = int(dm.group(1)) - 1
+            continue
+        tm = re.match(r'(\d{1,2}):(\d{2})\s*(.+)', s)
+        if tm and int(tm.group(1)) < 24 and int(tm.group(2)) < 60:
+            items.append((day, int(tm.group(1)), int(tm.group(2)), tm.group(3).strip()))
+
+    items.sort(key=lambda x: (x[0], x[1], x[2]))
+    events = []
+    for i, (d, h, mi, text) in enumerate(items):
+        st = datetime(start.year, start.month, start.day, h, mi) + timedelta(days=d)
+        if i + 1 < len(items) and items[i + 1][0] == d:
+            nd, nh, nm2, _ = items[i + 1]
+            en = datetime(start.year, start.month, start.day, nh, nm2) + timedelta(days=nd)
+            if en <= st:  # 時刻の逆転（LLM出力の乱れ）は既定の60分にフォールバック
+                en = st + timedelta(minutes=60)
+        else:
+            en = st + timedelta(minutes=60)
+        events.append((st, en, text))
+    return events
+
+
 def _build_plan_ics(plan: dict) -> str:
     """保存プランを iCalendar(.ics) 文字列に変換する（Google カレンダー等に取込可能）。
 
-    スケジュールは自由文のため、旅行日〜期間から終日イベントを1件作り、
-    観光・グルメ・宿・スケジュール・費用を説明文にまとめる。
+    構成:
+      - 旅行全体の終日イベント1件（概要説明＋前日リマインダー付き）
+      - スケジュール各行の時刻付きイベント（日別・Asia/Tokyo明示）
     """
     import re
     from datetime import date, datetime, timedelta
@@ -506,6 +563,10 @@ def _build_plan_ics(plan: dict) -> str:
     nm = re.search(r'(\d+)\s*泊', str(plan.get('duration') or ''))
     end = start + timedelta(days=(int(nm.group(1)) + 1 if nm else 1))
 
+    dest = plan.get('destination') or '旅行'
+    pid = plan.get('id')
+    dtstamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+
     lines = []
     def add(label, items):
         if items:
@@ -520,19 +581,49 @@ def _build_plan_ics(plan: dict) -> str:
         lines.append('💰費用')
         lines.extend(plan.get('budget_estimate'))
 
-    summary = f"🗾 {plan.get('destination') or '旅行'} 旅行プラン"
-    dtstamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-    return "\r\n".join([
+    out = [
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//tabimate//travel plan//JA",
-        "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
-        f"UID:tabimate-plan-{plan.get('id')}@kabu-app",
+        "CALSCALE:GREGORIAN",
+        # Asia/Tokyo を明示（DSTなし）。海外端末・他カレンダーでも時刻がズレない
+        "BEGIN:VTIMEZONE", "TZID:Asia/Tokyo",
+        "BEGIN:STANDARD", "DTSTART:19700101T000000",
+        "TZOFFSETFROM:+0900", "TZOFFSETTO:+0900", "TZNAME:JST",
+        "END:STANDARD", "END:VTIMEZONE",
+        # ① 旅行全体の終日イベント（概要）
+        "BEGIN:VEVENT",
+        f"UID:tabimate-plan-{pid}@tabimate",
         f"DTSTAMP:{dtstamp}",
         f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}",
         f"DTEND;VALUE=DATE:{end.strftime('%Y%m%d')}",
-        f"SUMMARY:{esc(summary)}",
+        f"SUMMARY:{esc('🗾 ' + dest + ' 旅行プラン')}",
+        f"LOCATION:{esc(dest)}",
         f"DESCRIPTION:{esc(chr(10).join(lines))}",
-        "END:VEVENT", "END:VCALENDAR", "",
-    ])
+        # 前日18時のリマインダー（対応クライアントのみ。Apple Calendar等）
+        "BEGIN:VALARM", "ACTION:DISPLAY",
+        f"DESCRIPTION:{esc('明日から' + dest + 'への旅！持ち物の準備はできた？🍀')}",
+        "TRIGGER:-PT6H",
+        "END:VALARM",
+        "END:VEVENT",
+    ]
+
+    # ② スケジュール各行の時刻付きイベント（日別）
+    for i, (st, en, text) in enumerate(_schedule_events(plan, start)):
+        out += [
+            "BEGIN:VEVENT",
+            f"UID:tabimate-plan-{pid}-{i}@tabimate",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;TZID=Asia/Tokyo:{st.strftime('%Y%m%dT%H%M%S')}",
+            f"DTEND;TZID=Asia/Tokyo:{en.strftime('%Y%m%dT%H%M%S')}",
+            f"SUMMARY:{esc(text)}",
+            "END:VEVENT",
+        ]
+
+    out += ["END:VCALENDAR", ""]
+    # RFC 5545: 各行は75オクテット以内（長い説明文は継続行に折りたたむ）
+    folded = []
+    for line in out:
+        folded.extend(_fold_ical_line(line))
+    return "\r\n".join(folded)
 
 
 @planner.route('/export_plan_ics/<int:plan_id>')

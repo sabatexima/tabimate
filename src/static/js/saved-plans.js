@@ -137,7 +137,7 @@ function esc(str) {
           <span>📍 出発地: ${esc(plan.departure_location || '—')}</span>
           <span>⏱️ 期間: ${esc(plan.duration || '—')}</span>
           <span>👥 人数: ${plan.num_people != null ? esc(plan.num_people) + '人' : '—'}</span>
-          <span>${plan.total_per_person ? `💴 費用の目安: ${fmt(plan.total_per_person)}円/人` : `💴 予算上限: ${fmt(plan.budget_limit)}円/人`}</span>
+          <span>${plan.total_per_person ? `💴 費用の目安: <span style="white-space:nowrap">${fmt(plan.total_per_person)}円/人</span>` : `💴 予算上限: <span style="white-space:nowrap">${fmt(plan.budget_limit)}円/人</span>`}</span>
         </div>
       </div>
       <div class="plan-weather" id="weather-${esc(plan.id)}" hidden></div>

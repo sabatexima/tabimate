@@ -62,7 +62,9 @@ def _format_plan(state: dict) -> str:
         return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     def accordion(icon: str, label: str, items: list, open: bool = False) -> str:
-        """項目リストを <details> 折りたたみブロックのHTMLにする。"""
+        """項目リストを <details> 折りたたみブロックのHTMLにする。空なら出さない（日帰りの宿泊等）。"""
+        if not items:
+            return ""
         items_html = "".join(f"<li>{esc(i)}</li>" for i in items)
         open_attr = " open" if open else ""
         return f"""<details{open_attr}>
@@ -73,9 +75,10 @@ def _format_plan(state: dict) -> str:
     status = state.get("status")
     logger.debug("フォーマット開始: destination=%s, status=%s", state.get("destination"), status)
 
+    # 金額と「円/人」は途中で改行されると読みにくい（「…円/」＋「人」の泣き別れ）ため分割禁止にする
     _total = state.get("total_per_person")
-    _cost_line = (f"💴 費用の目安: {_total:,}円/人"
-                  if _total else f"💴 予算上限: {state['budget_limit']:,}円/人")
+    _cost_line = (f'💴 費用の目安: <span style="white-space:nowrap">{_total:,}円/人</span>'
+                  if _total else f'💴 予算上限: <span style="white-space:nowrap">{state["budget_limit"]:,}円/人</span>')
     header = f"""<div class="plan-card">
   <div class="plan-summary-block">
     <div class="plan-title">🗾 旅行プラン：{esc(state['destination'])}</div>

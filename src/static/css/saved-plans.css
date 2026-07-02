@@ -434,5 +434,15 @@
   .plan-weather .wx-emoji { font-size: 1.3em; }
   .plan-weather .wx-temp { font-size: 0.85em; white-space: nowrap; }
   .plan-weather .wx-temp i { color: var(--text-muted); font-style: normal; margin: 0 1px; }
+  /* 取得中プレースホルダ（届いたら日別表示に差し替わる） */
+  .plan-weather .wx-loading {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    animation: wx-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes wx-pulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+  }
 
   /* 地図関連のスタイルは plan-map.css に切り出し（共有プランと共用） */

@@ -433,18 +433,22 @@ function esc(str) {
   }
   async function loadWeather(plan) {
     if (!withinForecast(plan.travel_date)) return;
+    const el = document.getElementById(`weather-${plan.id}`);
+    if (!el) return;
+    // 先に「取得中」を出しておく（突然の出現よりも自然で、後から行が増えるガタつきも防ぐ）
+    el.innerHTML = '<span class="plan-weather-label">🌤 旅行日の天気</span><span class="wx-loading">取得中…</span>';
+    el.hidden = false;
     try {
       const res = await fetch(`/api/plan_weather/${plan.id}`);
       const data = await res.json();
-      if (!data.days || data.days.length === 0) return;
-      const el = document.getElementById(`weather-${plan.id}`);
-      if (!el) return;
+      if (!data.days || data.days.length === 0) { el.hidden = true; return; }
       el.innerHTML = '<span class="plan-weather-label">🌤 旅行日の天気</span>'
         + data.days.map(d => `<span class="wx-day"><b>${wxDate(d.date)}</b>`
           + `<span class="wx-emoji">${d.emoji}</span>`
           + `<span class="wx-temp">${d.tmax != null ? d.tmax + '°' : '–'}<i>/</i>${d.tmin != null ? d.tmin + '°' : '–'}</span></span>`).join('');
-      el.hidden = false;
-    } catch (e) { /* 天気は付加情報なので失敗は無視 */ }
+    } catch (e) {
+      el.hidden = true;  // 天気は付加情報なので、取得失敗時は行ごと消す
+    }
   }
 
   function showEmpty() {

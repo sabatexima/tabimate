@@ -404,12 +404,28 @@ function esc(str) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
     return m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}` : esc(s);
   }
+  // 旅行日をDateに。西暦つきはそのまま、年なし（7/2・7月2日）は直近の該当日を推定。
+  // サーバー側 weather.parse_date と挙動を合わせる。
+  function parseTravelDate(travelDate) {
+    const s = travelDate || '';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let m = /(\d{4})\D+(\d{1,2})\D+(\d{1,2})/.exec(s);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = /(\d{1,2})\s*[/\-月]\s*(\d{1,2})/.exec(s);   // 「7/2」「7-2」「7月2日」
+    if (m) {
+      const mo = +m[1] - 1, da = +m[2];
+      for (const yr of [today.getFullYear(), today.getFullYear() + 1]) {
+        const d = new Date(yr, mo, da);
+        if ((today - d) / 86400000 <= 60) return d;  // 60日以上前でなければ採用
+      }
+    }
+    return null;
+  }
   // 旅行日が予報の取れる範囲（当日〜16日先）かをクライアントで判定し、
   // 範囲外のプランは無駄なリクエストを投げない（N+1 リクエストの抑制）。
   function withinForecast(travelDate) {
-    const m = /(\d{4})\D+(\d{1,2})\D+(\d{1,2})/.exec(travelDate || '');
-    if (!m) return false;
-    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    const d = parseTravelDate(travelDate);
+    if (!d) return false;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const min = new Date(today); min.setDate(min.getDate() - 7);   // 旅行中（数日前開始）も拾う
     const max = new Date(today); max.setDate(max.getDate() + 16);

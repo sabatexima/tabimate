@@ -41,14 +41,31 @@ def describe(code) -> tuple:
 
 
 def parse_date(travel_date) -> date | None:
-    """旅行日文字列（YYYY-MM-DD / YYYY/M/D / YYYY年M月D日）→ date。失敗時 None。"""
-    m = re.search(r'(\d{4})\D+(\d{1,2})\D+(\d{1,2})', str(travel_date or ''))
-    if not m:
-        return None
-    try:
-        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    except ValueError:
-        return None
+    """旅行日文字列 → date。失敗時 None。
+
+    西暦つき（YYYY-MM-DD / YYYY年M月D日）はそのまま。年が無い（7/2・7月2日）場合は
+    直近の該当日を推定する（今年。ただし60日以上前になるなら翌年）。
+    """
+    s = str(travel_date or '')
+    m = re.search(r'(\d{4})\D+(\d{1,2})\D+(\d{1,2})', s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    # 年なし: 「7/2」「7-2」「7月2日」など
+    m = re.search(r'(\d{1,2})\s*[/\-月]\s*(\d{1,2})', s)
+    if m:
+        mo, da = int(m.group(1)), int(m.group(2))
+        today = date.today()
+        for yr in (today.year, today.year + 1):
+            try:
+                d = date(yr, mo, da)
+            except ValueError:
+                return None
+            if (today - d).days <= 60:  # 60日以上前でなければ採用（過去すぎる時のみ翌年）
+                return d
+    return None
 
 
 def _num_days(duration) -> int:

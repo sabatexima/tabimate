@@ -49,9 +49,6 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=_IS_PROD,
     STADIA_API_KEY=os.environ.get('STADIA_API_KEY', ''),
-    # 楽天アフィリエイトID（任意）。設定すると宿検索リンクがアフィリエイト経由になる。
-    # 未設定でもリンク自体は楽天トラベル検索として機能する（収益化は後付け可）。
-    RAKUTEN_AFFILIATE_ID=os.environ.get('RAKUTEN_AFFILIATE_ID', ''),
     # リクエスト全体のサイズ上限。巨大アップロードによるメモリ枯渇/DoSを防ぐ。
     # 写真は複数枚まとめて送るため余裕を持たせつつ、青天井は避ける（既定100MB）。
     MAX_CONTENT_LENGTH=int(os.getenv('MAX_CONTENT_LENGTH_MB', '100')) * 1024 * 1024,

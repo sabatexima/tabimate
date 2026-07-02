@@ -6,13 +6,9 @@ function esc(str) {
     return n != null ? Number(n).toLocaleString() : '—';
   }
 
-  // 目的地の宿を楽天トラベルで探すリンク。アフィリエイトID(meta)があれば経由させる。
+  // 目的地の宿を Google マップで探すリンク（公式の Maps URLs 形式・スマホはアプリが開く）。
   function bookingUrl(destination) {
-    const target = `https://travel.rakuten.co.jp/dsearch/?f_query=${encodeURIComponent((destination || '') + ' 宿')}`;
-    const aid = document.querySelector('meta[name="rakuten-aid"]')?.content;
-    return aid
-      ? `https://hb.afl.rakuten.co.jp/hgc/${aid}/?pc=${encodeURIComponent(target)}&m=${encodeURIComponent(target)}`
-      : target;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((destination || '') + ' 宿')}`;
   }
 
   // 評価済みの表示（1プラン1評価・上書き式）。「修正」で再編集できる（誤入力の救済）。

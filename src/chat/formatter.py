@@ -1,7 +1,6 @@
 """完成した旅行プラン状態を、チャットに表示するHTMLカードへ整形するモジュール。"""
 
 import json
-import os
 import urllib.parse
 from chat.logger import get_logger
 
@@ -10,16 +9,13 @@ logger = get_logger("formatter")
 
 
 def booking_url(destination: str) -> str:
-    """目的地の宿を楽天トラベルで探すURL。RAKUTEN_AFFILIATE_ID があれば経由させる。
+    """目的地の宿を Google マップで探すURL（公式の Maps URLs 形式・スマホはアプリが開く）。
 
-    未設定でも通常の楽天トラベル検索URLとして機能する（収益化は後付け可能）。
+    以前は楽天トラベルの検索URLだったが、非公開のURL形式だったため常にエラーページに
+    着地していた。地図ピンの経路リンクとも揃う Google マップ検索に統一する。
     """
-    target = "https://travel.rakuten.co.jp/dsearch/?f_query=" + urllib.parse.quote((destination or "") + " 宿")
-    aid = os.getenv("RAKUTEN_AFFILIATE_ID", "")
-    if aid:
-        enc = urllib.parse.quote(target, safe="")
-        return f"https://hb.afl.rakuten.co.jp/hgc/{aid}/?pc={enc}&m={enc}"
-    return target
+    return ("https://www.google.com/maps/search/?api=1&query="
+            + urllib.parse.quote((destination or "") + " 宿"))
 
 
 # プラン状態のうち、保存・再編集に必要なフィールドだけを取り出した辞書を作る。

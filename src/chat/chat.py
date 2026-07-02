@@ -268,6 +268,7 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
             "travel_date": state.travel_date,
             "num_people": state.num_people,
             "budget_limit": state.budget_limit,
+            "departure_location": state.departure_location,  # 交通費が変わる
         }.items() if _changed(k, v)]
         if _fundamental_changes:
             logger.info("基本条件の変更を検出したため全体を作り直す: %s", _fundamental_changes)
@@ -306,6 +307,14 @@ class _PlanEditIntent(BaseModel):
             "全体的に作り直す場合は ['all']。"
         ),
     )
+    # 基本条件そのものを変える指示があった場合の新しい値（変更が無ければNull）。
+    # これらが変わると前回の行程を流用できないため、呼び出し側で全体作り直しに切り替える。
+    new_duration: Optional[str] = Field(None, description="期間（泊数）を変える指示があれば新しい期間（例:「10泊11日」）。無ければNull")
+    new_budget_limit: Optional[int] = Field(None, description="1人あたり予算上限を変える指示があれば新しい金額（円）。無ければNull")
+    new_num_people: Optional[int] = Field(None, description="人数を変える指示があれば新しい人数。無ければNull")
+    new_destination: Optional[str] = Field(None, description="行き先を変える指示があれば新しい行き先。無ければNull")
+    new_travel_date: Optional[str] = Field(None, description="旅行日程を変える指示があれば、本日の日付から換算した年を含む絶対日付（例: 2026年8月1日）。無ければNull")
+    new_departure_location: Optional[str] = Field(None, description="出発地を変える指示があれば新しい出発地。無ければNull")
 
 
 def _as_list(value) -> list:
@@ -326,21 +335,45 @@ def edit_saved_plan(plan: dict, message: str) -> dict:
     変更要望から対象領域を判定し、対象だけを再生成する（指定外は前回値を維持）。
     予算超過時は generate_travel_plan が ValueError を送出する。
     """
+    from datetime import date as _date
     intent_messages = [
         SystemMessage(content=(
-            "あなたは旅行プラン編集の意図分類器です。ユーザーの変更指示から、変更が必要な領域だけを "
+            f"あなたは旅行プラン編集の意図分類器です。本日の日付は {_date.today().strftime('%Y年%m月%d日')} です。"
+            "ユーザーの変更指示から、変更が必要な領域だけを "
             "edit_targets に列挙してください。領域: sightseeing(観光地)/gourmet(飲食店)/"
             "accommodation(宿泊)/schedule(スケジュール)/budget(費用)/transport(交通手段)。"
             "全体的な作り直しは ['all']。"
+            "また、期間・予算上限・人数・行き先・日程・出発地といった基本条件そのものを変える指示があれば、"
+            "対応する new_* フィールドに新しい値を設定すること（変更が無ければNull）。"
         )),
         HumanMessage(content=(
-            f"現在のプラン: 行き先={plan.get('destination')} / 期間={plan.get('duration')}。\n"
+            f"現在のプラン: 行き先={plan.get('destination')} / 期間={plan.get('duration')} / "
+            f"日程={plan.get('travel_date')} / 人数={plan.get('num_people')}人 / "
+            f"予算上限={plan.get('budget_limit')}円 / 出発地={plan.get('departure_location')}。\n"
             f"変更指示: {message}"
         )),
     ]
+    overrides = {}
     try:
         intent = invoke_with_retry(llm.with_structured_output(_PlanEditIntent), intent_messages)
         targets = intent.edit_targets or ["all"]
+        # 基本条件の新しい値を拾う（現在値と実質同じものは無視）
+        for key, new in (("duration", intent.new_duration),
+                         ("budget_limit", intent.new_budget_limit),
+                         ("num_people", intent.new_num_people),
+                         ("destination", intent.new_destination),
+                         ("travel_date", intent.new_travel_date),
+                         ("departure_location", intent.new_departure_location)):
+            if new in (None, ""):
+                continue
+            old = plan.get(key)
+            same = ((old or 0) == (new or 0)) if isinstance(new, int) else (str(old or '').strip() == str(new).strip())
+            if not same:
+                overrides[key] = new
+        if overrides:
+            # 基本条件が変わると前回の行程・予算残は流用できないため全体を作り直す
+            logger.info("保存プラン修正: 基本条件の変更を検出、全体を作り直す: %s", list(overrides))
+            targets = ["all"]
     except Exception:
         logger.warning("プラン編集の意図分類に失敗。全体作り直しにフォールバック", exc_info=True)
         targets = ["all"]
@@ -371,6 +404,7 @@ def edit_saved_plan(plan: dict, message: str) -> dict:
         "special_requirements": _as_list(plan.get("special_requirements")),
         "user_feedback":        message,
     }
+    inputs.update(overrides)  # 「10泊にして」「予算100万で」等の新しい基本条件を反映
     # 対象が限定されていれば、前回プランの成果物を引き継いで対象だけ再生成（部分編集）
     if targets and "all" not in targets:
         for key in ("spots", "restaurants", "accommodation", "schedule", "budget_estimate"):

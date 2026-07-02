@@ -66,6 +66,10 @@ def forecast(lat, lng, start: date, end: date) -> list:
     if end < today or start > today + timedelta(days=16):
         return []
     start = max(start, today)
+    # Open-Meteo は16日先までしか予報を持たず、範囲外の end_date を送ると
+    # リクエスト全体がエラーになる。長旅の後半が範囲外でも前半の予報は返せるよう、
+    # 終了日を予報範囲内にクランプする（旅行中に開いた場合の start と対）。
+    end = min(end, today + timedelta(days=16))
     try:
         resp = requests.get(_URL, params={
             'latitude': lat, 'longitude': lng,

@@ -137,11 +137,19 @@ def _build_user_preferences(user_id: str) -> str:
     return "\n".join(parts)
 
 
+# LLMに渡す会話履歴の上限（件数）。通常は「新しいチャット」でリセットされるため
+# ここまで溜まらないが、同じ会話を延々続けた場合の送信トークン増に上限を設ける保険。
+# 直近だけ残すので、これより古い発言の条件は忘れられる（実用上はプラン保存後に
+# 編集する流れのため影響はほぼない）。
+_MAX_HISTORY_MESSAGES = 40
+
+
 def _build_lc_messages(messages_history: list) -> list:
     """会話履歴をLangChainのメッセージリストに変換する。
-    プランHTMLはトークン節約のためプレースホルダーに置き換える。"""
+    プランHTMLはトークン節約のためプレースホルダーに置き換える。
+    履歴は直近 _MAX_HISTORY_MESSAGES 件までに絞る。"""
     lc_messages = [_system_prompt()]
-    for m in messages_history:
+    for m in messages_history[-_MAX_HISTORY_MESSAGES:]:
         content = m["content"]
         if m["role"] == "ai" and content.startswith("<div"):
             content = _PLAN_PLACEHOLDER

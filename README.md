@@ -37,12 +37,12 @@
 - A Balancer (reviewer) detects budget overruns, schedule conflicts, theme mismatches, etc., and automatically rejects & triggers regeneration (with a capped number of retries).
 - **Weather-aware generation**: the forecast for the travel date (Open-Meteo, no API key) is fetched at generation start. On rainy/snowy days the sightseeing and schedule agents are nudged toward indoor spots and shorter outdoor stays. Out-of-range/unknown dates simply skip the weather influence.
 - **Business-day awareness for dining**: the gourmet agent considers the travel date's day-of-week and avoids restaurants likely closed on that day (e.g., a café on its regular day off).
-- **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for most steps, and a stronger model (`gemini-3.5-flash`) for cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
+- **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for candidate extraction, selection and conversation parsing, and a stronger model (`gemini-3.5-flash`) where reasoning matters most — scheduling, cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
 - Generated plans can be saved, viewed, and deleted from the saved plans list.
 - **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles). Sightseeing spots are numbered green teardrop pins (with a four-leaf-clover accent matching the mascot) connected in route order, while restaurants (orange) and accommodation (blue) are shown as color-coded pins with a legend. Each pin's popup links to Google Maps navigation. Coordinates are geocoded **lazily on first map open** and cached (`geo_done`); geocoding is biased to the destination area (`viewbox`) and falls back through `name → "name, destination" → trimmed suffix` to improve hit rate. The shared-plan view and the photo "footprints" map reuse the same component.
 - **User-placed custom pins**: on your own plan's map you can drop pins by tapping, give each a name/type (sightseeing/dining/lodging/memo) and a color, drag to reposition, and delete them — useful for places Nominatim can't find. Spots that failed to geocode are listed as "unplaced" chips for one-tap placement. Custom pins persist (`custom_pins`) and are visible on the shared view too.
-- **Travel-date weather & calendar export**: saved (and shared) plans show the forecast for the travel date as a small strip, and can be exported to an `.ics` calendar file (Google Calendar, etc.).
+- **Travel-date weather & calendar export**: saved (and shared) plans show the forecast for the travel date as a small strip (Open-Meteo, today through +16 days; plans without cached coordinates fall back to geocoding the destination name). Relative dates like "tomorrow" or "this weekend" are normalized to absolute dates in code. The `.ics` export includes an all-day overview event plus **each schedule line as a timed, per-day event** (explicit Asia/Tokyo timezone, a day-before reminder, RFC 5545 line folding).
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
 - **Saved plans can also be edited via chat** directly on the card. The result is shown as a preview first and is only persisted when the user confirms ("update").
 - **Rating-based personalization**: users can rate a saved plan with ★1–5 plus a short comment (one rating per plan, overwrite-style; revisable via an "edit" button to fix mistakes). Highly-rated (★4+) and poorly-rated (★2−) plans and their comments are summarized into a preference hint that is softly applied to future plan generation (explicit requests still take priority; disliked tendencies are avoided).
@@ -249,7 +249,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 | Table | Purpose |
 |----------|------|
 | `travel_plans` | Saved travel plans (conditions/results in JSON columns). `spot_coords` / `restaurant_coords` / `accommodation_coords` cache geocoded lat/lng for the map; `custom_pins` stores user-placed pins; `geo_done` flags that lazy geocoding has run |
-| `chat_messages` | Chat history (role/content/request_id) |
+| `chat_messages` | Chat history (role/content/request_id). Rows where the AI presented a plan also store `plan_json` (structured data), read back as the "previous plan" for chat-based edits |
 | `trips` | Trips (title, dates, owner user). `linked_plan_id` optionally links a trip to a saved plan for the footprints overlay |
 | `photos` | Uploaded photos (storage_path, shoot time, GPS) |
 | `stickers` | Virtual sticky notes (text = display text, basis = internal logic generation basis) |
@@ -422,10 +422,10 @@ open -a Docker   # macOS
 - For SSL-enforced environments like TiDB Cloud, ensure `DB_SSL=true` and `DB_SSL_CA` are properly configured.
 
 ### Plan generation times out (504)
-- Cloud Run's default request timeout is 300s (5 min), which can be shorter than a full multi-agent generation. `deploy.sh` sets `--timeout=600` (matching gunicorn's 600s); the effective cap is `min(Cloud Run timeout, gunicorn timeout)`.
-- To apply without redeploying: `gcloud run services update <service-name> --region asia-northeast1 --timeout=600`.
-- To allow even longer, raise both the gunicorn `--timeout` (dockerfile) and Cloud Run `--timeout` (Cloud Run gen2 max is 3600s).
-- Expected timeouts are handled on the client side via the `abort_request` endpoint to cancel operations explicitly.
+- `deploy.sh` sets `--timeout=3600` (matching gunicorn's 3600s in the dockerfile) so even long multi-night generations (several minutes to 10+ minutes) are not cut off; the effective cap is `min(Cloud Run timeout, gunicorn timeout)`.
+- If a manually-deployed environment uses a shorter value: `gcloud run services update <service-name> --region asia-northeast1 --timeout=3600`.
+- `deploy.sh` also sets `--concurrency=20` (matching gunicorn's thread count) and `--max-instances=3` (cost ceiling).
+- To cancel a generation midway, the client calls the `abort_request` endpoint explicitly.
 
 ### Photo Loading is Slow
 GCS signed URLs call IAM signBlob per photo, which slows down as the photo count increases (increasing CPU/memory won't resolve this). `services/storage.py`'s `get_urls()` implements **caching & parallel generation**, and **thumbnails** are served in lists (originals only in the lightbox). For photos uploaded before thumbnails existed, run `scripts/backfill_thumbnails.py`. To further reduce cold starts, consider a minimum instance of 1 on Cloud Run.

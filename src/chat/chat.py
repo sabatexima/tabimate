@@ -147,6 +147,44 @@ def _build_user_preferences(user_id: str) -> str:
 _MAX_HISTORY_MESSAGES = 40
 
 
+def _normalize_travel_date(travel_date):
+    """旅行日程の相対表現を、コード側で確実に絶対日付へ変換する（LLM任せにしない保険）。
+
+    システムプロンプトで絶対日付化を指示しているが、軽量モデルが従わず
+    「明日」等をそのまま返すことがあり、そのまま保存されると天気・カレンダー・
+    予報ヒントがすべて機能しなくなる。日付が解析できない場合のみ、代表的な
+    相対表現を今日基準で換算して「YYYY年M月D日」にする。換算できなければ原文のまま。
+    """
+    import weather
+    from datetime import date, timedelta
+    s = (travel_date or "").strip()
+    if not s or weather.parse_date(s):
+        return travel_date  # 空 or 既に絶対日付として解析できるならそのまま
+
+    today = date.today()
+
+    def _fmt(d):
+        return f"{d.year}年{d.month}月{d.day}日"
+
+    # 単純な相対語（発話時点でのみ意味を持つため、抽出直後のここで確定させる）
+    fixed = {"今日": 0, "本日": 0, "明日": 1, "あした": 1, "あす": 1,
+             "明後日": 2, "あさって": 2, "しあさって": 3}
+    for word, days in fixed.items():
+        if word in s:
+            return _fmt(today + timedelta(days=days))
+    m = re.search(r'(\d+)\s*日後', s)
+    if m:
+        return _fmt(today + timedelta(days=int(m.group(1))))
+    sat_this = today + timedelta(days=(5 - today.weekday()) % 7)  # 直近の土曜（今日が土曜なら今日）
+    if "来週末" in s:
+        return _fmt(sat_this + timedelta(days=7))
+    if "週末" in s:  # 今週末・週末
+        return _fmt(sat_this)
+    if "来週" in s:
+        return _fmt(today + timedelta(days=(7 - today.weekday()) % 7 or 7))  # 次の月曜
+    return travel_date
+
+
 def _build_lc_messages(messages_history: list) -> list:
     """会話履歴をLangChainのメッセージリストに変換する。
     プランHTMLはトークン節約のためプレースホルダーに置き換える。
@@ -191,6 +229,10 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         return f"申し訳ありません、処理中にエラーが発生しました: {e}", None
 
     logger.debug("会話状態を解析しました: is_complete=%s, next_question=%s", state.is_complete, state.next_question)
+
+    # 「明日」「今週末」等の相対日付は、LLMがプロンプト指示に従わず素通しすることが
+    # あるため、コード側で確実に絶対日付へ変換する（天気・カレンダー・予報ヒントが全滅するのを防ぐ）
+    state.travel_date = _normalize_travel_date(state.travel_date)
 
     # 必須7項目の充足状況。進捗表示（ゴール感）と、取りこぼし防止の両方に共用する。
     _required = {
@@ -362,7 +404,7 @@ def edit_saved_plan(plan: dict, message: str) -> dict:
                          ("budget_limit", intent.new_budget_limit),
                          ("num_people", intent.new_num_people),
                          ("destination", intent.new_destination),
-                         ("travel_date", intent.new_travel_date),
+                         ("travel_date", _normalize_travel_date(intent.new_travel_date)),
                          ("departure_location", intent.new_departure_location)):
             if new in (None, ""):
                 continue

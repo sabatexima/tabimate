@@ -495,6 +495,8 @@ def timekeeper(state: TravelPlanState):
                 must_include_block += "・飲食店（すべて必須）: " + "、".join(missing_restaurants) + "\n"
 
     day_trip = is_day_trip(state["duration"])
+    # 泊数（「N泊」表記から）。宿泊プランの日数明示と、出力後の日数検証に使う
+    num_nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 1
 
     if day_trip:
         prompt = f"""あなたは綿密なツアーコンダクターです。
@@ -529,6 +531,9 @@ def timekeeper(state: TravelPlanState):
 
 【絶対に守るべき条件】
 ・旅行の時間枠: {state['duration']}  ← 必ずこの時間枠の中に全ての予定を収めること
+・この旅行は{num_nights}泊{num_nights + 1}日。「1日目」〜「{num_nights + 1}日目」の日別ブロックを必ず【すべて】作成すること
+・帰路・帰宅は必ず{num_nights + 1}日目（最終日）に置くこと。途中の日に帰路を入れて旅行を切り上げないこと
+・「予備日」「自由行動のみの日」を作らないこと。最終日まで具体的なスポット・食事で構成すること
 ・出発地: {state['departure_location']}（往路・復路の移動時間を具体的にスケジュールに組み込むこと）
 ・往復の交通手段: {state.get('transport_mode', 'おまかせ')}（この手段に合わせて往復の移動時間・経路を組むこと。車なら運転・休憩・駐車、高速バスなら乗車時間、鉄道/飛行機なら駅・空港での移動を考慮）
 ・参加人数: {state['num_people']}人（大人数は移動・入場・食事に時間がかかるため各行動に余裕を持たせること）
@@ -547,7 +552,7 @@ def timekeeper(state: TravelPlanState):
 ・旅行テーマ: {', '.join(state['themes'])}
 {must_include_block}
 【出力形式】
-・「1日目」「2日目」などの日別ブロックに分けて記載すること
+・「1日目」〜「{num_nights + 1}日目」の日別ブロック（必ず{num_nights + 1}個すべて）に分けて記載すること。各日の先頭行はその日を表す「N日目」の行にすること
 ・各行動を「HH:MM 行動内容（所要時間・移動手段・距離）」の形式で時系列に記載すること
 ・1日の総移動時間と観光時間のバランスが適切かを自己チェックし、詰め込みすぎの場合は削減すること
 """
@@ -596,6 +601,32 @@ def timekeeper(state: TravelPlanState):
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(TimekeeperOutput)
     response = invoke_with_retry(structured_llm, prompt)
+
+    # 日数の検証（宿泊プランのみ）: 「1日目」〜「N+1日目」のブロックが全て揃っているか。
+    # LLMは長期プランで最終日を省略したり途中で帰路に入れることがあるため、
+    # 欠けていたら欠落日を明示して1回だけ作り直す（それでも駄目ならバランサーが差し戻す）。
+    if not day_trip:
+        total_days = num_nights + 1
+        def _days_in(schedule):
+            found = set()
+            for line in schedule or []:
+                dm = re.match(r'[【\[]?\s*(\d+)\s*日目', str(line).strip())
+                if dm:
+                    found.add(int(dm.group(1)))
+            return found
+        missing = set(range(1, total_days + 1)) - _days_in(response.schedule)
+        if missing:
+            log.warning("⏱️ スケジュールの日数不足を検出（%s日目が欠落）。作り直します",
+                        "・".join(str(d) for d in sorted(missing)))
+            retry_prompt = prompt + (
+                f"\n\n【重大な不備（必ず修正すること）】前回の出力には "
+                + "、".join(f"「{d}日目」" for d in sorted(missing))
+                + f" のブロックがありませんでした。この旅行は{num_nights}泊{total_days}日です。"
+                f"「1日目」〜「{total_days}日目」の全ブロックを必ず作成し、各日の先頭行に「N日目」の行を置き、"
+                f"帰路は{total_days}日目に置いてください。"
+            )
+            response = invoke_with_retry(structured_llm, retry_prompt)
+
     _pp(response.schedule, "📅 作成したスケジュール:")
     return {"schedule": response.schedule}
 
@@ -733,7 +764,8 @@ def balancer(state: TravelPlanState):
 
 【審査の{"4" if is_day_trip(state["duration"]) else "5"}観点】
 1. 予算: 費用見積もりの1人あたり合計が予算上限（{state['budget_limit']:,}円）の【110%以内】に収まっているか。予備費の範囲内とみなせる軽微な超過（110%以内）は合格とし、fix_budget にしないこと。明確に110%を超える場合のみ問題とし、超過金額を具体的に明記すること。
-2. スケジュール: 移動時間が現実的か、開館前到着・閉館後出発などの矛盾がないか、1日の総移動時間が観光時間を上回っていないか。
+2. スケジュール: 期間（{state['duration']}）どおりの日数で組まれているか（N泊なら「1日目」〜「N+1日目」まで全てあり、帰路は最終日のみ）。「予備日」や中身のない日で埋めていないか。移動時間が現実的か、開館前到着・閉館後出発などの矛盾がないか、1日の総移動時間が観光時間を上回っていないか。
+   ※日数不足・途中の日の帰路・予備日は【スケジュールの問題】なので必ず fix_time を選ぶこと（fix_accommodation にしない）。宿泊施設リストは施設名のみで泊数を表さない（同一施設での連泊が原則）ため、宿の泊数不足をここから推定しないこと。
 3. 疲労度: {state['num_people']}人の大人数で、特別条件（{', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}）を持つ参加者が無理なく楽しめる強度か。
 4. テーマ一貫性: 観光スポット・飲食店{"" if is_day_trip(state["duration"]) else "・宿泊施設"}がすべて旅行テーマ（{', '.join(state['themes'])}）に沿っているか。
 {"" if is_day_trip(state["duration"]) else f"5. 特別条件の充足: 車椅子対応・アレルギー対応などの特別条件が、全スポット・飲食店・宿泊施設で実際に満たされているか。"}

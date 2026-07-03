@@ -24,7 +24,8 @@ from chat.logger import get_logger
 logger = get_logger("services.trip_interpreter")
 
 # --- モデル設定（環境変数で差替可能）---
-_MODEL = os.getenv("INTERPRETER_MODEL", "gemini-2.5-flash")
+# 付箋生成は短文の創作タスク（旅ごとに1回だけ）なので軽量モデルで十分。
+_MODEL = os.getenv("INTERPRETER_MODEL", "gemini-3.1-flash-lite")
 _SEND_IMAGES_DEFAULT = os.getenv("INTERPRETER_SEND_IMAGES", "false").lower() == "true"
 
 # 画像送付（任意機能）のコスト保護: 送る最大枚数と縮小後の最大辺(px)。
@@ -66,9 +67,10 @@ def _prepare_image_blocks(images: Optional[list], max_images: Optional[int] = No
             logger.debug("画像の前処理に失敗（スキップ）", exc_info=True)
     return blocks
 
-# 推定コスト（USD / 100万トークン）。実価格に合わせて環境変数で上書き可。
-_PRICE_IN = float(os.getenv("INTERPRETER_PRICE_INPUT_PER_M", "0.30"))
-_PRICE_OUT = float(os.getenv("INTERPRETER_PRICE_OUTPUT_PER_M", "2.50"))
+# 推定コスト（USD / 100万トークン）。既定は gemini-3.1-flash-lite の価格。
+# 実価格・モデル変更時は環境変数で上書き可。
+_PRICE_IN = float(os.getenv("INTERPRETER_PRICE_INPUT_PER_M", "0.25"))
+_PRICE_OUT = float(os.getenv("INTERPRETER_PRICE_OUTPUT_PER_M", "1.50"))
 
 _llm = ChatGoogleGenerativeAI(
     model=_MODEL,

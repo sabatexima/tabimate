@@ -608,7 +608,10 @@ def timekeeper(state: TravelPlanState):
         )
     prompt += _pref(state)
     prompt += _directive(state)
-    structured_llm = llm.with_structured_output(TimekeeperOutput)
+    # スケジュール作成は全エージェント中で最難関（地理・移動時間・営業時間・日数構成を
+    # 同時に満たす）ため、上位モデルを使う。lite だと別エリアの施設を近所扱いする等の
+    # 誤りが出て審査ループの主因になっていた。
+    structured_llm = llm_strong.with_structured_output(TimekeeperOutput)
     response = invoke_with_retry(structured_llm, prompt)
 
     # 日数の検証（宿泊プランのみ）: 「1日目」〜「N+1日目」のブロックが全て揃っているか。

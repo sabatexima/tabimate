@@ -15,4 +15,5 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 WORKDIR /src
 COPY src/ /src/
 
-CMD exec gunicorn --worker-class gthread --workers 1 --threads 20 --timeout 600 --bind 0.0.0.0:${PORT:-8080} app:app
+# timeout はプラン生成（長期旅行は数分〜十数分かかり得る）に合わせて Cloud Run 側(--timeout=3600)と揃える
+CMD exec gunicorn --worker-class gthread --workers 1 --threads 20 --timeout 3600 --bind 0.0.0.0:${PORT:-8080} app:app

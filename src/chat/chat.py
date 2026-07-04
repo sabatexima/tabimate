@@ -234,6 +234,33 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # あるため、コード側で確実に絶対日付へ変換する（天気・カレンダー・予報ヒントが全滅するのを防ぐ）
     state.travel_date = _normalize_travel_date(state.travel_date)
 
+    # 入力ガード: あり得ない値は「未入力」扱いに戻して自然に聞き直させる
+    # （0人のまま生成すると費用×0等の壊れた出力になるため）。
+    _invalid_msg = None
+    if state.num_people is not None and state.num_people < 1:
+        logger.info("人数が不正のため聞き直し: %s", state.num_people)
+        state.num_people = None
+        _invalid_msg = "ご参加は1名様からになります。何名様でのご旅行でしょうか？"
+    if state.budget_limit is not None and state.budget_limit <= 0:
+        logger.info("予算が不正のため聞き直し: %s", state.budget_limit)
+        state.budget_limit = None
+        _invalid_msg = _invalid_msg or "ご予算は1円以上でお願いします。1人あたりおいくらくらいでお考えですか？"
+
+    # 過去日付のガード: 旅行が完全に過去（終了日も過ぎている）なら生成せず日付を確認する。
+    # 過去日付は天気もカレンダーも機能せず、意図しない生成になりやすい（「今旅行中」の
+    # ケースは終了日が今日以降なので弾かれない）。
+    import weather as _wx
+    _start = _wx.parse_date(state.travel_date)
+    if _start is not None:
+        from datetime import date as _date, timedelta as _td
+        _end = _start + _td(days=_wx._num_days(state.duration) - 1)
+        if _end < _date.today():
+            logger.info("過去日付のプランのため確認: travel_date=%s", state.travel_date)
+            return (
+                f"「{state.travel_date}」は過去の日付のようです🍀 "
+                "これから出発されるご予定でしたら、旅行日程をもう一度教えていただけますか？"
+            ), None
+
     # 必須7項目の充足状況。進捗表示（ゴール感）と、取りこぼし防止の両方に共用する。
     _required = {
         "旅行先": state.destination,
@@ -262,7 +289,8 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 欠けたまま生成するとエージェント側で None 参照のエラーになるため、ここで防ぐ。
     if _missing:
         logger.warning("is_complete=trueだが必須項目が不足のため聞き直し: %s", _missing)
-        return _with_progress(f"恐れ入りますが、{_missing[0]}を教えていただけますか？"), None
+        # 不正値で弾いた項目があれば、汎用の聞き直しより具体的な案内を優先する
+        return _with_progress(_invalid_msg or f"恐れ入りますが、{_missing[0]}を教えていただけますか？"), None
 
     if request_id and active_requests and request_id not in active_requests:
         logger.info("リクエストがキャンセルされました: request_id=%s", request_id)
@@ -407,6 +435,13 @@ def edit_saved_plan(plan: dict, message: str) -> dict:
                          ("travel_date", _normalize_travel_date(intent.new_travel_date)),
                          ("departure_location", intent.new_departure_location)):
             if new in (None, ""):
+                continue
+            # 入力ガード: あり得ない人数・予算への変更は無視して元の値を保つ
+            if key == "num_people" and (not isinstance(new, int) or new < 1):
+                logger.info("保存プラン修正: 不正な人数(%s)を無視", new)
+                continue
+            if key == "budget_limit" and (not isinstance(new, int) or new <= 0):
+                logger.info("保存プラン修正: 不正な予算(%s)を無視", new)
                 continue
             old = plan.get(key)
             same = ((old or 0) == (new or 0)) if isinstance(new, int) else (str(old or '').strip() == str(new).strip())

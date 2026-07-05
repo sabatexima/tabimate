@@ -9,7 +9,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 24px;
+    margin: 0 auto 24px;   /* 広い画面でも本文（860px）と左端を揃えて中央寄せ */
+    max-width: 860px;
   }
   .page-header h1 {
     font-size: 1.6rem;
@@ -23,6 +24,7 @@
     flex-direction: column;
     gap: 20px;
     max-width: 860px;
+    margin: 0 auto;   /* 広い画面で左寄りにならないよう中央寄せ（空状態・カード共通）*/
   }
   .shared-flag {
     margin-right: auto;
@@ -252,7 +254,7 @@
   }
   .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 168, 58, 0.38); }
 
-  #loading { padding: 8px 0; }
+  #loading { padding: 8px 0; max-width: 860px; margin: 0 auto; }
   /* 読み込み中のスケルトン（待たされ感を減らす） */
   .skeleton-card {
     background: #fffdf8; border: 1px solid #ece3d0; border-radius: 16px;

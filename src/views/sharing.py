@@ -366,7 +366,7 @@ def shared_generate_stickers(trip_id: int):
     items, usage = trip_interpreter.interpret_stickers(feat, images=images)
     repo.replace_stickers(trip_id, items)
     logger.info("共有編集で付箋生成: trip_id=%s count=%d", trip_id, len(items))
-    return jsonify({"stickers": [{"text": it["text"]} for it in items]})
+    return jsonify({"stickers": repo.get_stickers(trip_id)})
 
 
 # ----------------------------------------------------------------------

@@ -1,8 +1,5 @@
 const CFG = JSON.parse(document.getElementById('page-config').textContent);
   const TRIP_ID = CFG.tripId;
-  function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
 
   // --- 共有モーダル ---
   document.getElementById('share-btn').addEventListener('click', () => {
@@ -127,65 +124,110 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     datesSave.disabled = false; datesSave.textContent = '保存';
   });
 
-  // --- 写真アップロード ---
+  // --- 思い出ボード（付箋＋写真）共通 ---
+  const boardEl = document.getElementById('memory-board');
+  const boardEmpty = document.getElementById('board-empty');
+  const photoCountEl = document.getElementById('photo-count');
+
+  function updatePhotoCount() {
+    photoCountEl.textContent = `写真 ${boardEl.querySelectorAll('.polaroid').length} 枚`;
+  }
+  function updateBoardEmpty() {
+    if (boardEmpty) boardEmpty.hidden = !!boardEl.querySelector('.board-item');
+  }
+  function fmtDotDate(s) {
+    return String(s || '').slice(0, 10).replace(/-/g, '.');  // "2026-06-12..." -> "2026.06.12"
+  }
+
+  // --- タブ絞り込み（すべて / 付箋 / 写真）---
+  const tabs = Array.from(document.querySelectorAll('.board-tab'));
+  tabs.forEach((tab) => tab.addEventListener('click', () => {
+    tabs.forEach((t) => t.classList.toggle('is-active', t === tab));
+    const f = tab.dataset.filter;
+    boardEl.classList.toggle('filter-sticker', f === 'sticker');
+    boardEl.classList.toggle('filter-photo', f === 'photo');
+  }));
+
+  // --- 写真アップロード（右下の＋で選択→即アップロード）---
   const uploadBtn = document.getElementById('upload-btn');
-  uploadBtn.addEventListener('click', async () => {
-    const input = document.getElementById('photo-input');
-    if (!input.files.length) { alert('写真を選択してください'); return; }
+  const photoInput = document.getElementById('photo-input');
+  uploadBtn.addEventListener('click', () => photoInput.click());
+  photoInput.addEventListener('change', async () => {
+    if (!photoInput.files.length) return;
     const fd = new FormData();
-    for (const f of input.files) fd.append('photos', f);
-    uploadBtn.disabled = true; uploadBtn.textContent = 'アップロード中...';
+    for (const f of photoInput.files) fd.append('photos', f);
+    uploadBtn.disabled = true;
     try {
       const res = await fetch(`/reflection/trips/${TRIP_ID}/photos`, { method: 'POST', body: fd });
       const data = await res.json();
       if (res.ok) {
-        const grid = document.getElementById('photo-grid');
-        data.saved.forEach(p => grid.appendChild(makePhotoFigure(p)));
-        const cnt = document.getElementById('photo-count');
-        cnt.textContent = `現在 ${grid.querySelectorAll('.photo').length} 枚`;
-        input.value = '';
+        data.saved.forEach((p) => boardEl.appendChild(makePhotoItem(p)));
+        updatePhotoCount(); updateBoardEmpty();
+        photoInput.value = '';
       } else {
         alert(data.error || 'アップロードに失敗しました');
       }
     } catch (e) { alert('アップロードに失敗しました'); }
-    uploadBtn.disabled = false; uploadBtn.textContent = 'アップロード';
+    uploadBtn.disabled = false;
   });
 
-  // アップロード直後の写真も削除できるよう figure を組み立てる
-  function makePhotoFigure(p) {
+  // ポラロイド型の写真アイテムを組み立てる
+  function makePhotoItem(p) {
     const fig = document.createElement('figure');
-    fig.className = 'photo';
+    fig.className = 'board-item polaroid';
+    fig.dataset.kind = 'photo';
     if (p.id != null) fig.dataset.id = p.id;
+    const wrap = document.createElement('div');
+    wrap.className = 'polaroid-img';
     const img = document.createElement('img');
     img.src = p.thumb_url || p.url;
     img.dataset.full = p.url;
     img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
     img.onerror = () => { img.onerror = null; img.src = img.dataset.full; };
+    wrap.appendChild(img);
+    fig.appendChild(wrap);
+    if (p.caption) {
+      const cap = document.createElement('figcaption');
+      cap.textContent = p.caption;
+      fig.appendChild(cap);
+    }
     const del = document.createElement('button');
     del.className = 'photo-del'; del.setAttribute('aria-label', '写真を削除'); del.textContent = '×';
-    fig.appendChild(img); fig.appendChild(del);
+    fig.appendChild(del);
     return fig;
   }
 
-  // --- 写真を1枚削除 ---
-  const photoGrid = document.getElementById('photo-grid');
-  photoGrid.addEventListener('click', async (ev) => {
-    const del = ev.target.closest('.photo-del');
-    if (!del) return;
-    const fig = del.closest('.photo');
-    const id = fig.dataset.id;
-    if (!id) { fig.remove(); return; }
-    if (!confirm('この写真を削除しますか？元に戻せません。')) return;
-    del.disabled = true;
-    try {
-      const res = await fetch(`/reflection/trips/${TRIP_ID}/photos/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok && data.deleted) {
-        fig.remove();
-        const cnt = document.getElementById('photo-count');
-        cnt.textContent = `現在 ${photoGrid.querySelectorAll('.photo').length} 枚`;
-      } else { alert('削除に失敗しました'); del.disabled = false; }
-    } catch (e) { alert('削除に失敗しました'); del.disabled = false; }
+  // --- ボード上のクリック（写真削除 / 付箋削除 / 写真拡大）---
+  boardEl.addEventListener('click', async (ev) => {
+    const pDel = ev.target.closest('.photo-del');
+    if (pDel) {
+      const fig = pDel.closest('.polaroid');
+      const id = fig.dataset.id;
+      if (!id) { fig.remove(); updatePhotoCount(); updateBoardEmpty(); return; }
+      if (!confirm('この写真を削除しますか？元に戻せません。')) return;
+      pDel.disabled = true;
+      try {
+        const res = await fetch(`/reflection/trips/${TRIP_ID}/photos/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.deleted) { fig.remove(); updatePhotoCount(); updateBoardEmpty(); }
+        else { alert('削除に失敗しました'); pDel.disabled = false; }
+      } catch (e) { alert('削除に失敗しました'); pDel.disabled = false; }
+      return;
+    }
+    const sDel = ev.target.closest('.note .del');
+    if (sDel) {
+      const note = sDel.closest('.note');
+      const id = note.dataset.id;
+      if (!id) { note.remove(); updateBoardEmpty(); return; }
+      try {
+        const res = await fetch(`/reflection/trips/${TRIP_ID}/stickers/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.deleted) { note.remove(); updateBoardEmpty(); }
+      } catch (e) { /* 失敗時は次の生成で整合 */ }
+      return;
+    }
+    const fig = ev.target.closest('.polaroid');
+    if (fig && fig.querySelector('img')) lbOpen(lbFigures().indexOf(fig));
   });
 
   // --- 写真の拡大表示（ライトボックス）---
@@ -196,7 +238,7 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   let lbCount = 0;
 
   function lbFigures() {
-    return Array.from(photoGrid.querySelectorAll('.photo'));
+    return Array.from(boardEl.querySelectorAll('.polaroid'));
   }
   function lbShow(i) {
     const figs = lbFigures();
@@ -219,14 +261,6 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     lbImg.src = '';
     document.body.style.overflow = '';
   }
-
-  // 写真をタップで拡大（削除ボタンのクリックは除外）
-  photoGrid.addEventListener('click', (ev) => {
-    if (ev.target.closest('.photo-del')) return;
-    const fig = ev.target.closest('.photo');
-    if (!fig || !fig.querySelector('img')) return;
-    lbOpen(lbFigures().indexOf(fig));
-  });
 
   lightbox.querySelector('.lb-close').addEventListener('click', lbClose);
   lightbox.querySelector('.lb-prev').addEventListener('click', (e) => { e.stopPropagation(); lbShow(lbIndex - 1); });
@@ -251,13 +285,33 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   });
 
   // --- 付箋生成 ---
-  const board = document.getElementById('sticker-board');
+  // 付箋アイテム（ふせん型）を組み立てる。text は textContent なのでエスケープ不要。
+  function makeNoteItem(s) {
+    const div = document.createElement('div');
+    div.className = 'board-item note';
+    div.dataset.kind = 'sticker';
+    if (s.id != null) div.dataset.id = s.id;
+    const t = document.createElement('div');
+    t.className = 'note-text'; t.textContent = s.text;
+    div.appendChild(t);
+    if (s.created_at) {
+      const d = document.createElement('div');
+      d.className = 'note-date'; d.textContent = fmtDotDate(s.created_at);
+      div.appendChild(d);
+    }
+    const del = document.createElement('button');
+    del.className = 'del'; del.setAttribute('aria-label', '削除'); del.textContent = '×';
+    div.appendChild(del);
+    return div;
+  }
+
   function renderStickers(items) {
-    board.innerHTML = items.map(s =>
-      `<div class="sticker">${esc(s.text)}<button class="del" aria-label="削除">×</button></div>`
-    ).join('');
-    const empty = document.getElementById('sticker-empty');
-    if (empty) empty.style.display = items.length ? 'none' : '';
+    // 既存の付箋だけ差し替え、写真は残す。付箋は先頭（写真より前）に並べる。
+    boardEl.querySelectorAll('.note').forEach((n) => n.remove());
+    const frag = document.createDocumentFragment();
+    (items || []).forEach((s) => frag.appendChild(makeNoteItem(s)));
+    boardEl.insertBefore(frag, boardEl.firstChild);
+    updateBoardEmpty();
   }
 
   const stickerBtn = document.getElementById('sticker-btn');
@@ -266,28 +320,10 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     try {
       const res = await fetch(`/reflection/trips/${TRIP_ID}/stickers/generate`, { method: 'POST' });
       const data = await res.json();
-      if (res.ok) {
-        renderStickers(data.stickers || []);
-      } else {
-        alert(data.error || '付箋を作れませんでした');
-      }
+      if (res.ok) renderStickers(data.stickers || []);
+      else alert(data.error || '付箋を作れませんでした');
     } catch (e) { alert('付箋を作れませんでした'); }
-    stickerBtn.disabled = false; stickerBtn.textContent = '付箋を作る';
-  });
-
-  // --- 付箋を1枚削除 ---
-  board.addEventListener('click', async (ev) => {
-    const del = ev.target.closest('.del');
-    if (!del) return;
-    const card = del.closest('.sticker');
-    const id = card.dataset.id;
-    // 生成直後（未保存IDなし）の場合は見た目だけ消す
-    if (!id) { card.remove(); return; }
-    try {
-      const res = await fetch(`/reflection/trips/${TRIP_ID}/stickers/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok && data.deleted) card.remove();
-    } catch (e) { /* 失敗時は何もしない（次の生成で整合する） */ }
+    stickerBtn.disabled = false; stickerBtn.textContent = '✨ 付箋を作る';
   });
 
   // --- 旅の削除（写真・付箋もまとめて消える） ---

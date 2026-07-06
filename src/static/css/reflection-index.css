@@ -106,31 +106,50 @@
   }
   .unshare-btn:hover { background: #f43f5e; color: #fff; border-color: #f43f5e; }
 
-  /* 旅カード（SNSフィード風: 大きな写真主体）*/
-  #trips { display: flex; flex-direction: column; gap: 18px; }
-  .trip-card {
-    position: relative; background: var(--surface); border-radius: var(--radius); overflow: hidden;
-    border: 1px solid var(--border); box-shadow: var(--shadow-card);
-    transition: transform 0.1s;
+  /* 旅カード＝スクラップブックのボードに散りばめたポラロイド */
+  #trips {
+    column-count: 2; column-gap: 14px;
+    background: linear-gradient(160deg, #fbf6ea 0%, #f6efe0 100%);
+    border: 1px solid #ece0c8; border-radius: 18px;
+    padding: 16px;
+    box-shadow: inset 0 2px 10px rgba(150,130,90,0.10);
   }
-  .trip-card:hover { transform: translateY(-2px); }
+  /* display は指定しない（hidden 属性による絞り込みを効かせるため）*/
+  .trip-card {
+    position: relative; break-inside: avoid; -webkit-column-break-inside: avoid;
+    margin: 0 0 14px;
+    background: #fff; border-radius: 3px; padding: 8px 8px 4px;
+    box-shadow: 2px 5px 12px rgba(80,70,50,0.20);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  /* 散らばり感の軽い傾き。並び替えで順序が変わっても崩れないよう nth-child で付与 */
+  .trip-card:nth-child(4n+1) { transform: rotate(-1.8deg); }
+  .trip-card:nth-child(4n+2) { transform: rotate(1.5deg); }
+  .trip-card:nth-child(4n+3) { transform: rotate(-0.8deg); }
+  .trip-card:nth-child(4n)   { transform: rotate(1.1deg); }
+  .trip-card:hover {
+    transform: rotate(0) scale(1.03); z-index: 3;
+    box-shadow: 3px 8px 18px rgba(80,70,50,0.28);
+  }
   .card-link { display: block; text-decoration: none; color: var(--text-main); }
 
   .cover {
     position: relative;
-    width: 100%; aspect-ratio: 4 / 3; background: #f1eefc;
+    width: 100%; aspect-ratio: 1 / 1; background: #efe9dc;
     display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
   }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cover-empty { font-size: 3.4rem; opacity: 0.45; }
 
-  .card-body { padding: 14px 16px 16px; }
+  /* タイトル・日付はポラロイド下の手書き風キャプション */
+  .card-body { padding: 10px 6px 6px; text-align: center; }
   .card-body .t {
-    font-weight: 700; font-size: 1.1em;
+    font-weight: 700; font-size: 0.98em; color: var(--text-main);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .card-body .m { font-size: 0.84em; color: var(--text-muted); margin-top: 4px; }
-  .card-body .meta { font-size: 0.8em; color: var(--text-muted); margin-top: 2px; }
+  .card-body .m { font-size: 0.76em; color: var(--text-muted); margin-top: 3px; }
+  .card-body .meta { font-size: 0.72em; color: var(--text-muted); margin-top: 1px; }
 
   /* 付箋バッジ（1〜2個）: 写真の左下にふせんを貼ったようにオーバーレイ */
   .badges {
@@ -185,23 +204,19 @@
   }
   .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 168, 58, 0.38); }
 
-  /* PC版: 幅を広げてカードを2〜3列のグリッドに（モバイルは1列のまま）*/
+  /* 空状態はボード幅いっぱいに中央表示（列の1つに寄らないよう全列スパン）*/
+  #trips .empty-state { column-span: all; }
+
+  /* PC版: 幅を広げて列数を増やす（散らばりボードのまま）*/
   @media (min-width: 768px) {
     .feed { max-width: 1040px; }
-    /* コントロール類はグリッドと同じ幅に揃える（右端をカードと合わせる） */
-    #trips {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 18px;
-      /* 既定の align-items: stretch により各行のカード高さが揃う（日付有無のガタつき解消）*/
-    }
-    #trips .empty-state { grid-column: 1 / -1; }
+    #trips { column-count: 4; }
   }
 
-  /* 旅カードの登場アニメ（ふわっと出る・少しずつずらして表示） */
+  /* 旅カードの登場アニメ（ふわっとフェードイン。transformは傾きを残すため触らない）*/
   @keyframes cardIn {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
   .trip-card { animation: cardIn 0.45s ease-out both; }
   .trip-card:nth-child(1) { animation-delay: 0.00s; }

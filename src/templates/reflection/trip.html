@@ -33,48 +33,40 @@
   <button class="btn secondary" id="dates-cancel">キャンセル</button>
 </div>
 
-<!-- 思い出ボード（付箋＋写真をひとつのボードに散りばめる）-->
-<div class="board-section">
-  <div class="board-tabs" role="tablist">
-    <button class="board-tab is-active" data-filter="all" role="tab">すべて</button>
-    <button class="board-tab" data-filter="sticker" role="tab">付箋</button>
-    <button class="board-tab" data-filter="photo" role="tab">写真</button>
-  </div>
-
-  <div class="board" id="memory-board">
+<!-- 付箋ボード（主役）-->
+<div class="section sticker-section">
+  <h2>🪧 旅の付箋</h2>
+  <p class="hint">写真から、旅の空気感をそっと言葉にしました。「なにそれ?」と思ったら、下の写真を見返してみてください。</p>
+  <button class="btn" id="sticker-btn">付箋を作る</button>
+  <div class="sticker-board" id="sticker-board">
     {% for s in stickers %}
-    <div class="board-item note" data-kind="sticker" data-id="{{ s.id }}">
-      <div class="note-text">{{ s.text }}</div>
-      {% if s.created_at %}<div class="note-date">{{ s.created_at[:10] | replace('-', '.') }}</div>{% endif %}
-      <button class="del" aria-label="削除">×</button>
-    </div>
-    {% endfor %}
-    {% for p in photos %}
-    <figure class="board-item polaroid" data-kind="photo" data-id="{{ p.id }}">
-      <div class="polaroid-img">
-        <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
-             onerror="this.onerror=null;this.src=this.dataset.full;">
+      <div class="sticker" data-id="{{ s.id }}">
+        {{ s.text }}<button class="del" aria-label="削除">×</button>
       </div>
-      {% if p.caption %}<figcaption>{{ p.caption }}</figcaption>{% endif %}
+    {% endfor %}
+  </div>
+  {% if not stickers %}
+    <div class="sticker-empty" id="sticker-empty">写真を入れると、ここに旅の付箋が並びます。</div>
+  {% endif %}
+</div>
+
+<!-- 写真 -->
+<div class="section">
+  <h2>📷 写真</h2>
+  <p class="hint">旅の写真をまとめてアップロード。ここから付箋を生成します。</p>
+  <div class="photo-grid" id="photo-grid">
+    {% for p in photos %}
+    <figure class="photo" data-id="{{ p.id }}">
+      <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
+           onerror="this.onerror=null;this.src=this.dataset.full;">
       <button class="photo-del" aria-label="写真を削除">×</button>
     </figure>
     {% endfor %}
   </div>
-
-  <div class="board-empty" id="board-empty" {% if stickers or photos %}hidden{% endif %}>
-    <img src="{{ url_for('static', filename='img/mate.png') }}" alt="">
-    <p>まだ何もありません。<br>写真を追加して、旅の付箋を作ってみましょう🍀</p>
-  </div>
-
-  <div class="board-actions">
-    <button class="btn" id="sticker-btn">✨ 付箋を作る</button>
-    <span class="photo-count" id="photo-count">写真 {{ photos|length }} 枚</span>
-  </div>
+  <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
+  <input type="file" id="photo-input" accept="image/*" multiple style="margin-bottom:10px;">
+  <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
-
-<!-- 写真追加（FAB）。file input は隠して FAB から開く -->
-<input type="file" id="photo-input" accept="image/*" multiple hidden>
-<button class="board-fab" id="upload-btn" aria-label="写真を追加" title="写真を追加">＋</button>
 
 {% if footprints or my_plans %}
 <!-- 旅の足あと（撮影地マップ）＋プランの重ね合わせ -->

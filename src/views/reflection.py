@@ -364,8 +364,8 @@ def generate_stickers(trip_id: int):
     repo.replace_stickers(trip_id, items)
     logger.info("付箋生成: trip_id=%s count=%d tokens(in/out)=%d/%d",
                 trip_id, len(items), usage["input_tokens"], usage["output_tokens"])
-    # 保存後の付箋（id・作成日つき・basis非表示）を返す。ボードで日付表示・削除に使う。
-    return jsonify({"stickers": repo.get_stickers(trip_id)})
+    # 付箋の言葉のみ返す。basis（生成根拠）・トークン等の内部情報は返さない。
+    return jsonify({"stickers": [{"text": it["text"]} for it in items]})
 
 
 @reflection.route("/trips/<int:trip_id>/stickers", methods=["GET"])

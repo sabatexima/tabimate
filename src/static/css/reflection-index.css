@@ -121,6 +121,9 @@
     display: grid; grid-template-columns: 1fr 1fr;
     gap: 14px; align-items: center;
   }
+  /* display:grid が UA の [hidden]{display:none} を上書きしてしまうため明示的に隠す
+     （検索・お気に入り絞り込みで hidden 属性が効くようにする）*/
+  .trip-card[hidden] { display: none; }
   .card-link {
     display: contents;  /* cover と card-note を trip-card のグリッド列にする */
     text-decoration: none; color: var(--text-main);
@@ -172,7 +175,16 @@
     font-size: 0.7rem; font-weight: 600; cursor: pointer;
   }
 
-  /* ホバーで軽く起こす */
+  /* 画像と付箋を旅ごとに左右交互に配置（偶数番目は写真=右／付箋=左）*/
+  .trip-card:nth-child(even) .cover {
+    grid-column: 2; grid-row: 1; transform: rotate(1.6deg);
+  }
+  .trip-card:nth-child(even) .card-note {
+    grid-column: 1; grid-row: 1; transform: rotate(-1.3deg);
+    padding: 14px 14px 12px;  /* ⋯メニューは写真側に来るので右余白は不要 */
+  }
+
+  /* ホバーで軽く起こす（交互ルールより後に置き、ホバー時は必ず水平に）*/
   .trip-card:hover .cover,
   .trip-card:hover .card-note { transform: rotate(0); }
 

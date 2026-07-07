@@ -232,11 +232,9 @@
   /* 空状態はボード内で中央表示（text-align:center 済み）*/
   #trips .empty-state { align-self: stretch; }
 
-  /* PC版: 旅を2つ横並び（各旅は内部で写真｜ラベル＝実質4カラム）*/
+  /* PCでも旅は横に1つ（縦に積む）。幅だけ少し広げて中央寄せする */
   @media (min-width: 768px) {
-    .feed { max-width: 960px; }
-    #trips { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
-    #trips .empty-state { grid-column: 1 / -1; }
+    .feed { max-width: 600px; }
   }
 
   /* 旅カードの登場アニメ（ふわっとフェードイン。transformは傾きを残すため触らない）*/

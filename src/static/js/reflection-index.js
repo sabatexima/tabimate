@@ -146,7 +146,11 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   const favFilterBtn = document.getElementById('fav-filter');
   let favOnly = false;
 
-  const norm = (s) => (s || '').toString().toLowerCase();
+  // カタカナ→ひらがな（検索でカナ表記ゆれを吸収）
+  const kataToHira = (s) => s.replace(/[ァ-ヶ]/g,
+    (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+  // 全角/半角・大文字小文字・カナ種別を正規化して比較しやすくする
+  const norm = (s) => kataToHira((s || '').toString().normalize('NFKC').toLowerCase());
 
   function compareCards(a, b, mode) {
     const txt = (c) => norm(c.dataset.title);
@@ -169,12 +173,13 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
 
   function applyFilterSort() {
     if (!searchEl) return;
-    const q = norm(searchEl.value).trim();
+    // スペース区切りは AND 検索（各語をすべて含むものだけ表示）
+    const terms = norm(searchEl.value).trim().split(/\s+/).filter(Boolean);
     const cards = Array.from(tripsEl.querySelectorAll('.trip-card'));
     let visible = 0;
     cards.forEach((c) => {
       const hay = norm(c.dataset.title) + ' ' + norm(c.dataset.stickers);
-      const matchText = !q || hay.indexOf(q) !== -1;
+      const matchText = terms.every((t) => hay.indexOf(t) !== -1);
       const matchFav = !favOnly || c.dataset.favorite === '1';
       const show = matchText && matchFav;
       c.hidden = !show;

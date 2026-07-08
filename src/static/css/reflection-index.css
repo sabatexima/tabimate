@@ -175,6 +175,32 @@
     font-size: 0.7rem; font-weight: 600; cursor: pointer;
   }
 
+  /* 押しピンでボードに留めた表現（写真・付箋の上端中央に画鋲を刺す）*/
+  .cover::before,
+  .card-note::before {
+    content: ""; position: absolute; z-index: 8; pointer-events: none;
+    top: -9px; left: 50%; width: 16px; height: 16px; border-radius: 50%;
+    transform: translateX(-50%);
+    /* 光沢（左上）＋赤いドーム（右下に影）で立体的なピンに */
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 62% 68%, #c0344b 0%, #e15268 52%, #ff8ea0 100%);
+    box-shadow: 0 4px 5px rgba(70,45,30,0.35);
+  }
+  /* ピンの色を旅ごとに変えて散らばり感を出す（緑＝クローバー / 黄）*/
+  .trip-card:nth-child(3n+2) .cover::before,
+  .trip-card:nth-child(3n+2) .card-note::before {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 62% 68%, #2f8f5b 0%, #47b06f 52%, #8ad89d 100%);
+  }
+  .trip-card:nth-child(3n) .cover::before,
+  .trip-card:nth-child(3n) .card-note::before {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 62% 68%, #d9a021 0%, #f0be3c 52%, #ffe392 100%);
+  }
+
   /* 画像と付箋を旅ごとに左右交互に配置（偶数番目は写真=右／付箋=左）*/
   .trip-card:nth-child(even) .cover {
     grid-column: 2; grid-row: 1; transform: rotate(1.6deg);

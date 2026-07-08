@@ -116,11 +116,49 @@ function esc(str) {
     </details>`;
   }
 
-  // プラン本体（概要＋アコーディオン）のHTML。renderPlan / プレビューで共用。
-  function planBodyHtml(plan) {
+  // 絵本の表紙（概要だけ）。クリックで詳細をひらく。
+  function planCoverHtml(plan, opts = {}) {
     const saved = plan.created_at
       ? new Date(plan.created_at).toLocaleDateString('ja-JP')
       : '';
+    const cost = plan.total_per_person
+      ? `💴 ${fmt(plan.total_per_person)}円/人`
+      : (plan.budget_limit ? `💴 〜${fmt(plan.budget_limit)}円/人` : '');
+    const chips = [
+      plan.departure_location ? `📍 ${esc(plan.departure_location)}発` : '',
+      plan.duration ? `⏱ ${esc(plan.duration)}` : '',
+      plan.num_people != null ? `👥 ${esc(plan.num_people)}人` : '',
+      cost,
+    ].filter(Boolean).map((c) => `<span class="cover-chip">${c}</span>`).join('');
+    return `
+      <button class="plan-cover" type="button" aria-expanded="false">
+        <span class="cover-icon" aria-hidden="true">🗾</span>
+        <span class="cover-main">
+          <span class="cover-dest">${esc(plan.destination)}${opts.shared ? '<span class="cover-shared">🤝 共有</span>' : ''}</span>
+          <span class="cover-chips">${chips}</span>
+          ${saved ? `<span class="cover-meta">保存日 ${esc(saved)}</span>` : ''}
+        </span>
+        <span class="cover-toggle" aria-hidden="true">ひらく ▾</span>
+      </button>`;
+  }
+
+  // 表紙クリックで詳細の開閉を結線する（絵本をひらくイメージ）
+  function mountCoverToggle(card) {
+    const cover = card.querySelector('.plan-cover');
+    const body = card.querySelector('.plan-body');
+    if (!cover || !body) return;
+    cover.addEventListener('click', () => {
+      const opening = body.hidden;
+      body.hidden = !opening;
+      cover.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      card.classList.toggle('open', opening);
+      const t = cover.querySelector('.cover-toggle');
+      if (t) t.textContent = opening ? 'とじる ▴' : 'ひらく ▾';
+    });
+  }
+
+  // 詳細（天気・アコーディオン・宿・地図）。表紙をひらくと見える部分。
+  function planDetailHtml(plan) {
     const mapId = `plan-map-${esc(plan.id)}`;
     const hasSpots = plan.spots && plan.spots.length > 0;
     const mapSection = hasSpots ? `
@@ -130,16 +168,6 @@ function esc(str) {
         <div class="plan-map-container" id="${mapId}" hidden></div>
       </div>` : '';
     return `
-      <div class="plan-summary-block">
-        <div class="plan-title">🗾 旅行プラン：${esc(plan.destination)}</div>
-        ${saved ? `<div class="plan-meta">保存日: ${esc(saved)}</div>` : ''}
-        <div class="plan-summary-grid">
-          <span>📍 出発地: ${esc(plan.departure_location || '—')}</span>
-          <span>⏱️ 期間: ${esc(plan.duration || '—')}</span>
-          <span>👥 人数: ${plan.num_people != null ? esc(plan.num_people) + '人' : '—'}</span>
-          <span>${plan.total_per_person ? `💴 費用の目安: <span style="white-space:nowrap">${fmt(plan.total_per_person)}円/人</span>` : `💴 予算上限: <span style="white-space:nowrap">${fmt(plan.budget_limit)}円/人</span>`}</span>
-        </div>
-      </div>
       <div class="plan-weather" id="weather-${esc(plan.id)}" hidden></div>
       <div class="plan-accordion">
         ${accordion('✨', '主要観光地', plan.spots)}
@@ -161,11 +189,19 @@ function esc(str) {
     card.className = 'plan-card plan-preview';
     card.innerHTML = `
       <div class="preview-banner">✏️ 修正案のプレビュー（まだ保存していません）</div>
-      ${planBodyHtml(proposed)}
-      <div class="plan-footer">
-        <button class="preview-cancel" type="button">やめる</button>
-        <button class="preview-apply" type="button">この内容で更新する</button>
+      ${planCoverHtml(proposed, { shared })}
+      <div class="plan-body">
+        ${planDetailHtml(proposed)}
+        <div class="plan-footer">
+          <button class="preview-cancel" type="button">やめる</button>
+          <button class="preview-apply" type="button">この内容で更新する</button>
+        </div>
       </div>`;
+    card.classList.add('open');  // 修正案は中身を確認するものなので開いた状態で
+    mountCoverToggle(card);
+    const pvCover = card.querySelector('.plan-cover');
+    pvCover.setAttribute('aria-expanded', 'true');
+    pvCover.querySelector('.cover-toggle').textContent = 'とじる ▴';
 
     card.querySelector('.preview-cancel').addEventListener('click', () => {
       card.replaceWith(renderPlan(origPlan, { shared }));  // 元のプランに戻す
@@ -247,11 +283,15 @@ function esc(str) {
 
     card.innerHTML = `
       ${ribbonHtml}
-      ${planBodyHtml(plan)}
-      ${footer}
-      ${editArea}
-      ${ratingArea}
+      ${planCoverHtml(plan, { shared })}
+      <div class="plan-body" hidden>
+        ${planDetailHtml(plan)}
+        ${footer}
+        ${editArea}
+        ${ratingArea}
+      </div>
     `;
+    mountCoverToggle(card);
 
     if (editable) {
       // チャットで修正：入力欄の開閉（自分のプラン or 編集可で共有されたプラン）

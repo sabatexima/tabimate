@@ -109,29 +109,43 @@
   /* 旅カード＝スクラップブックのボードに散りばめたポラロイド */
   /* ボード上に、旅ごとに「写真（ポラロイド）｜付箋ラベル」を左右ペアで並べる */
   #trips {
+    position: relative;
     display: flex; flex-direction: column; gap: 18px;
     padding: 22px 18px;
-    border-radius: 12px;
-    /* 木枠フレーム＋内側にコルク面の落ち込み影 */
-    border: 10px solid #9c6b34;
+    border-radius: 16px;
+    /* クリーム色のやさしい木枠＋内側にコルク面の落ち込み影 */
+    border: 10px solid #f3dcb0;
     box-shadow:
-      inset 0 0 0 2px rgba(120,80,40,0.4),
-      inset 0 3px 16px rgba(70,45,20,0.35),
-      0 8px 20px rgba(60,40,20,0.28);
-    background-color: #cba876;
-    /* コルクの粒々（細かいスペックル）＋大きめの色ムラ＋ベースのグラデーション */
+      inset 0 0 0 2px rgba(200,150,90,0.30),
+      inset 0 3px 14px rgba(150,110,60,0.22),
+      0 8px 20px rgba(150,110,60,0.18);
+    background-color: #e4c496;
+    /* ミルクティー色のコルク：粒々スペックル＋色ムラ＋ベース */
     background-image:
-      radial-gradient(circle at 18% 28%, rgba(110,72,36,0.30) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 68% 62%, rgba(88,56,26,0.28) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 42% 82%, rgba(150,108,64,0.32) 0 1.8px, transparent 2.4px),
-      radial-gradient(circle at 85% 16%, rgba(96,64,30,0.24) 0 1px, transparent 1.6px),
-      radial-gradient(circle at 8% 66%, rgba(160,120,76,0.26) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 20% 18%, rgba(255,240,214,0.20), transparent 42%),
-      radial-gradient(circle at 82% 74%, rgba(96,62,30,0.18), transparent 46%),
-      linear-gradient(160deg, #d3b07d 0%, #c19c66 100%);
+      radial-gradient(circle at 18% 28%, rgba(140,96,50,0.20) 0 1.4px, transparent 2px),
+      radial-gradient(circle at 68% 62%, rgba(120,80,40,0.18) 0 1.4px, transparent 2px),
+      radial-gradient(circle at 42% 82%, rgba(170,124,74,0.22) 0 1.8px, transparent 2.4px),
+      radial-gradient(circle at 85% 16%, rgba(126,88,44,0.16) 0 1px, transparent 1.6px),
+      radial-gradient(circle at 8% 66%, rgba(184,142,92,0.18) 0 1.4px, transparent 2px),
+      radial-gradient(circle at 20% 18%, rgba(255,244,222,0.24), transparent 42%),
+      radial-gradient(circle at 82% 74%, rgba(140,96,50,0.12), transparent 46%),
+      linear-gradient(160deg, #e9cd9f 0%, #dcba85 100%);
     background-size:
       13px 13px, 17px 17px, 23px 23px, 11px 11px, 19px 19px,
       100% 100%, 100% 100%, 100% 100%;
+  }
+  /* ボードの角にステッカーをぺたり（クローバーとお花）*/
+  #trips::before {
+    content: "🍀"; position: absolute; top: -18px; left: -16px; z-index: 9;
+    font-size: 1.9rem; transform: rotate(-16deg);
+    filter: drop-shadow(0 2px 3px rgba(90,60,30,0.3));
+    pointer-events: none;
+  }
+  #trips::after {
+    content: "🌼"; position: absolute; bottom: -14px; right: -12px; z-index: 9;
+    font-size: 1.7rem; transform: rotate(12deg);
+    filter: drop-shadow(0 2px 3px rgba(90,60,30,0.3));
+    pointer-events: none;
   }
   /* 1旅 = 2カラム（左:写真 / 右:ラベル）。display は指定せず hidden 絞り込みを維持 */
   .trip-card {
@@ -150,9 +164,9 @@
   /* 左：写真（ポラロイド）*/
   .cover {
     position: relative; margin: 0;
-    background: #fff; padding: 7px; border-radius: 3px;
+    background: #fff; padding: 7px 7px 16px; border-radius: 4px;  /* 下に余白＝ポラロイドのあご */
     box-shadow: 2px 5px 12px rgba(80,70,50,0.20);
-    transform: rotate(-1.6deg); transition: transform 0.15s;
+    transform: rotate(-2.2deg); transition: transform 0.15s;
   }
   .cover img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #efe9dc; }
   .cover-empty {
@@ -167,7 +181,7 @@
     background: linear-gradient(150deg, #fff6c9 0%, #fdefac 100%);
     padding: 14px 34px 12px 14px; border-radius: 3px; min-width: 0;  /* 右は「⋯」メニュー分を空ける */
     box-shadow: 2px 4px 10px rgba(120,100,40,0.16);
-    transform: rotate(1.3deg); transition: transform 0.15s;
+    transform: rotate(1.8deg); transition: transform 0.15s;
   }
   .trip-card:nth-child(3n+2) .card-note { background: linear-gradient(150deg, #ffe0e6 0%, #ffd0da 100%); }
   .note-title {
@@ -185,6 +199,11 @@
     display: flex; flex-direction: column; gap: 2px;
   }
   .trip-card:nth-child(3n+2) .note-meta { color: rgba(122,59,72,0.72); }
+  /* 3枚に1枚はミントの付箋（いろどり）*/
+  .trip-card:nth-child(3n) .card-note { background: linear-gradient(150deg, #e2f6ea 0%, #cdeedd 100%); }
+  .trip-card:nth-child(3n) .note-title { color: #2f6b4f; }
+  .trip-card:nth-child(3n) .note-memo { color: #4d8a6d; }
+  .trip-card:nth-child(3n) .note-meta { color: rgba(47,107,79,0.72); }
   /* 共有解除は付箋内の小さなボタンに */
   .card-note .unshare-btn {
     position: static; display: inline-block; margin-top: 10px;
@@ -193,40 +212,63 @@
     font-size: 0.7rem; font-weight: 600; cursor: pointer;
   }
 
-  /* 押しピンでボードに留めた表現（写真・付箋の上端中央に画鋲を刺す）*/
-  .cover::before,
-  .card-note::before {
+  /* 写真＝パステルの押しピン、付箋＝マスキングテープで留めた表現 */
+  .cover::before {
     content: ""; position: absolute; z-index: 8; pointer-events: none;
     top: -9px; left: 50%; width: 16px; height: 16px; border-radius: 50%;
     transform: translateX(-50%);
-    /* 光沢（左上）＋赤いドーム（右下に影）で立体的なピンに */
+    /* 光沢（左上）＋いちごミルク色のドーム（右下に影）で立体的なピンに */
     background:
       radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
-      radial-gradient(circle at 62% 68%, #c0344b 0%, #e15268 52%, #ff8ea0 100%);
-    box-shadow: 0 4px 5px rgba(70,45,30,0.35);
+      radial-gradient(circle at 62% 68%, #e86a90 0%, #f78bab 52%, #ffc9d8 100%);
+    box-shadow: 0 4px 5px rgba(100,65,40,0.30);
   }
-  /* ピンの色を旅ごとに変えて散らばり感を出す（緑＝クローバー / 黄）*/
-  .trip-card:nth-child(3n+2) .cover::before,
+  .trip-card:nth-child(3n+2) .cover::before {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 62% 68%, #3aa576 0%, #5fc493 52%, #abe8c8 100%);
+  }
+  .trip-card:nth-child(3n) .cover::before {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 62% 68%, #e0a92e 0%, #ffd766 52%, #fff0b8 100%);
+  }
+  /* 付箋のマスキングテープ（半透明ストライプ・端はギザギザ）*/
+  .card-note::before {
+    content: ""; position: absolute; z-index: 8; pointer-events: none;
+    top: -11px; left: 50%; width: 66px; height: 22px;
+    transform: translateX(-50%) rotate(-4deg);
+    background: repeating-linear-gradient(45deg,
+      rgba(247,143,175,0.55) 0 7px, rgba(255,203,219,0.55) 7px 14px);
+    box-shadow: 0 2px 4px rgba(120,80,50,0.18);
+    clip-path: polygon(0 0, 100% 0, 97% 15%, 100% 30%, 97% 50%, 100% 70%, 97% 85%, 100% 100%,
+                       0 100%, 3% 85%, 0 70%, 3% 50%, 0 30%, 3% 15%);
+  }
   .trip-card:nth-child(3n+2) .card-note::before {
-    background:
-      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
-      radial-gradient(circle at 62% 68%, #2f8f5b 0%, #47b06f 52%, #8ad89d 100%);
+    background: repeating-linear-gradient(45deg,
+      rgba(95,196,147,0.5) 0 7px, rgba(171,232,200,0.5) 7px 14px);
   }
-  .trip-card:nth-child(3n) .cover::before,
   .trip-card:nth-child(3n) .card-note::before {
-    background:
-      radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 40%),
-      radial-gradient(circle at 62% 68%, #d9a021 0%, #f0be3c 52%, #ffe392 100%);
+    background: repeating-linear-gradient(45deg,
+      rgba(255,215,102,0.55) 0 7px, rgba(255,240,184,0.55) 7px 14px);
+  }
+  /* 付箋の右下をちょこっとめくれた紙に */
+  .card-note::after {
+    content: ""; position: absolute; right: 0; bottom: 0; width: 0; height: 0;
+    border-style: solid; border-width: 0 0 16px 16px;
+    border-color: transparent transparent rgba(120,90,40,0.13) transparent;
+    pointer-events: none;
   }
 
   /* 画像と付箋を旅ごとに左右交互に配置（偶数番目は写真=右／付箋=左）*/
   .trip-card:nth-child(even) .cover {
-    grid-column: 2; grid-row: 1; transform: rotate(1.6deg);
+    grid-column: 2; grid-row: 1; transform: rotate(2.2deg);
   }
   .trip-card:nth-child(even) .card-note {
-    grid-column: 1; grid-row: 1; transform: rotate(-1.3deg);
+    grid-column: 1; grid-row: 1; transform: rotate(-1.8deg);
     padding: 14px 14px 12px;  /* ⋯メニューは写真側に来るので右余白は不要 */
   }
+  .trip-card:nth-child(even) .card-note::before { transform: translateX(-50%) rotate(4deg); }
 
   /* ホバーで軽く起こす（交互ルールより後に置き、ホバー時は必ず水平に）*/
   .trip-card:hover .cover,

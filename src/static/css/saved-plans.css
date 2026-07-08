@@ -33,42 +33,73 @@
     font-size: 0.85em;
   }
   .plan-card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
+    background: #fffdf6;
+    border-radius: 6px 22px 22px 6px;   /* 左＝綴じ側は角丸を控えめに */
+    border: 2px solid #ecdfc3;
     overflow: hidden;
     box-shadow: var(--shadow-card);
   }
 
-  .plan-summary-block {
-    background: var(--header-grad);
-    color: white;
-    padding: 14px 16px;
+  /* ===== 絵本の表紙（概要）。クリックで詳細をひらく ===== */
+  .plan-cover {
+    display: flex; align-items: center; gap: 14px; width: 100%;
+    background: none; border: none; cursor: pointer; text-align: left;
+    padding: 18px 18px 16px 20px;
+    font-family: inherit; color: var(--text-main);
+    transition: background 0.15s;
   }
-  .plan-title {
-    font-size: 1.05em;
-    font-weight: 700;
-    margin-bottom: 8px;
+  .plan-cover:hover { background: #fdf8ea; }
+  /* 挿絵メダル（目的地の絵をはめる丸窓のイメージ）*/
+  .cover-icon {
+    flex: 0 0 auto; width: 54px; height: 54px; border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #f3fbea, #d9efc6);
+    border: 2px dashed #a8d494;
+    display: flex; align-items: center; justify-content: center; font-size: 1.5em;
   }
-  .plan-meta {
-    font-size: 0.82em;
-    opacity: 0.8;
-    margin-bottom: 8px;
+  .cover-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  .cover-dest {
+    font-size: 1.25em; font-weight: 800; color: #45613a; line-height: 1.3;
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 2px;  /* 手書きふうの波線 */
+    text-underline-offset: 5px;
   }
-  .plan-summary-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 12px;
-    font-size: 0.88em;
-    opacity: 0.95;
+  .cover-shared {
+    margin-left: 8px; font-size: 0.6em; font-weight: 700; color: #4a7aa8;
+    background: #eaf3fb; border: 1px solid #cfe2f2; border-radius: 10px;
+    padding: 2px 8px; vertical-align: 2px; text-decoration: none; display: inline-block;
   }
-  .plan-summary-grid span { display: block; }
+  .cover-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cover-chip {
+    font-size: 0.78em; font-weight: 600; color: #6b6046;
+    background: #fbf3dd; border: 1px solid #eddfba; border-radius: 12px; padding: 3px 10px;
+  }
+  /* チップはパステルで巡回（絵本のいろどり）*/
+  .cover-chip:nth-child(2) { background: #eaf6e2; border-color: #cfe8c0; color: #4c7040; }
+  .cover-chip:nth-child(3) { background: #fdeef0; border-color: #f4d3da; color: #8a5560; }
+  .cover-chip:nth-child(4) { background: #eaf3fb; border-color: #cfe2f2; color: #4c6b8a; }
+  .cover-meta { font-size: 0.72em; color: #b0a488; }
+  .cover-toggle {
+    flex: 0 0 auto; font-size: 0.78em; font-weight: 700; color: #679a4e;
+    background: #f2f9ec; border: 1px solid #cfe6bf; border-radius: 16px; padding: 6px 12px;
+    white-space: nowrap;
+  }
+  .plan-cover:hover .cover-toggle { background: #e7f4dd; }
+
+  /* ひらいた詳細（絵本の中身）*/
+  .plan-body { border-top: 2px dashed #f0e5c8; }
+  .plan-body[hidden] { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .plan-body { animation: bodyOpen 0.25s ease; }
+  }
+  @keyframes bodyOpen {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+  }
 
   .plan-accordion {
-    border-top: 1px solid rgba(79,168,58,0.1);
+    border-top: none;
   }
   .plan-accordion details {
-    border-bottom: 1px solid rgba(79,168,58,0.08);
+    border-bottom: 2px dashed #f2e8cf;   /* 点線区切りで手作りノートふうに */
   }
   .plan-accordion details:last-child { border-bottom: none; }
   .plan-accordion summary {
@@ -383,6 +414,12 @@
 
   /* スマホ: 縦積みで押しやすく */
   @media (max-width: 600px) {
+    /* トグルは下段の全幅バーにして、チップに横幅をゆずる */
+    .plan-cover { flex-wrap: wrap; gap: 10px; padding: 14px 42px 12px 16px; }
+    .cover-icon { width: 44px; height: 44px; font-size: 1.25em; }
+    .cover-dest { font-size: 1.12em; }
+    .cover-chip { white-space: nowrap; }
+    .cover-toggle { flex: 1 1 100%; text-align: center; padding: 7px; margin-top: 2px; }
     /* フッターのボタンはスマホでは中央寄せで折り返し、窮屈さを解消 */
     .plan-footer { justify-content: center; gap: 10px; }
     .edit-btn { margin-right: 0; }
@@ -412,7 +449,7 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
-    margin: 0 16px 12px;
+    margin: 12px 16px;
     padding: 10px 14px;
     border-radius: 14px;
     background: linear-gradient(135deg, #eef6ff 0%, #f3f9ff 100%);
@@ -449,39 +486,38 @@
 
   /* 地図関連のスタイルは plan-map.css に切り出し（共有プランと共用） */
 
-  /* ===== ブックレット（旅のしおり）風の装丁 ===== */
-  /* 左に綴じ帯（背表紙）、上からしおりリボンを垂らして「旅の小冊子」に見せる */
+  /* ===== ブックレット（絵本）風の装丁 ===== */
+  /* 左に綴じ帯（背表紙）、上からしおりリボンを垂らして「旅の絵本」に見せる */
   .plan-card {
     position: relative;
     padding-left: 16px;                     /* 背表紙の帯ぶんを空ける */
-    border-radius: 5px 18px 18px 5px;       /* 左＝綴じ側は角丸を控えめに */
-    box-shadow: 0 8px 20px rgba(110,90,60,0.16), inset -3px 0 0 rgba(120,100,70,0.04);
+    box-shadow: 0 8px 20px rgba(110,90,60,0.14), inset -3px 0 0 rgba(120,100,70,0.04);
   }
-  /* 背表紙（左の綴じ帯）*/
+  /* 背表紙（左の綴じ帯）：やわらかい若草色 */
   .plan-card::before {
     content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 16px; z-index: 3;
-    background: linear-gradient(180deg, #3f8a30, #2e6c22);
-    box-shadow: inset -2px 0 5px rgba(0,0,0,0.22);
+    background: linear-gradient(180deg, #8cc973, #63a94b);
+    box-shadow: inset -2px 0 5px rgba(0,0,0,0.16);
     pointer-events: none;
   }
   /* 綴じのステッチ（点線）*/
   .plan-card::after {
     content: ""; position: absolute; top: 12px; bottom: 12px; left: 7px; z-index: 4;
-    border-left: 2px dotted rgba(255,255,255,0.55);
+    border-left: 2px dotted rgba(255,255,255,0.6);
     pointer-events: none;
   }
   /* しおりリボン（上から垂らす。評価済みで金＋★に変わる）*/
   .book-ribbon {
-    position: absolute; top: 0; right: 26px; width: 28px; height: 52px; z-index: 6;
-    background: linear-gradient(180deg, #efe3c2, #e3d0a0);
-    box-shadow: 0 3px 5px rgba(0,0,0,0.22);
+    position: absolute; top: 0; right: 14px; width: 24px; height: 44px; z-index: 6;
+    background: linear-gradient(180deg, #f2e7c9, #e6d4a6);
+    box-shadow: 0 3px 5px rgba(0,0,0,0.18);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
     display: flex; align-items: flex-start; justify-content: center;
-    padding-top: 7px; font-size: 0.72em; font-weight: 800; color: #8a6d00;
+    padding-top: 6px; font-size: 0.66em; font-weight: 800; color: #8a6d00;
     pointer-events: none;
   }
   .plan-card.has-rating .book-ribbon {
     background: linear-gradient(180deg, #ffd759, #f5b301); color: #7a5600;
   }
-  /* 目的地を主役に少し大きく */
-  .plan-title { font-size: 1.2em; }
+  /* リボンと重ならないよう、表紙の右端を少し空ける */
+  .plan-cover { padding-right: 46px; }

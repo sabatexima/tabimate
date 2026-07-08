@@ -448,3 +448,40 @@
   }
 
   /* 地図関連のスタイルは plan-map.css に切り出し（共有プランと共用） */
+
+  /* ===== ブックレット（旅のしおり）風の装丁 ===== */
+  /* 左に綴じ帯（背表紙）、上からしおりリボンを垂らして「旅の小冊子」に見せる */
+  .plan-card {
+    position: relative;
+    padding-left: 16px;                     /* 背表紙の帯ぶんを空ける */
+    border-radius: 5px 18px 18px 5px;       /* 左＝綴じ側は角丸を控えめに */
+    box-shadow: 0 8px 20px rgba(110,90,60,0.16), inset -3px 0 0 rgba(120,100,70,0.04);
+  }
+  /* 背表紙（左の綴じ帯）*/
+  .plan-card::before {
+    content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 16px; z-index: 3;
+    background: linear-gradient(180deg, #3f8a30, #2e6c22);
+    box-shadow: inset -2px 0 5px rgba(0,0,0,0.22);
+    pointer-events: none;
+  }
+  /* 綴じのステッチ（点線）*/
+  .plan-card::after {
+    content: ""; position: absolute; top: 12px; bottom: 12px; left: 7px; z-index: 4;
+    border-left: 2px dotted rgba(255,255,255,0.55);
+    pointer-events: none;
+  }
+  /* しおりリボン（上から垂らす。評価済みで金＋★に変わる）*/
+  .book-ribbon {
+    position: absolute; top: 0; right: 26px; width: 28px; height: 52px; z-index: 6;
+    background: linear-gradient(180deg, #efe3c2, #e3d0a0);
+    box-shadow: 0 3px 5px rgba(0,0,0,0.22);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 7px; font-size: 0.72em; font-weight: 800; color: #8a6d00;
+    pointer-events: none;
+  }
+  .plan-card.has-rating .book-ribbon {
+    background: linear-gradient(180deg, #ffd759, #f5b301); color: #7a5600;
+  }
+  /* 目的地を主役に少し大きく */
+  .plan-title { font-size: 1.2em; }

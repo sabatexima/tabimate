@@ -89,6 +89,10 @@ function esc(str) {
           plan.rating = current; plan.rating_comment = comment;
           box.outerHTML = ratedRateHtml(current, comment);
           mountRate(card, plan);
+          // しおりリボンを金＋★に更新
+          card.classList.add('has-rating');
+          const ribbon = card.querySelector('.book-ribbon');
+          if (ribbon) ribbon.textContent = '★' + current;
           if (window.cloverBurst) window.cloverBurst();
         } else {
           alert(result.message || '記録に失敗しました');
@@ -204,6 +208,10 @@ function esc(str) {
     const editable = !shared || plan.permission === 'edit';
     const card = document.createElement('div');
     card.className = 'plan-card';
+    // ブックレットのしおりリボン：自分のプランで評価済みなら金＋★を表示
+    const rated = !shared && plan.rating;
+    if (rated) card.classList.add('has-rating');
+    const ribbonHtml = `<span class="book-ribbon">${rated ? '★' + esc(plan.rating) : ''}</span>`;
 
     const editBtnHtml = editable
       ? `<button class="edit-btn" data-id="${esc(plan.id)}">✏️ チャットで修正</button>`
@@ -238,6 +246,7 @@ function esc(str) {
         : editableRateHtml(plan));
 
     card.innerHTML = `
+      ${ribbonHtml}
       ${planBodyHtml(plan)}
       ${footer}
       ${editArea}

@@ -34,7 +34,7 @@
   .field.title-field { flex: 1 1 100%; }
   .field label { font-size: 0.78em; color: var(--text-muted); font-weight: 600; }
   .new-trip input {
-    border: 1px solid #ddd; border-radius: 8px; padding: 9px 12px; font-size: 0.92em;
+    border: 1px solid #e0d5c0; border-radius: 10px; padding: 9px 12px; font-size: 0.92em;
   }
   .field.title-field input { width: 100%; box-sizing: border-box; }
   .field.date-field { flex: 1 1 0; min-width: 0; }
@@ -43,7 +43,7 @@
     -webkit-appearance: none; appearance: none; min-height: 38px; background: #fff;
   }
   .new-trip button.create {
-    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    background: var(--primary-color); color: #fff; border: none; border-radius: 20px;
     padding: 11px 20px; font-weight: 600; cursor: pointer; font-size: 0.92em;
     flex: 1 1 100%; margin-top: 4px;
   }
@@ -58,11 +58,11 @@
   }
   #album-search {
     width: 100%; box-sizing: border-box; padding: 10px 12px 10px 34px;
-    border: 1px solid #ddd; border-radius: 10px; font-size: 0.92em; background: #fff;
+    border: 1px solid #e0d5c0; border-radius: 10px; font-size: 0.92em; background: #fff;
   }
   #album-search:focus { outline: none; border-color: var(--primary-color); }
   .sort-select {
-    flex: 0 0 auto; border: 1px solid #ddd; border-radius: 10px;
+    flex: 0 0 auto; border: 1px solid #e0d5c0; border-radius: 10px;
     padding: 10px 12px; font-size: 0.9em; background: #fff; color: var(--text-main); cursor: pointer;
   }
   .sort-select:focus { outline: none; border-color: var(--primary-color); }
@@ -71,7 +71,7 @@
   /* お気に入りのみフィルター（トグルチップ）*/
   .fav-filter {
     flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-    border: 1px solid #ddd; border-radius: 10px; padding: 10px 14px;
+    border: 1px solid #e0d5c0; border-radius: 10px; padding: 10px 14px;
     font-size: 0.9em; background: #fff; color: var(--text-muted); cursor: pointer;
     user-select: none;
   }

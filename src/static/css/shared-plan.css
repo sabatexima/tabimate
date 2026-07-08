@@ -26,19 +26,25 @@
     background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
     overflow: hidden; box-shadow: var(--shadow-card); max-width: 860px;
   }
+  /* クリーム紙の表紙ヘッダー（保存プラン詳細と同じ絵本トーン）*/
   .plan-summary-block {
-    background: var(--header-grad);
-    color: white; padding: 14px 16px;
+    background: linear-gradient(135deg, #fdf8ea 0%, #f4f0de 100%);
+    color: var(--text-main); padding: 14px 16px;
+    border-bottom: 2px dashed #f0e5c8;
   }
-  .plan-title { font-size: 1.05em; font-weight: 700; margin-bottom: 8px; }
+  .plan-title {
+    font-size: 1.1em; font-weight: 800; margin-bottom: 8px; color: #45613a;
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 2px;
+    text-underline-offset: 4px;
+  }
   .plan-summary-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
-    font-size: 0.88em; opacity: 0.95;
+    font-size: 0.88em; color: #6b6046;
   }
   .plan-summary-grid span { display: block; }
 
-  .plan-accordion { border-top: 1px solid rgba(79,168,58,0.1); }
-  .plan-accordion details { border-bottom: 1px solid rgba(79,168,58,0.08); }
+  .plan-accordion { border-top: none; }
+  .plan-accordion details { border-bottom: 2px dashed #f2e8cf; }
   .plan-accordion details:last-child { border-bottom: none; }
   .plan-accordion summary {
     display: flex; align-items: center; gap: 8px; padding: 11px 16px;

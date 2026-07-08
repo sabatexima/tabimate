@@ -125,7 +125,7 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   font-family: inherit;
 }
 .plan-map-editbar .pin-edit-btn.save { border-color: #4fa83a; color: #fff; background: #4fa83a; }
-.plan-map-editbar .pin-edit-btn.cancel { border-color: #ccc; color: #777; }
+.plan-map-editbar .pin-edit-btn.cancel { border-color: #d5cbb8; color: #8a817a; }
 .plan-map-editbar .pin-edit-hint { font-size: 11px; color: #8a817a; }
 .plan-map-editbar .pin-unplaced { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .plan-map-editbar .pin-unplaced-label { font-size: 11px; color: #8a817a; }

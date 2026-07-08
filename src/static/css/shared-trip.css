@@ -29,7 +29,7 @@
   .section .hint { font-size: 0.82em; color: var(--text-muted); margin: 0 0 14px; }
 
   .btn {
-    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    background: var(--primary-color); color: #fff; border: none; border-radius: 20px;
     padding: 9px 18px; font-weight: 600; cursor: pointer; font-size: 0.9em;
   }
   .btn.secondary { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }

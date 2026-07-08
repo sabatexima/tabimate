@@ -273,7 +273,7 @@
   .plan-edit-input {
     flex: 1;
     min-width: 0;
-    border: 1px solid #ddd;
+    border: 1px solid #e0d5c0;
     border-radius: 20px;
     padding: 8px 14px;
     font-size: 0.9em;
@@ -307,7 +307,7 @@
   .preview-cancel {
     margin-right: auto;
     background: none;
-    border: 1px solid #ccc;
+    border: 1px solid #d5cbb8;
     color: var(--text-muted);
     border-radius: 20px;
     padding: 6px 16px;

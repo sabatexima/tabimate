@@ -3,12 +3,12 @@
     z-index: 300; align-items: center; justify-content: center; padding: 16px;
   }
   .sm-box {
-    background: #fff; border-radius: 14px; width: 100%; max-width: 520px;
+    background: #fffdf8; border-radius: 18px; width: 100%; max-width: 520px;
     max-height: 88vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
   }
   .sm-head {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 18px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff;
+    padding: 16px 18px; border-bottom: 1px solid #f0e8d6; position: sticky; top: 0; background: #fffdf8;
   }
   .sm-head h3 { margin: 0; font-size: 1.15rem; color: var(--text-main); }
   .sm-close { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
@@ -18,11 +18,12 @@
   .sm-section .sm-hint { margin: 0 0 12px; font-size: 0.8em; color: var(--text-muted); line-height: 1.5; }
   .sm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .sm-row input[type=email], .sm-row input[type=text] {
-    flex: 1 1 180px; min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 9px 11px; font-size: 0.9em;
+    flex: 1 1 180px; min-width: 0; border: 1px solid #e0d5c0; border-radius: 10px;
+    padding: 9px 11px; font-size: 0.9em; background: #fff;
   }
-  .sm-row select { border: 1px solid #ddd; border-radius: 8px; padding: 9px 8px; font-size: 0.9em; }
+  .sm-row select { border: 1px solid #e0d5c0; border-radius: 10px; padding: 9px 8px; font-size: 0.9em; background: #fff; }
   .sm-btn {
-    background: var(--primary-color); color: #fff; border: none; border-radius: 8px;
+    background: var(--primary-color); color: #fff; border: none; border-radius: 18px;
     padding: 9px 16px; font-weight: 600; cursor: pointer; font-size: 0.88em; white-space: nowrap;
   }
   .sm-btn:disabled { opacity: 0.6; cursor: default; }
@@ -36,10 +37,10 @@
   .sm-li .sm-url { color: var(--text-muted); font-size: 0.92em; }
   .sm-badge {
     border-radius: 20px; padding: 1px 8px; font-size: 0.78em; font-weight: 700;
-    background: #b2bec3; color: #fff;
+    background: #b8ab92; color: #fff;
   }
   .sm-badge.edit { background: var(--primary-color); }
-  .sm-perm { border: 1px solid #ddd; border-radius: 8px; padding: 4px 6px; font-size: 0.82em; background: #fff; cursor: pointer; }
+  .sm-perm { border: 1px solid #e0d5c0; border-radius: 10px; padding: 4px 6px; font-size: 0.82em; background: #fff; cursor: pointer; }
   .sm-mini { background: none; border: none; cursor: pointer; font-size: 0.85em; padding: 2px 6px; border-radius: 6px; }
   .sm-mini.copy { color: var(--primary-color); }
   .sm-mini.del { color: #e74c3c; }

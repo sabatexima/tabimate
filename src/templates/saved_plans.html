@@ -4,13 +4,13 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/saved-plans.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1>🗂️ 保存済みプラン</h1>
+  <h1>📚 保存済みプラン</h1>
 </div>
+<p class="page-lead">ちゃむと作った旅の絵本たち。表紙をタップすると中身がひらきます。</p>
 
 <div id="loading">
   <div class="skeleton-card"><div class="skeleton-bar title"></div><div class="skeleton-bar"></div><div class="skeleton-bar short"></div></div>
@@ -18,9 +18,5 @@
 </div>
 <div id="plans-container" style="display:none;"></div>
 
-{% include "_share_modal.html" %}
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{{ url_for('static', filename='js/plan-map.js') }}"></script>
 <script src="{{ url_for('static', filename='js/saved-plans.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ plan.destination }} — 保存済みプラン — たびメイト{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/saved-plans.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="detail-wrap">
+  <a class="back" href="{{ url_for('planner.saved_plans') }}">‹ 一覧へ戻る</a>
+  <div id="plan-root"></div>
+</div>
+
+{% include "_share_modal.html" %}
+
+<script type="application/json" id="plan-data">{{ plan|tojson }}</script>
+<script type="application/json" id="page-config">{{ {"listUrl": url_for('planner.saved_plans')}|tojson }}</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ url_for('static', filename='js/plan-map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/plan-detail.js') }}"></script>
+{% endblock %}

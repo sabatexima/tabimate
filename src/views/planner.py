@@ -173,6 +173,20 @@ def saved_plans():
     return render_template("saved_plans.html")
 
 
+@planner.route("/plan/<int:plan_id>")
+@login_required
+def plan_detail(plan_id):
+    """保存プランの詳細ページ（本人のみ）。一覧は表紙だけにして、中身はここで見せる。"""
+    from db import get_travel_plan_by_id
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan or plan.get("google_user_id") != session.get("user_id"):
+        abort(404)
+    plan.pop("google_user_id", None)
+    if plan.get("created_at") is not None:
+        plan["created_at"] = str(plan["created_at"])  # tojson 用に文字列へ
+    return render_template("plan_detail.html", plan=plan)
+
+
 @planner.route("/terms")
 def terms():
     """利用規約（ログイン不要）。"""

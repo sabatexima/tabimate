@@ -120,6 +120,9 @@ class CostOutput(BaseModel):
 
 
 class BalancerOutput(BaseModel):
+    # 注: ルーティング側(route_after_balancer)には歴史的経緯で candidates_ready /
+    # fallback_* の分岐も残っているが、LLM に選ばせる価値はない（approved の代わりに
+    # 選ばれると無意味な再ループになる）ため、出力スキーマからは除外している。
     status: Literal[
         "approved",
         "fix_sightseeing",
@@ -128,25 +131,17 @@ class BalancerOutput(BaseModel):
         "fix_budget",
         "fix_time",
         "budget_infeasible",
-        "candidates_ready",
-        "accommodation_candidates_ready",
-        "gourmet_candidates_ready",
-        "fallback_sightseeing",
-        "fallback_accommodation",
-        "fallback_gourmet",
     ] = Field(
         description=(
             "プラン審査結果。"
-            "完璧なら approved、"
+            "全観点をパスしたら approved、"
             "観光スポットの選定に問題があれば fix_sightseeing、"
             "飲食店の選定に問題（アレルギー非対応など）があれば fix_gourmet、"
             "宿泊施設の選定に問題（バリアフリー非対応・人数不足など）があれば fix_accommodation、"
             "宿泊費と食費の両方が予算を圧迫しており両方見直しが必要な場合は fix_budget、"
             "スケジュールの詰め込みや移動時間に問題があれば fix_time、"
-            "費用見積もりの合計が予算上限を大幅に超えており、どう選び直しても構造的に実現不可能と判断される場合は budget_infeasible、"
-            "候補抽出チェックで問題がなくなったら intermediate status を返す。"
+            "費用見積もりの合計が予算上限を大幅に超えており、どう選び直しても構造的に実現不可能と判断される場合は budget_infeasible を返す。"
             "初回審査では budget_infeasible を選ばず、fix_* で差し戻す。"
-            "候補抽出でGPTが失敗した場合は fallback_* で救済する。"
         )
     )
     feedback: str = Field(description="審査の理由や、修正が必要なエージェントへの具体的なアドバイス")

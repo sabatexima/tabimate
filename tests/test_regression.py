@@ -265,7 +265,7 @@ def test_timekeeper_feedback_reaches_on_non_fixtime(monkeypatch):
     ag.timekeeper(state)
     assert "前回審査での指摘" in captured[0]
     assert "カフェ・弘法の湯" in captured[0]
-    assert "指摘された施設・場所はスケジュールに使わない" in captured[0]
+    assert "とされた施設・場所はスケジュールに使わない" in captured[0]
 
 
 # ----------------------------------------------------------------------

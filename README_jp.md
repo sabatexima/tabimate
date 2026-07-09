@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/static/img/mate-head.png" alt="ちゃむ（たびメイトのマスコット）" width="120">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/src/static/img/mate-head.png" alt="ちゃむ（たびメイトのマスコット）" width="120">
 </p>
 
 <h1 align="center">たびメイト（TabiMate）🍀</h1>

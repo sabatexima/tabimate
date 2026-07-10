@@ -389,18 +389,23 @@ function parseTravelDate(travelDate) {
   }
   return null;
 }
-function withinForecast(travelDate) {
-  const d = parseTravelDate(travelDate);
-  if (!d) return false;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const min = new Date(today); min.setDate(min.getDate() - 7);   // 旅行中（数日前開始）も拾う
-  const max = new Date(today); max.setDate(max.getDate() + 16);
-  return d >= min && d <= max;
-}
 async function loadWeather(plan) {
-  if (!withinForecast(plan.travel_date)) return;
   const el = document.getElementById(`weather-${plan.id}`);
   if (!el) return;
+  const d = parseTravelDate(plan.travel_date);
+  if (!d) return;  // 日付が読み取れないプランは天気行そのものを出さない
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const min = new Date(today); min.setDate(min.getDate() - 7);   // 旅行中（数日前開始）も拾う
+  const max = new Date(today); max.setDate(max.getDate() + 16);  // 予報が取れるのは16日先まで
+  if (d < min) return;  // 終わった旅の天気は出さない
+  if (d > max) {
+    // まだ予報範囲外：黙って消さず「出発が近づいたら出る」ことを伝える
+    const daysTo = Math.round((d - max) / 86400000);
+    el.innerHTML = '<span class="plan-weather-label">🌤 旅行日の天気</span>'
+      + `<span class="wx-note">出発が近づくと表示されます（予報が届くのは16日前から・あと約${daysTo}日）</span>`;
+    el.hidden = false;
+    return;
+  }
   el.innerHTML = '<span class="plan-weather-label">🌤 旅行日の天気</span><span class="wx-loading">取得中…</span>';
   el.hidden = false;
   try {

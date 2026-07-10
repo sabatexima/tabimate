@@ -17,6 +17,7 @@ invoke_with_retry でリトライしながら実行する。
 
 import re
 from datetime import date
+from weather import parse_duration
 from chat.models import TravelPlanState
 from chat.llm import llm, llm_strong, invoke_with_retry, build_search_context
 from chat.logger import get_logger
@@ -34,8 +35,12 @@ MAX_BALANCER_RETRIES       = 5     # バランサー差し戻し上限回数
 
 
 def is_day_trip(duration: str) -> bool:
-    """期間文字列が日帰り（宿泊なし）かどうかを判定する。"""
-    return "日帰り" in duration or bool(re.match(r'0泊', duration.strip()))
+    """宿泊なし（日帰り・0泊）かどうかを判定する。
+
+    注意: 「0泊2日」（夜行）も True（宿は取らない）。ただし行程は2日分あるため、
+    スケジュール・食事・費用の日数は parse_duration() の日数側で判断すること。
+    """
+    return parse_duration(duration)[0] == 0
 
 
 def _pp(data, label):
@@ -204,9 +209,9 @@ def sightseeing_expert(state: TravelPlanState):
         return {}  # 部分編集: 観光は対象外。前回のスポットを引き継ぐ
     log.info("[🗺️ 観光エキスパート]: スポットを選定中... destination=%s", state["destination"])
     candidates = state.get("spot_candidates", [])
-    # 1日を充実させられる件数を期間から見積もる（日帰り3〜4、1泊ごとに+2目安）
-    _nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 0
-    target_spots = 4 if _nights == 0 else min(3 + 2 * _nights, 6)
+    # 1日を充実させられる件数を期間から見積もる（1日行程は3〜4、1日増えるごとに+2目安）
+    _days = parse_duration(state["duration"])[1]
+    target_spots = 4 if _days <= 1 else min(3 + 2 * (_days - 1), 6)
     prompt = f"""あなたは旅行のプロです。以下の候補から最適な観光スポットを選定してください。
 
 行き先: {state['destination']}
@@ -254,7 +259,7 @@ def accommodation_candidates(state: TravelPlanState):
         log.info("[🏨 宿泊エージェント]: 日帰りのため宿泊施設なし")
         return {"accommodation_candidates": []}
     log.info("[🏨 宿泊エキスパート]: 宿泊候補を抽出中... destination=%s", state["destination"])
-    num_nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 1
+    num_nights = max(parse_duration(state["duration"])[0], 1)
     # 1泊あたりの予算目安（残予算の40%を泊数で割る）。この価格帯で泊まれる候補を集める。
     per_night_budget = int(state.get("remaining_budget", 0) * ACCOMMODATION_BUDGET_RATIO) // max(num_nights, 1)
     queries = [
@@ -307,7 +312,7 @@ def accommodation_agent(state: TravelPlanState):
         log.info("[🏨 宿泊エージェント]: 日帰りのため宿泊施設なし")
         return {"accommodation": []}
     log.info("[🏨 宿泊エージェント]: 宿泊施設を選定中... destination=%s", state["destination"])
-    num_nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 1
+    num_nights = max(parse_duration(state["duration"])[0], 1)
     total_accommodation_budget = int(state["remaining_budget"] * ACCOMMODATION_BUDGET_RATIO)
     per_night_budget = total_accommodation_budget // num_nights
     candidates = state.get("accommodation_candidates", [])
@@ -428,7 +433,9 @@ def gourmet_hunter(state: TravelPlanState):
     spots = state.get("spots", [])
     accommodation = state.get("accommodation", [])
     candidates = state.get("restaurant_candidates", [])
-    num_nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 1
+    # 食事回数は「日数」で決める（0泊2日の夜行でも2日分の食事が必要）
+    _days = parse_duration(state["duration"])[1]
+    meals = f"昼食×{_days}" + (f" + 夕食×{_days - 1}" if _days >= 2 else "")
 
     prompt = f"""あなたはグルメガイドです。以下の候補から必要な飲食店を選定してください。
 
@@ -447,7 +454,7 @@ def gourmet_hunter(state: TravelPlanState):
 {chr(10).join(f'- {c}' for c in candidates)}
 
 【選定の基準】
-・期間中に必要な食事の回数分をカバーすること（{state['duration']} = {"昼食×1" if is_day_trip(state["duration"]) else f"昼食×{num_nights + 1} + 夕食×{num_nights}"}）
+・期間中に必要な食事の回数分をカバーすること（{state['duration']} = {meals}）
 ・{state['travel_date']}{_weekday_hint(state['travel_date'])} の営業日・定休日を考慮し、当日に営業している店のみを選ぶこと（その曜日が定休日に当たる店は選ばない。定休日が不明なら定休日の少ない業態を優先）
 ・地図で検索できる正式な店名で答えること。「駅前のカフェ」「地元の食堂」のような曖昧な総称は使わない。
 ・各日程のスポット周辺にある店を選び、日別に「〇日目 昼食」「〇日目 夕食」と明記すること
@@ -494,9 +501,10 @@ def timekeeper(state: TravelPlanState):
             if missing_restaurants:
                 must_include_block += "・飲食店（すべて必須）: " + "、".join(missing_restaurants) + "\n"
 
-    day_trip = is_day_trip(state["duration"])
-    # 泊数（「N泊」表記から）。宿泊プランの日数明示と、出力後の日数検証に使う
-    num_nights = int(m.group(1)) if (m := re.search(r'(\d+)泊', state["duration"])) else 1
+    # 泊数と日数を分けて扱う（0泊2日の夜行は「宿なし・2日行程」）。
+    # スケジュールの形式は日数で、宿の扱いは泊数で決める。
+    num_nights, num_days = parse_duration(state["duration"])
+    day_trip = num_days <= 1
 
     if day_trip:
         prompt = f"""あなたは綿密なツアーコンダクターです。
@@ -526,33 +534,40 @@ def timekeeper(state: TravelPlanState):
 ・総移動時間と観光時間のバランスが適切かを自己チェックし、詰め込みすぎの場合は削減すること
 """
     else:
+        # 宿の有無で行程指示を切り替える（0泊2日=夜行は宿の指示を入れない）
+        if num_nights > 0:
+            lodging_rules = """・宿泊施設のチェックイン（目安15:00〜）・チェックアウト（目安11:00〜）を必ずスケジュールに組み込むこと
+・チェックアウト後は宿泊施設に戻る行程を入れないこと。最終日は最後の観光地から直接、または帰路の駅周辺で昼食をとってから出発すること
+・夕食はできるだけ宿泊施設内または徒歩圏内の飲食店を選び、タクシーで往復するだけの外出は避けること"""
+        else:
+            lodging_rules = """・これは【宿泊なし】の行程（夜行バス・車中泊・深夜移動など）。ホテルのチェックイン/チェックアウトは存在しないため組み込まないこと
+・夜間をどう過ごすか（夜行バスの乗車時刻・車中泊の場所・深夜営業施設など）を具体的に明記すること
+・深夜移動の疲労を考慮し、翌日の午前は無理のないペースにすること"""
         prompt = f"""あなたは綿密なツアーコンダクターです。
 以下の【絶対に守るべき条件】と【絶対に含めるべき項目】を満たした日別タイムスケジュールを作成してください。
 
 【絶対に守るべき条件】
 ・旅行の時間枠: {state['duration']}  ← 必ずこの時間枠の中に全ての予定を収めること
-・この旅行は{num_nights}泊{num_nights + 1}日。「1日目」〜「{num_nights + 1}日目」の日別ブロックを必ず【すべて】作成すること
-・帰路・帰宅は必ず{num_nights + 1}日目（最終日）に置くこと。途中の日に帰路を入れて旅行を切り上げないこと
+・この旅行は{num_nights}泊{num_days}日。「1日目」〜「{num_days}日目」の日別ブロックを必ず【すべて】作成すること
+・帰路・帰宅は必ず{num_days}日目（最終日）に置くこと。途中の日に帰路を入れて旅行を切り上げないこと
 ・「予備日」「自由行動のみの日」を作らないこと。最終日まで具体的なスポット・食事で構成すること
 ・出発地: {state['departure_location']}（往路・復路の移動時間を具体的にスケジュールに組み込むこと）
 ・往復の交通手段: {state.get('transport_mode', 'おまかせ')}（この手段に合わせて往復の移動時間・経路を組むこと。車なら運転・休憩・駐車、高速バスなら乗車時間、鉄道/飛行機なら駅・空港での移動を考慮）
 ・参加人数: {state['num_people']}人（大人数は移動・入場・食事に時間がかかるため各行動に余裕を持たせること）
 ・各スポットの営業時間（開館・閉館）を確認し、開館前の到着や閉館時刻を超えた滞在にならないよう、「到着時刻 + 滞在時間 <= 閉館時刻」を必ず守ること
 ・スポット間の移動は交通手段と所要時間を明記し、{state['destination']}の混雑を考慮して余裕を持たせること
-・宿泊施設のチェックイン（目安15:00〜）・チェックアウト（目安11:00〜）を必ずスケジュールに組み込むこと
+{lodging_rules}
 ・食事（昼食・夕食）の時間帯を明確に確保し、飲食店の営業時間内に訪問できるようにすること
 ・特別条件（車椅子等）がある場合、移動に追加時間がかかることを考慮すること
-・チェックアウト後は宿泊施設に戻る行程を入れないこと。最終日は最後の観光地から直接、または帰路の駅周辺で昼食をとってから出発すること
-・夕食はできるだけ宿泊施設内または徒歩圏内の飲食店を選び、タクシーで往復するだけの外出は避けること
 
 【絶対に含めるべき項目】（以下のリストのすべてをスケジュールに組み込むこと）
 ・観光スポット（すべて必須）: {', '.join(spots) if spots else '（なし）'}
 ・飲食店（すべて必須）: {', '.join(restaurants) if restaurants else '（なし）'}
-・宿泊施設: {', '.join(accommodation) if accommodation else '（なし）'}
+・宿泊施設: {', '.join(accommodation) if accommodation else ('（なし・宿泊しない行程）' if num_nights == 0 else '（なし）')}
 ・旅行テーマ: {', '.join(state['themes'])}
 {must_include_block}
 【出力形式】
-・「1日目」〜「{num_nights + 1}日目」の日別ブロック（必ず{num_nights + 1}個すべて）に分けて記載すること。各日の先頭行はその日を表す「N日目」の行にすること
+・「1日目」〜「{num_days}日目」の日別ブロック（必ず{num_days}個すべて）に分けて記載すること。各日の先頭行はその日を表す「N日目」の行にすること
 ・各行動を「HH:MM 行動内容（所要時間・移動手段・距離）」の形式で時系列に記載すること
 ・1日の総移動時間と観光時間のバランスが適切かを自己チェックし、詰め込みすぎの場合は削減すること
 """
@@ -620,7 +635,7 @@ def timekeeper(state: TravelPlanState):
     # LLMは長期プランで最終日を省略したり途中で帰路に入れることがあるため、
     # 欠けていたら欠落日を明示して1回だけ作り直す（それでも駄目ならバランサーが差し戻す）。
     if not day_trip:
-        total_days = num_nights + 1
+        total_days = num_days
         def _days_in(schedule):
             found = set()
             for line in schedule or []:
@@ -647,16 +662,17 @@ def timekeeper(state: TravelPlanState):
 
 def _build_day_sections(duration: str) -> str:
     """費用見積もりプロンプト用に、日別の費用項目テンプレートを生成する。"""
-    if is_day_trip(duration):
+    num_nights, num_days = parse_duration(duration)
+    if num_days <= 1:
         return (
             "■ 当日の費用\n"
             "・現地交通費（バス・電車・タクシー等）\n"
             "・各観光スポットの入場料（無料の場合も「無料」と明記）\n"
             "・昼食の食費（各飲食店ごとに1人あたりの金額を記載）"
         )
-    m = re.search(r'(\d+)泊(\d+)日', duration)
-    num_nights = int(m.group(1)) if m else 1
-    num_days   = int(m.group(2)) if m else 2
+    # 宿泊なしの複数日（0泊2日=夜行など）は宿泊費の行を出さない
+    lodging_line = "\n・宿泊費（1泊1人あたり、朝食込/素泊まりを区別）" if num_nights > 0 else ""
+    breakfast_line = "・朝食費（宿泊プランに含まれない場合）\n" if num_nights > 0 else "・朝食費\n"
 
     sections = []
     for day in range(1, num_days + 1):
@@ -665,13 +681,13 @@ def _build_day_sections(duration: str) -> str:
                 f"■ 1日目の費用\n"
                 f"・現地到着後の交通費（バス・電車・タクシー等）\n"
                 f"・各観光スポットの入場料（無料の場合も「無料」と明記）\n"
-                f"・昼食・夕食の食費（各飲食店ごとに1人あたりの金額を記載）\n"
-                f"・宿泊費（1泊1人あたり、朝食込/素泊まりを区別）"
+                f"・昼食・夕食の食費（各飲食店ごとに1人あたりの金額を記載）"
+                f"{lodging_line}"
             )
         elif day == num_days:
             sections.append(
                 f"■ {day}日目（最終日）の費用\n"
-                f"・朝食費（宿泊プランに含まれない場合）\n"
+                f"{breakfast_line}"
                 f"・観光スポットの入場料\n"
                 f"・昼食の食費\n"
                 f"・帰路の現地交通費"
@@ -679,10 +695,10 @@ def _build_day_sections(duration: str) -> str:
         else:
             sections.append(
                 f"■ {day}日目の費用\n"
-                f"・朝食費（宿泊プランに含まれない場合）\n"
+                f"{breakfast_line}"
                 f"・観光スポットの入場料\n"
-                f"・昼食・夕食の食費\n"
-                f"・宿泊費（1泊1人あたり、朝食込/素泊まりを区別）"
+                f"・昼食・夕食の食費"
+                f"{lodging_line}"
             )
     return "\n\n".join(sections)
 
@@ -759,6 +775,7 @@ def balancer(state: TravelPlanState):
         log.info("[⚖️ バランサー]: 部分編集の予算・実現性を確認中...")
     else:
         log.info("[⚖️ バランサー]: プランを審査中... destination=%s", state["destination"])
+    _b_nights, _b_days = parse_duration(state["duration"])
     prompt = f"""あなたは旅行代理店のシニアマネージャーです。以下のプランを審査してください。
 
 ■ 基本条件: {state['destination']}（{state['duration']}）
@@ -770,7 +787,7 @@ def balancer(state: TravelPlanState):
 ■ 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
 ■ 観光地: {', '.join(state['spots'])}
 ■ 飲食店: {', '.join(state['restaurants'])}
-{f"■ 宿泊施設: {', '.join(state.get('accommodation', []))}" if not is_day_trip(state['duration']) else "■ 宿泊施設: なし（日帰り）"}
+{f"■ 宿泊施設: {', '.join(state.get('accommodation', []))}" if not is_day_trip(state['duration']) else "■ 宿泊施設: なし（宿泊しない行程）"}
 ■ スケジュール:
 {chr(10).join(state['schedule'])}
 ■ 費用見積もり:
@@ -778,13 +795,13 @@ def balancer(state: TravelPlanState):
 
 【審査の5観点】
 1. 予算: 費用見積もりの1人あたり合計が予算上限（{state['budget_limit']:,}円）の【110%以内】に収まっているか。予備費の範囲内とみなせる軽微な超過（110%以内）は合格とし、fix_budget にしないこと。明確に110%を超える場合のみ問題とし、超過金額を具体的に明記すること。
-2. スケジュール: 期間（{state['duration']}）どおりの日数で組まれているか（N泊なら「1日目」〜「N+1日目」まで全てあり、帰路は最終日のみ）。「予備日」や中身のない日で埋めていないか。移動時間が現実的か、開館前到着・閉館後出発などの矛盾がないか、1日の総移動時間が観光時間を上回っていないか。
+2. スケジュール: 期間（{state['duration']}＝{_b_days}日間）どおりの日数で組まれているか（{"「1日目」〜「" + str(_b_days) + "日目」まで全てあり、帰路は最終日のみ" if _b_days >= 2 else "1日で完結している"}）。「予備日」や中身のない日で埋めていないか。移動時間が現実的か、開館前到着・閉館後出発などの矛盾がないか、1日の総移動時間が観光時間を上回っていないか。
    ※日数不足・途中の日の帰路・予備日は【スケジュールの問題】なので必ず fix_time を選ぶこと（fix_accommodation にしない）。宿泊施設リストは施設名のみで泊数を表さない（同一施設での連泊が原則）ため、宿の泊数不足をここから推定しないこと。
    ※上記の「観光地」「飲食店」リストに無いのにスケジュールへ登場する店・カフェ・スポット（空き時間の補完）は、位置・実在・移動時間の問題があっても fix_gourmet / fix_sightseeing ではなく必ず fix_time を選ぶこと（それらはスケジュール作成者が挿入したものであり、リストの選び直しでは直らない）。feedbackには問題の施設名を明記すること。
 3. 疲労度: {state['num_people']}人の大人数で、特別条件（{', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}）を持つ参加者が無理なく楽しめる強度か。
 4. テーマ一貫性: 観光スポット・飲食店{"" if is_day_trip(state["duration"]) else "・宿泊施設"}がすべて旅行テーマ（{', '.join(state['themes'])}）に沿っているか。
 5. 特別条件の充足: 車椅子対応・アレルギー対応などの特別条件が、全スポット・飲食店{"" if is_day_trip(state["duration"]) else "・宿泊施設"}で実際に満たされているか。
-{"【重要】これは日帰りプランです。fix_accommodation は絶対に使わないこと。" if is_day_trip(state["duration"]) else ""}
+{"【重要】これは宿泊のないプランです（日帰りまたは夜行）。fix_accommodation は絶対に使わないこと。" if is_day_trip(state["duration"]) else ""}
 
 【判定ルール】
 ・上記の各観点すべてをパスした場合のみ 'approved' を返すこと

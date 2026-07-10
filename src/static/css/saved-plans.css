@@ -538,6 +538,11 @@
   .plan-weather .wx-emoji { font-size: 1.3em; }
   .plan-weather .wx-temp { font-size: 0.85em; white-space: nowrap; }
   .plan-weather .wx-temp i { color: var(--text-muted); font-style: normal; margin: 0 1px; }
+  /* 予報範囲外（出発が16日より先）の説明文 */
+  .plan-weather .wx-note {
+    font-size: 0.8em;
+    color: var(--text-muted);
+  }
   /* 取得中プレースホルダ（届いたら日別表示に差し替わる） */
   .plan-weather .wx-loading {
     font-size: 0.8em;

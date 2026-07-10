@@ -356,3 +356,50 @@ def test_edit_ignores_invalid_people_and_budget(monkeypatch):
     C.edit_saved_plan(_saved_plan(), "0人で予算0円にして")
     assert captured["num_people"] == 2             # 不正な人数は無視して元の値
     assert captured["budget_limit"] == 20000       # 不正な予算も無視
+
+
+# ----------------------------------------------------------------------
+# 期間パース（0泊2日=夜行 / 変則表記）と、日数ベースの行程・食事・費用
+# ----------------------------------------------------------------------
+def test_parse_duration_variants():
+    """「N泊M日」以外の表記でも泊数・日数を正しく推定する。"""
+    import weather as wx
+    assert wx.parse_duration("2泊3日") == (2, 3)
+    assert wx.parse_duration("1泊") == (1, 2)
+    assert wx.parse_duration("0泊2日") == (0, 2)      # 夜行: 宿なし・2日行程
+    assert wx.parse_duration("日帰り") == (0, 1)
+    assert wx.parse_duration("3日間") == (2, 3)        # 「N日間」→ N-1泊N日相当
+    assert wx.parse_duration("2日") == (1, 2)
+    assert wx.parse_duration("週末") == (1, 2)
+    assert wx.parse_duration("ゆっくりめで") == (1, 2)  # 不明時は1泊2日に既定
+    # 日付表記を日数と誤読しない（「12日」を12日間としない）
+    assert wx.parse_duration("7月12日〜13日の1泊2日") == (1, 2)
+
+
+def test_overnight_trip_is_no_lodging_but_two_days(monkeypatch):
+    """0泊2日: 宿はスキップしつつ、スケジュールは2日分・チェックイン指示なし。"""
+    import chat.agents as ag
+    from chat.models import TimekeeperOutput
+
+    assert ag.is_day_trip("0泊2日") is True   # 宿泊なし → 宿の選定はスキップ対象
+    assert ag.accommodation_candidates(_agent_state(duration="0泊2日")) == {"accommodation_candidates": []}
+
+    captured = []
+    def fake(sllm, prompt):
+        captured.append(prompt)
+        return TimekeeperOutput(schedule=["1日目", "23:00 夜行バス乗車", "2日目", "06:00 到着", "18:00 帰路"])
+    monkeypatch.setattr(ag, "invoke_with_retry", fake)
+    ag.timekeeper(_agent_state(duration="0泊2日", accommodation=[]))
+    p = captured[0]
+    assert "0泊2日" in p and "「2日目」" in p          # 2日分のブロックを要求
+    assert "チェックイン（目安15:00" not in p           # 宿泊用の指示は入れない
+    assert "宿泊なし" in p and "夜行バス" in p           # 宿泊なし行程の指示に切り替わる
+
+
+def test_overnight_trip_meals_and_costs():
+    """0泊2日: 食事は昼2+夕1、費用テンプレに宿泊費の行が無い。"""
+    import chat.agents as ag
+    sections = ag._build_day_sections("0泊2日")
+    assert "2日目" in sections and "宿泊費" not in sections
+    sections_stay = ag._build_day_sections("2泊3日")
+    assert "宿泊費" in sections_stay                    # 従来挙動は不変

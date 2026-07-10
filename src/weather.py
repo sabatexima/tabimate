@@ -68,10 +68,35 @@ def parse_date(travel_date) -> date | None:
     return None
 
 
+def parse_duration(duration) -> tuple[int, int]:
+    """期間文字列から (泊数, 日数) を推定する。
+
+    「N泊M日」「N泊」「0泊2日（夜行）」「日帰り」「N日間」「週末」などの
+    表記に対応する。解釈できない場合は 1泊2日 として扱う（最も一般的な旅程）。
+    """
+    s = str(duration or '')
+    m = re.search(r'(\d+)\s*泊\s*(\d+)\s*日', s)
+    if m:
+        return int(m.group(1)), max(int(m.group(2)), 1)
+    m = re.search(r'(\d+)\s*泊', s)
+    if m:
+        n = int(m.group(1))
+        return n, n + 1
+    if '日帰り' in s:
+        return 0, 1
+    # 「3日間」/「3日」単体。日付（7月12日 等）を誤読しないよう「日間」か文字列全体のみ
+    m = re.search(r'(\d+)\s*日間', s) or re.fullmatch(r'\s*(\d+)\s*日\s*', s)
+    if m:
+        d = max(int(m.group(1)), 1)
+        return max(d - 1, 0), d
+    if '週末' in s:
+        return 1, 2
+    return 1, 2
+
+
 def _num_days(duration) -> int:
-    """「N泊」→ N+1日、それ以外（日帰り等）→ 1日。"""
-    nm = re.search(r'(\d+)\s*泊', str(duration or ''))
-    return (int(nm.group(1)) + 1) if nm else 1
+    """期間文字列から日数を推定する（予報範囲・過去日判定用）。"""
+    return parse_duration(duration)[1]
 
 
 def forecast(lat, lng, start: date, end: date) -> list:

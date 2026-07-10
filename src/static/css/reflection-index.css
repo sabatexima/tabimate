@@ -1,19 +1,36 @@
 /* 共通カラー変数は layout.html の :root で定義 */
-  .page-header { margin-bottom: 8px; }
-  .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text-main); margin: 0; }
-  .page-lead { color: var(--text-muted); font-size: 0.92em; margin: 0 0 20px; max-width: 60ch; }
+  /* エディトリアルな見出し：英字キッカー＋大きめタイトル＋手描きふうの波線 */
+  .page-header { margin-bottom: 4px; }
+  .kicker {
+    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.38em;
+    color: #c2a05e; margin: 0 0 8px 2px;
+  }
+  .page-header h1 {
+    font-size: 1.9rem; font-weight: 800; color: var(--text-main);
+    margin: 0; line-height: 1.25; letter-spacing: 0.01em;
+  }
+  .page-header h1 .accent {
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+    text-underline-offset: 8px;
+  }
+  .page-lead {
+    color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
+    margin: 14px 0 26px; max-width: 60ch;
+  }
 
   .feed { max-width: 520px; margin: 0 auto; }
 
   /* 新しい旅: 既定は1ボタンに畳む。タップで展開。 */
   .new-trip-bar { margin-bottom: 22px; }
   .new-trip-toggle {
-    width: 100%; background: #fff; color: var(--primary-color);
-    border: 1px dashed rgba(79,168,58,0.5); border-radius: 16px;
-    padding: 14px; font-weight: 700; font-size: 0.98em; cursor: pointer;
-    box-shadow: var(--shadow-card);
+    width: 100%; background: rgba(255,255,255,0.7); color: var(--primary-color);
+    border: 1.5px dashed rgba(79,168,58,0.45); border-radius: 999px;
+    padding: 14px; font-weight: 700; font-size: 0.95em; cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
   }
-  .new-trip-toggle:hover { background: #f6f9f1; }
+  .new-trip-toggle:hover {
+    background: #fff; border-color: rgba(79,168,58,0.75); transform: translateY(-1px);
+  }
 
   .new-trip {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -56,28 +73,39 @@
     position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
     font-size: 0.9em; opacity: 0.55; pointer-events: none;
   }
+  /* 検索・並び替え・絞り込みは枠線を捨てて、影で立体を出す（ソフトUI）*/
   #album-search {
-    width: 100%; box-sizing: border-box; padding: 10px 12px 10px 34px;
-    border: 1px solid #e0d5c0; border-radius: 10px; font-size: 0.92em; background: #fff;
+    width: 100%; box-sizing: border-box; padding: 12px 14px 12px 36px;
+    border: none; border-radius: 999px; font-size: 0.92em; background: #fff;
+    box-shadow: 0 1px 2px rgba(120,100,70,0.05), 0 4px 14px rgba(120,100,70,0.08);
+    transition: box-shadow 0.2s;
   }
-  #album-search:focus { outline: none; border-color: var(--primary-color); }
+  #album-search:focus {
+    outline: none;
+    box-shadow: 0 1px 2px rgba(120,100,70,0.05), 0 4px 14px rgba(120,100,70,0.08),
+                0 0 0 3px rgba(79,168,58,0.16);
+  }
   .sort-select {
-    flex: 0 0 auto; border: 1px solid #e0d5c0; border-radius: 10px;
-    padding: 10px 12px; font-size: 0.9em; background: #fff; color: var(--text-main); cursor: pointer;
+    flex: 0 0 auto; border: none; border-radius: 999px;
+    padding: 12px 14px; font-size: 0.88em; background: #fff; color: var(--text-main); cursor: pointer;
+    box-shadow: 0 1px 2px rgba(120,100,70,0.05), 0 4px 14px rgba(120,100,70,0.08);
   }
-  .sort-select:focus { outline: none; border-color: var(--primary-color); }
+  .sort-select:focus { outline: none; box-shadow: 0 4px 14px rgba(120,100,70,0.08), 0 0 0 3px rgba(79,168,58,0.16); }
   .no-results { text-align: center; color: var(--text-muted); padding: 30px 0; }
 
   /* お気に入りのみフィルター（トグルチップ）*/
   .fav-filter {
     flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-    border: 1px solid #e0d5c0; border-radius: 10px; padding: 10px 14px;
-    font-size: 0.9em; background: #fff; color: var(--text-muted); cursor: pointer;
+    border: none; border-radius: 999px; padding: 12px 16px;
+    font-size: 0.88em; background: #fff; color: var(--text-muted); cursor: pointer;
     user-select: none;
+    box-shadow: 0 1px 2px rgba(120,100,70,0.05), 0 4px 14px rgba(120,100,70,0.08);
+    transition: color 0.15s, background 0.15s;
   }
-  .fav-filter:hover { border-color: var(--primary-color); }
+  .fav-filter:hover { color: #b9820a; }
   .fav-filter.active {
-    background: #fff7e6; border-color: #f5b301; color: #b9820a; font-weight: 700;
+    background: #fff6e0; color: #b9820a; font-weight: 700;
+    box-shadow: inset 0 1px 3px rgba(185,130,10,0.15), 0 1px 2px rgba(120,100,70,0.05);
   }
   .fav-filter .star { font-size: 1.05em; line-height: 1; }
 
@@ -109,28 +137,31 @@
 
   /* 旅カード＝スクラップブックのボードに散りばめたポラロイド */
   /* ボード上に、旅ごとに「写真（ポラロイド）｜付箋ラベル」を左右ペアで並べる */
+  /* ボード＝重ねたジャーナルの1ページ目。
+     コルクの箱ではなく、微細な紙目のあるあたたかい白紙＋彫刻的なソフトシャドウで見せる */
   #trips {
     position: relative;
-    display: flex; flex-direction: column; gap: 18px;
-    padding: 22px 18px;
-    border-radius: 16px;
-    /* クリーム色のやさしい木枠＋内側にコルク面の落ち込み影（控えめに） */
-    border: 10px solid #f2ddb6;
-    box-shadow:
-      inset 0 0 0 1px rgba(200,155,95,0.22),
-      inset 0 2px 10px rgba(150,110,60,0.14),
-      0 6px 18px rgba(150,110,60,0.14);
-    background-color: #e9d4ae;
-    /* コルクの質感は「目を凝らすと分かる」程度の微細な紙目に留める
-       （粒を大きく濃くすると水玉模様に見えて安っぽくなる）*/
+    display: flex; flex-direction: column; gap: 26px;
+    padding: 30px 20px;
+    border: 1px solid #f0e5cd;
+    border-radius: 24px;
+    background-color: #fffdf6;
     background-image:
-      radial-gradient(circle at 25% 35%, rgba(150,108,58,0.08) 0 1px, transparent 1.5px),
-      radial-gradient(circle at 70% 64%, rgba(150,108,58,0.055) 0 1px, transparent 1.5px),
-      radial-gradient(circle at 18% 12%, rgba(255,248,230,0.35), transparent 55%),
-      linear-gradient(160deg, #eedcb8 0%, #e2cb9e 100%);
-    background-size:
-      11px 11px, 17px 17px,
-      100% 100%, 100% 100%;
+      radial-gradient(circle at 25% 35%, rgba(150,120,70,0.04) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 64%, rgba(150,120,70,0.028) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 18% 8%, rgba(255,255,250,0.8), transparent 55%),
+      linear-gradient(168deg, #fffdf6 0%, #fbf3e2 100%);
+    background-size: 11px 11px, 17px 17px, 100% 100%, 100% 100%;
+    box-shadow:
+      0 1px 2px rgba(120,100,70,0.06),
+      0 14px 40px rgba(120,100,70,0.13);
+  }
+  /* 下に覗く2枚目のページ（束ねたジャーナル感）*/
+  #trips::before {
+    content: ""; position: absolute; z-index: -1;
+    inset: 14px -7px -9px 8px;
+    background: #f6ecd6; border: 1px solid #eee1c5;
+    border-radius: 24px; transform: rotate(0.7deg);
   }
   /* 1旅 = 2カラム（左:写真 / 右:ラベル）。display は指定せず hidden 絞り込みを維持 */
   .trip-card {
@@ -150,8 +181,9 @@
   .cover {
     position: relative; margin: 0;
     background: #fff; padding: 7px 7px 16px; border-radius: 4px;  /* 下に余白＝ポラロイドのあご */
-    box-shadow: 2px 5px 12px rgba(80,70,50,0.20);
-    transform: rotate(-2.2deg); transition: transform 0.15s;
+    box-shadow: 0 2px 4px rgba(80,70,50,0.10), 4px 10px 24px rgba(80,70,50,0.16);
+    transform: rotate(-2.2deg);
+    transition: transform 0.45s cubic-bezier(0.22, 1.35, 0.36, 1), box-shadow 0.3s;
   }
   .cover img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #efe9dc; }
   .cover-empty {
@@ -165,8 +197,9 @@
   .card-note {
     background: linear-gradient(150deg, #fff6c9 0%, #fdefac 100%);
     padding: 14px 40px 12px 14px; border-radius: 3px; min-width: 0;  /* 右は「⋯」メニュー分を空ける */
-    box-shadow: 2px 4px 10px rgba(120,100,40,0.16);
-    transform: rotate(1.8deg); transition: transform 0.15s;
+    box-shadow: 0 2px 4px rgba(120,100,40,0.08), 3px 8px 20px rgba(120,100,40,0.14);
+    transform: rotate(1.8deg);
+    transition: transform 0.45s cubic-bezier(0.22, 1.35, 0.36, 1), box-shadow 0.3s;
   }
   .trip-card:nth-child(3n+2) .card-note { background: linear-gradient(150deg, #ffe0e6 0%, #ffd0da 100%); }
   .note-title {
@@ -180,9 +213,11 @@
   }
   .trip-card:nth-child(3n+2) .note-memo { color: #96566a; }
   .note-meta {
-    margin-top: 10px; font-size: 0.72em; color: rgba(90,74,42,0.7);
-    display: flex; flex-direction: column; gap: 2px;
+    margin-top: 10px; font-size: 0.7em; color: rgba(90,74,42,0.62);
+    letter-spacing: 0.04em;
+    display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 6px;
   }
+  .meta-sep { opacity: 0.45; }
   .trip-card:nth-child(3n+2) .note-meta { color: rgba(122,59,72,0.72); }
   /* 3枚に1枚はミントの付箋（いろどり）*/
   .trip-card:nth-child(3n) .card-note { background: linear-gradient(150deg, #e2f6ea 0%, #cdeedd 100%); }
@@ -248,9 +283,12 @@
   }
   .trip-card:nth-child(even) .card-note::before { transform: translateX(-50%) rotate(4deg); }
 
-  /* ホバーで軽く起こす（交互ルールより後に置き、ホバー時は必ず水平に）*/
+  /* ホバーで水平に起こしつつ、ふわっと持ち上げる（交互ルールより後に置く）*/
   .trip-card:hover .cover,
-  .trip-card:hover .card-note { transform: rotate(0); }
+  .trip-card:hover .card-note { transform: rotate(0) translateY(-4px); }
+  .trip-card:hover .cover {
+    box-shadow: 0 4px 8px rgba(80,70,50,0.10), 6px 18px 32px rgba(80,70,50,0.20);
+  }
 
   /* 付箋バッジ（1〜2個）: 写真の左下にふせんを貼ったようにオーバーレイ */
   .badges {

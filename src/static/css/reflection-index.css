@@ -81,16 +81,17 @@
   }
   .fav-filter .star { font-size: 1.05em; line-height: 1; }
 
-  /* カード上のお気に入り★ボタン（写真左上に控えめに重ねる）*/
+  /* カード上のお気に入り★ボタン（白いチップで写真になじませる。黒丸は重く安見えする）*/
   .fav-btn {
     position: absolute; top: 8px; left: 8px; z-index: 5;
-    background: rgba(0,0,0,0.45); border: none; cursor: pointer;
-    width: 34px; height: 34px; border-radius: 50%; font-size: 1.05em; line-height: 1;
+    background: rgba(255,255,255,0.88); border: none; cursor: pointer;
+    width: 30px; height: 30px; border-radius: 50%; font-size: 0.95em; line-height: 1;
     display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,0.85); transition: transform 0.1s;
+    color: #c8bda2; box-shadow: 0 1px 4px rgba(90,70,40,0.28);
+    transition: transform 0.1s;
   }
-  .fav-btn:hover { background: rgba(0,0,0,0.65); transform: scale(1.08); }
-  .fav-btn.on { color: #ffd23f; }
+  .fav-btn:hover { background: #fff; transform: scale(1.08); }
+  .fav-btn.on { color: #f5b301; }
 
   /* 共有された旅であることを示すフラグ（カバー右上）*/
   .share-flag {
@@ -113,39 +114,23 @@
     display: flex; flex-direction: column; gap: 18px;
     padding: 22px 18px;
     border-radius: 16px;
-    /* クリーム色のやさしい木枠＋内側にコルク面の落ち込み影 */
-    border: 10px solid #f3dcb0;
+    /* クリーム色のやさしい木枠＋内側にコルク面の落ち込み影（控えめに） */
+    border: 10px solid #f2ddb6;
     box-shadow:
-      inset 0 0 0 2px rgba(200,150,90,0.30),
-      inset 0 3px 14px rgba(150,110,60,0.22),
-      0 8px 20px rgba(150,110,60,0.18);
-    background-color: #e4c496;
-    /* ミルクティー色のコルク：粒々スペックル＋色ムラ＋ベース */
+      inset 0 0 0 1px rgba(200,155,95,0.22),
+      inset 0 2px 10px rgba(150,110,60,0.14),
+      0 6px 18px rgba(150,110,60,0.14);
+    background-color: #e9d4ae;
+    /* コルクの質感は「目を凝らすと分かる」程度の微細な紙目に留める
+       （粒を大きく濃くすると水玉模様に見えて安っぽくなる）*/
     background-image:
-      radial-gradient(circle at 18% 28%, rgba(140,96,50,0.20) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 68% 62%, rgba(120,80,40,0.18) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 42% 82%, rgba(170,124,74,0.22) 0 1.8px, transparent 2.4px),
-      radial-gradient(circle at 85% 16%, rgba(126,88,44,0.16) 0 1px, transparent 1.6px),
-      radial-gradient(circle at 8% 66%, rgba(184,142,92,0.18) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 20% 18%, rgba(255,244,222,0.24), transparent 42%),
-      radial-gradient(circle at 82% 74%, rgba(140,96,50,0.12), transparent 46%),
-      linear-gradient(160deg, #e9cd9f 0%, #dcba85 100%);
+      radial-gradient(circle at 25% 35%, rgba(150,108,58,0.08) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 64%, rgba(150,108,58,0.055) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 18% 12%, rgba(255,248,230,0.35), transparent 55%),
+      linear-gradient(160deg, #eedcb8 0%, #e2cb9e 100%);
     background-size:
-      13px 13px, 17px 17px, 23px 23px, 11px 11px, 19px 19px,
-      100% 100%, 100% 100%, 100% 100%;
-  }
-  /* ボードの角にステッカーをぺたり（クローバーとお花）*/
-  #trips::before {
-    content: "🍀"; position: absolute; top: -18px; left: -16px; z-index: 9;
-    font-size: 1.9rem; transform: rotate(-16deg);
-    filter: drop-shadow(0 2px 3px rgba(90,60,30,0.3));
-    pointer-events: none;
-  }
-  #trips::after {
-    content: "🌼"; position: absolute; bottom: -14px; right: -12px; z-index: 9;
-    font-size: 1.7rem; transform: rotate(12deg);
-    filter: drop-shadow(0 2px 3px rgba(90,60,30,0.3));
-    pointer-events: none;
+      11px 11px, 17px 17px,
+      100% 100%, 100% 100%;
   }
   /* 1旅 = 2カラム（左:写真 / 右:ラベル）。display は指定せず hidden 絞り込みを維持 */
   .trip-card {
@@ -179,7 +164,7 @@
   /* 右：付箋ラベル（黄・一部ピンク）*/
   .card-note {
     background: linear-gradient(150deg, #fff6c9 0%, #fdefac 100%);
-    padding: 14px 34px 12px 14px; border-radius: 3px; min-width: 0;  /* 右は「⋯」メニュー分を空ける */
+    padding: 14px 40px 12px 14px; border-radius: 3px; min-width: 0;  /* 右は「⋯」メニュー分を空ける */
     box-shadow: 2px 4px 10px rgba(120,100,40,0.16);
     transform: rotate(1.8deg); transition: transform 0.15s;
   }
@@ -236,28 +221,21 @@
   /* 付箋のマスキングテープ（半透明ストライプ・端はギザギザ）*/
   .card-note::before {
     content: ""; position: absolute; z-index: 8; pointer-events: none;
-    top: -11px; left: 50%; width: 66px; height: 22px;
+    top: -10px; left: 50%; width: 58px; height: 19px;
     transform: translateX(-50%) rotate(-4deg);
     background: repeating-linear-gradient(45deg,
-      rgba(247,143,175,0.55) 0 7px, rgba(255,203,219,0.55) 7px 14px);
-    box-shadow: 0 2px 4px rgba(120,80,50,0.18);
+      rgba(243,150,178,0.42) 0 7px, rgba(255,210,224,0.42) 7px 14px);
+    box-shadow: 0 1px 3px rgba(120,80,50,0.15);
     clip-path: polygon(0 0, 100% 0, 97% 15%, 100% 30%, 97% 50%, 100% 70%, 97% 85%, 100% 100%,
                        0 100%, 3% 85%, 0 70%, 3% 50%, 0 30%, 3% 15%);
   }
   .trip-card:nth-child(3n+2) .card-note::before {
     background: repeating-linear-gradient(45deg,
-      rgba(95,196,147,0.5) 0 7px, rgba(171,232,200,0.5) 7px 14px);
+      rgba(105,196,150,0.38) 0 7px, rgba(180,232,204,0.38) 7px 14px);
   }
   .trip-card:nth-child(3n) .card-note::before {
     background: repeating-linear-gradient(45deg,
-      rgba(255,215,102,0.55) 0 7px, rgba(255,240,184,0.55) 7px 14px);
-  }
-  /* 付箋の右下をちょこっとめくれた紙に */
-  .card-note::after {
-    content: ""; position: absolute; right: 0; bottom: 0; width: 0; height: 0;
-    border-style: solid; border-width: 0 0 16px 16px;
-    border-color: transparent transparent rgba(120,90,40,0.13) transparent;
-    pointer-events: none;
+      rgba(240,200,95,0.42) 0 7px, rgba(255,236,178,0.42) 7px 14px);
   }
 
   /* 画像と付箋を旅ごとに左右交互に配置（偶数番目は写真=右／付箋=左）*/
@@ -294,11 +272,12 @@
   /* 「…」メニュー（削除導線。写真の上に控えめに重ねる）*/
   .card-menu { position: absolute; top: 8px; right: 8px; z-index: 5; }
   .kebab {
-    background: rgba(0,0,0,0.45); border: none; color: #fff; font-size: 1.2em; line-height: 1;
-    width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    background: rgba(255,255,255,0.88); border: none; color: #b0a488; font-size: 1.1em; line-height: 1;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 4px rgba(90,70,40,0.28);
   }
-  .kebab:hover { background: rgba(0,0,0,0.65); }
+  .kebab:hover { background: #fff; color: #7a6f58; }
   .menu {
     position: absolute; top: 40px; right: 0;
     background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px;

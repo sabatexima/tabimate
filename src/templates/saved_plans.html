@@ -3,14 +3,17 @@
 {% block title %}保存済みプラン — たびメイト{% endblock %}
 
 {% block head %}
+{# 手書きレイヤー用フォント（タイトル・表紙の行き先・保存日）#}
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/saved-plans.css') }}">
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1>📚 保存済みプラン</h1>
+  <p class="kicker">TRAVEL&nbsp;BOOKSHELF</p>
+  <h1><span class="accent">保存済みプラン</span></h1>
 </div>
-<p class="page-lead">ちゃむと作った旅の絵本たち。表紙をタップすると中身がひらきます。</p>
+<p class="page-lead">ちゃむと作った旅の絵本たち。表紙をひらくと、旅の中身が見られます。</p>
 
 <div id="loading">
   <div class="skeleton-card"><div class="skeleton-bar title"></div><div class="skeleton-bar"></div><div class="skeleton-bar short"></div></div>

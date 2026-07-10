@@ -3,6 +3,8 @@
 {% block title %}{{ plan.destination }} — 保存済みプラン — たびメイト{% endblock %}
 
 {% block head %}
+{# 手書きレイヤー用フォント（行き先タイトル・評価コメント）#}
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/saved-plans.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
 {% endblock %}

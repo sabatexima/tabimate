@@ -5,22 +5,27 @@
     --text-muted: #8a817a;
   }
 
+  /* エディトリアルな見出し：英字キッカー＋手書きの表題＋波線（振り返りと同じ言語）*/
   .page-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 auto 6px;
+    margin: 0 auto 4px;
     max-width: 640px;
   }
+  .kicker {
+    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.38em;
+    color: #c2a05e; margin: 0 0 8px 2px;
+  }
   .page-header h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: var(--text-main);
-    margin: 0;
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;
+    font-size: 2rem; font-weight: 600; color: var(--text-main);
+    margin: 0; line-height: 1.25; letter-spacing: 0.02em;
+  }
+  .page-header h1 .accent {
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+    text-underline-offset: 8px;
   }
   .page-lead {
-    color: var(--text-muted); font-size: 0.92em;
-    margin: 0 auto 20px; max-width: 640px;
+    color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
+    margin: 14px auto 24px; max-width: 640px;
   }
 
   /* ===== 一覧 = 本棚。表紙カードを縦に並べ、タップで詳細ページへ ===== */
@@ -37,13 +42,13 @@
     background: #fffdf6; border: 2px solid #ecdfc3; border-radius: 6px 22px 22px 6px;
     padding: 18px 40px 16px 34px;   /* 左=背表紙ぶん / 右=リボン・メニューぶん */
     text-decoration: none; color: var(--text-main);
-    box-shadow: 0 6px 16px rgba(120,100,70,0.12);
+    box-shadow: 0 1px 2px rgba(120,100,70,0.06), 0 6px 16px rgba(120,100,70,0.12);
     overflow: hidden;
-    transition: transform 0.15s, box-shadow 0.15s;
+    transition: transform 0.45s cubic-bezier(0.22, 1.35, 0.36, 1), box-shadow 0.3s;
   }
   .plan-cover-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 22px rgba(120,100,70,0.18);
+    transform: translateY(-4px);
+    box-shadow: 0 2px 4px rgba(120,100,70,0.06), 0 14px 30px rgba(120,100,70,0.2);
   }
   /* 背表紙（左の綴じ帯）＋ステッチ。3色巡回で本棚のいろどりに */
   .plan-cover-card::before {
@@ -101,8 +106,10 @@
   }
   .cover-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
   .cover-dest {
-    font-size: 1.25em; font-weight: 800; color: #45613a; line-height: 1.3;
-    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 2px;  /* 手書きふうの波線 */
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 表紙に手書きした行き先 */
+    font-size: 1.4em; font-weight: 600; color: #45613a; line-height: 1.3;
+    letter-spacing: 0.02em;
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 2px;
     text-underline-offset: 5px;
   }
   .cover-shared {
@@ -119,7 +126,10 @@
   .cover-chip:nth-child(2) { background: #eaf6e2; border-color: #cfe8c0; color: #4c7040; }
   .cover-chip:nth-child(3) { background: #fdeef0; border-color: #f4d3da; color: #8a5560; }
   .cover-chip:nth-child(4) { background: #eaf3fb; border-color: #cfe2f2; color: #4c6b8a; }
-  .cover-meta { font-size: 0.72em; color: #b0a488; }
+  .cover-meta {
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 保存日も手書きの書き込みに */
+    font-size: 0.7em; font-weight: 600; letter-spacing: 0.1em; color: #b0a488;
+  }
 
   /* しおりリボン（評価済みで金＋★に変わる）*/
   .book-ribbon {
@@ -456,9 +466,10 @@
   .rate-star-static { font-size: 1.25em; line-height: 1; color: #e3dac7; }
   .rate-star-static.on { color: #f5b301; }
   .rate-comment-view {
-    color: var(--text-muted);
-    font-style: italic;
-    font-size: 0.9em;
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 自分の感想は手書きで残る */
+    color: #7a6a4a;
+    font-size: 0.95em;
+    font-weight: 600;
   }
   .rate-edit {
     margin-left: auto;

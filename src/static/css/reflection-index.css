@@ -190,7 +190,9 @@
   .cover img {
     width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #efe9dc;
     border: 1px solid rgba(60,45,25,0.05);
-    filter: saturate(1.05) contrast(1.02);  /* ほんのりフィルム写真の発色に */
+    /* 注意: ここに filter を付けてはいけない。回転した親×lazy画像×filter の組み合わせで
+       WebKit/Blink が初回描画をスキップし「ホバーするまで画像が出ない」バグになる */
+    transform: translateZ(0);  /* 自前の合成レイヤーを持たせて確実に描画させる */
   }
   /* あごに手書きの日付（現像した写真に書き込むあの感じ）*/
   .cover-date {
@@ -387,7 +389,7 @@
   .trip-card:nth-child(n+6) { animation-delay: 0.30s; }
   /* カバー写真のゆるいパララックス風ズーム（ホバー時）*/
   .cover img { transition: transform 0.5s ease; }
-  .trip-card:hover .cover img { transform: scale(1.05); }
+  .trip-card:hover .cover img { transform: scale(1.05) translateZ(0); }
 
   @media (prefers-reduced-motion: reduce) {
     .trip-card { animation: none; }

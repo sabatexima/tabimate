@@ -563,7 +563,7 @@ def _build_plan_ics(plan: dict) -> str:
       - スケジュール各行の時刻付きイベント（日別・Asia/Tokyo明示）
     """
     import re
-    from datetime import date, datetime, timedelta
+    from datetime import date, datetime, timedelta, timezone
 
     def esc(s):
         return (str(s or '').replace('\\', '\\\\').replace(';', '\\;')
@@ -579,7 +579,8 @@ def _build_plan_ics(plan: dict) -> str:
 
     dest = plan.get('destination') or '旅行'
     pid = plan.get('id')
-    dtstamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    # utcnow() は Python 3.12 で非推奨のため、tz付きUTCを使う
+    dtstamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
     lines = []
     def add(label, items):

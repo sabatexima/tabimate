@@ -263,10 +263,12 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
             p["url"] = url_map.get(p["storage_path"])
             p["thumb_url"] = thumb_map.get(p["storage_path"])
         stickers = repo.get_stickers(resource_id)
+        # 旅の丸ごと削除は所有者のみ（editの共有相手には見せない・させない）
+        is_owner = bool(_is_owner("trip", resource_id, session.get("user_id")))
         return render_template(
             "shared/trip.html",
             trip=trip, photos=photos, stickers=stickers,
-            can_edit=can_edit, share_token=share_token,
+            can_edit=can_edit, is_owner=is_owner, share_token=share_token,
         )
     if resource_type == "plan":
         plan = db.get_travel_plan_by_id(resource_id)
@@ -319,7 +321,7 @@ def shared_upload_photos(trip_id: int):
         if not f or not f.filename:
             continue
         ext = os.path.splitext(f.filename)[1].lower()
-        if ext and ext not in _ALLOWED_EXT:
+        if ext not in _ALLOWED_EXT:  # 拡張子なし("")も弾く（reflection側と同じ判定）
             continue
         data = f.read()
         if not data:
@@ -394,11 +396,15 @@ def shared_delete_sticker(trip_id: int, sticker_id: int):
 
 @share.route("/shared/trip/<int:trip_id>", methods=["DELETE"])
 def shared_delete_trip(trip_id: int):
-    """共有された旅を丸ごと削除する（編集権限が必要）。
+    """旅を丸ごと削除する（所有者のみ）。
 
-    所有者の削除と同様に、DB削除の前にストレージ上の写真実体も消す。
+    写真の実体ごと消える破壊的操作なので、編集権限(edit)の共有相手にも
+    許可しない。DB削除の前にストレージ上の写真実体も消す。
     """
-    trip, owner_id = _require_trip_edit(trip_id)
+    trip = _is_owner("trip", trip_id, session.get("user_id"))
+    if not trip:
+        abort(403)
+    owner_id = trip["user_id"]
     photos = repo.get_photos(trip_id)
     for p in photos:
         storage.delete(p["storage_path"])

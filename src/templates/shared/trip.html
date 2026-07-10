@@ -64,11 +64,11 @@
     {% endif %}
   </div>
 
-  {% if can_edit %}
-  <!-- 危険ゾーン（旅の削除）: 編集権限のある共有相手のみ -->
+  {% if is_owner %}
+  <!-- 危険ゾーン（旅の削除）: 破壊的操作なので所有者のみに見せる -->
   <div class="section danger-zone">
     <h2>🗑 この旅を削除</h2>
-    <p class="hint">写真・付箋をすべて削除します。元には戻せません。共有元の所有者の記録も消えます。</p>
+    <p class="hint">写真・付箋をすべて削除します。元には戻せません。</p>
     <button class="btn danger" id="delete-trip-btn">この旅を削除する</button>
   </div>
   {% endif %}

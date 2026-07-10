@@ -161,7 +161,13 @@ def _ensure_plan_columns(conn) -> None:
             {"c": col},
         ).scalar()
         if not exists:
-            conn.execute(text(f"ALTER TABLE travel_plans ADD COLUMN {col} {ddl}"))
+            try:
+                conn.execute(text(f"ALTER TABLE travel_plans ADD COLUMN {col} {ddl}"))
+            except Exception:
+                # 複数ワーカーが同時起動すると、確認と ALTER の間で他プロセスが
+                # 先に列を追加して Duplicate column になることがある（無害な競合）
+                conn.rollback()
+                logger.info("列 %s は他プロセスが追加済み（競合を無視）", col)
     _plan_columns_ensured = True
 
 _CREATE_CHAT_TABLE = """
@@ -193,7 +199,11 @@ def _ensure_chat_columns(conn) -> None:
         )
     ).scalar()
     if not exists:
-        conn.execute(text("ALTER TABLE chat_messages ADD COLUMN plan_json MEDIUMTEXT NULL"))
+        try:
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN plan_json MEDIUMTEXT NULL"))
+        except Exception:
+            conn.rollback()  # 他プロセスが先に追加した場合の競合（無害）
+            logger.info("plan_json 列は他プロセスが追加済み（競合を無視）")
     _chat_columns_ensured = True
 
 

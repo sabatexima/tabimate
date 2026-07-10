@@ -6,8 +6,9 @@
     color: #c2a05e; margin: 0 0 8px 2px;
   }
   .page-header h1 {
-    font-size: 1.9rem; font-weight: 800; color: var(--text-main);
-    margin: 0; line-height: 1.25; letter-spacing: 0.01em;
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 手書きの表題 */
+    font-size: 2rem; font-weight: 600; color: var(--text-main);
+    margin: 0; line-height: 1.25; letter-spacing: 0.02em;
   }
   .page-header h1 .accent {
     text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
@@ -119,6 +120,7 @@
     transition: transform 0.1s;
   }
   .fav-btn:hover { background: #fff; transform: scale(1.08); }
+  .fav-btn:active { transform: scale(0.88); }
   .fav-btn.on { color: #f5b301; }
 
   /* 共有された旅であることを示すフラグ（カバー右上）*/
@@ -180,12 +182,24 @@
   /* 左：写真（ポラロイド）*/
   .cover {
     position: relative; margin: 0;
-    background: #fff; padding: 7px 7px 16px; border-radius: 4px;  /* 下に余白＝ポラロイドのあご */
+    background: #fff; padding: 7px 7px 26px; border-radius: 4px;  /* 下に余白＝ポラロイドのあご */
     box-shadow: 0 2px 4px rgba(80,70,50,0.10), 4px 10px 24px rgba(80,70,50,0.16);
     transform: rotate(-2.2deg);
     transition: transform 0.45s cubic-bezier(0.22, 1.35, 0.36, 1), box-shadow 0.3s;
   }
-  .cover img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #efe9dc; }
+  .cover img {
+    width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #efe9dc;
+    border: 1px solid rgba(60,45,25,0.05);
+    filter: saturate(1.05) contrast(1.02);  /* ほんのりフィルム写真の発色に */
+  }
+  /* あごに手書きの日付（現像した写真に書き込むあの感じ）*/
+  .cover-date {
+    position: absolute; left: 7px; right: 7px; bottom: 5px;
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;
+    font-size: 0.66rem; font-weight: 600; letter-spacing: 0.12em;
+    color: #a1937a; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .cover-empty {
     display: flex; align-items: center; justify-content: center;
     aspect-ratio: 1 / 1; background: #efe9dc; font-size: 2.6rem; opacity: 0.45;
@@ -208,7 +222,8 @@
   }
   .trip-card:nth-child(3n+2) .note-title { color: #7a3b48; }
   .note-memo {
-    margin-top: 6px; font-size: 0.84em; color: #7a6a3a; line-height: 1.45;
+    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 付箋の一言は手書きで */
+    margin-top: 6px; font-size: 0.88em; font-weight: 600; color: #7a6a3a; line-height: 1.55;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .trip-card:nth-child(3n+2) .note-memo { color: #96566a; }
@@ -271,6 +286,12 @@
   .trip-card:nth-child(3n) .card-note::before {
     background: repeating-linear-gradient(45deg,
       rgba(240,200,95,0.42) 0 7px, rgba(255,236,178,0.42) 7px 14px);
+  }
+  /* 付箋の上端に糊の光（本物のふせんの、上だけ少し明るいあの帯）*/
+  .card-note::after {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 24%;
+    background: linear-gradient(rgba(255,255,255,0.38), rgba(255,255,255,0));
+    border-radius: 3px 3px 0 0; pointer-events: none;
   }
 
   /* 画像と付箋を旅ごとに左右交互に配置（偶数番目は写真=右／付箋=左）*/
@@ -352,10 +373,10 @@
     .feed { max-width: 600px; }
   }
 
-  /* 旅カードの登場アニメ（ふわっとフェードイン。transformは傾きを残すため触らない）*/
+  /* 旅カードの登場アニメ（少し下からふわっと。傾きは子要素側なので transform を使ってよい）*/
   @keyframes cardIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
   .trip-card { animation: cardIn 0.45s ease-out both; }
   .trip-card:nth-child(1) { animation-delay: 0.00s; }

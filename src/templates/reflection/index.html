@@ -3,6 +3,8 @@
 {% block title %}旅の振り返り — たびメイト{% endblock %}
 
 {% block head %}
+{# 手書きレイヤー用フォント（タイトル・付箋の一言・写真の日付書き込み）#}
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reflection-index.css') }}">
 {% endblock %}
 
@@ -81,12 +83,12 @@
             {% endif %}
             <button class="fav-btn {{ 'on' if trip.is_favorite else '' }}" type="button"
                     aria-label="お気に入り">{{ '★' if trip.is_favorite else '☆' }}</button>
+            {% if trip.start_date %}<figcaption class="cover-date">{{ trip.start_date|string|replace('-', '.') }}</figcaption>{% endif %}
           </figure>
           <div class="card-note">
             <div class="note-title">{{ trip.title }}</div>
             {% if trip.stickers_preview %}<div class="note-memo">「{{ trip.stickers_preview[0] }}」</div>{% endif %}
             <div class="note-meta">
-              {% if trip.start_date %}<span>{{ trip.start_date | tripdates(trip.end_date) }}</span><span class="meta-sep">·</span>{% endif %}
               <span>写真 {{ trip.photo_count or 0 }}枚</span>
             </div>
           </div>
@@ -119,12 +121,12 @@
             <button class="fav-btn {{ 'on' if trip.is_favorite else '' }}" type="button"
                     aria-label="お気に入り">{{ '★' if trip.is_favorite else '☆' }}</button>
             <span class="share-flag">🤝 {{ '編集可' if trip.permission == 'edit' else '閲覧' }}</span>
+            {% if trip.start_date %}<figcaption class="cover-date">{{ trip.start_date|string|replace('-', '.') }}</figcaption>{% endif %}
           </figure>
           <div class="card-note">
             <div class="note-title">{{ trip.title }}</div>
             {% if trip.stickers_preview %}<div class="note-memo">「{{ trip.stickers_preview[0] }}」</div>{% endif %}
             <div class="note-meta">
-              {% if trip.start_date %}<span>{{ trip.start_date | tripdates(trip.end_date) }}</span><span class="meta-sep">·</span>{% endif %}
               <span>写真 {{ trip.photo_count or 0 }}枚</span>
             </div>
             <button class="unshare-btn" type="button" data-grant="{{ trip.grant_id }}" aria-label="共有を解除">共有解除</button>

@@ -3,8 +3,6 @@
 {% block title %}旅の振り返り — たびメイト{% endblock %}
 
 {% block head %}
-{# 手書きレイヤー用フォント（タイトル・付箋の一言・写真の日付書き込み）#}
-<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reflection-index.css') }}">
 {% endblock %}
 
@@ -134,6 +132,10 @@
         </a>
       </div>
     {% endfor %}
+
+    {% if trips or shared_trips %}
+      <img class="journal-mate" src="{{ url_for('static', filename='img/mate.png') }}" alt="" aria-hidden="true">
+    {% endif %}
 
     {% if not trips and not shared_trips %}
       <div class="empty-state" id="empty">

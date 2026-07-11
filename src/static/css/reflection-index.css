@@ -6,8 +6,7 @@
     color: #c2a05e; margin: 0 0 8px 2px;
   }
   .page-header h1 {
-    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 手書きの表題 */
-    font-size: 2rem; font-weight: 600; color: var(--text-main);
+    font-size: 1.9rem; font-weight: 700; color: var(--text-main);
     margin: 0; line-height: 1.25; letter-spacing: 0.02em;
   }
   .page-header h1 .accent {
@@ -16,13 +15,13 @@
   }
   .page-lead {
     color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
-    margin: 14px 0 26px; max-width: 60ch;
+    margin: 12px 0 20px; max-width: 60ch;
   }
 
   .feed { max-width: 520px; margin: 0 auto; }
 
   /* 新しい旅: 既定は1ボタンに畳む。タップで展開。 */
-  .new-trip-bar { margin-bottom: 22px; }
+  .new-trip-bar { margin-bottom: 14px; }
   .new-trip-toggle {
     width: 100%; background: rgba(255,255,255,0.7); color: var(--primary-color);
     border: 1.5px dashed rgba(79,168,58,0.45); border-radius: 999px;
@@ -68,7 +67,7 @@
   .new-trip button.create:disabled { opacity: 0.6; cursor: default; }
 
   /* 検索・並び替えバー */
-  .album-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .album-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
   .search-wrap { position: relative; flex: 1 1 200px; }
   .search-icon {
     position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
@@ -143,8 +142,8 @@
      コルクの箱ではなく、微細な紙目のあるあたたかい白紙＋彫刻的なソフトシャドウで見せる */
   #trips {
     position: relative;
-    display: flex; flex-direction: column; gap: 26px;
-    padding: 30px 20px;
+    display: flex; flex-direction: column; gap: 22px;
+    padding: 26px 18px;
     border: 1px solid #f0e5cd;
     border-radius: 24px;
     background-color: #fffdf6;
@@ -169,7 +168,7 @@
   .trip-card {
     position: relative;
     display: grid; grid-template-columns: 1fr 1fr;
-    gap: 14px; align-items: center;
+    gap: 14px; align-items: stretch;  /* 付箋を写真と同じ高さに伸ばし、余白のガタつきをなくす */
   }
   /* display:grid が UA の [hidden]{display:none} を上書きしてしまうため明示的に隠す
      （検索・お気に入り絞り込みで hidden 属性が効くようにする）*/
@@ -197,8 +196,7 @@
   /* あごに手書きの日付（現像した写真に書き込むあの感じ）*/
   .cover-date {
     position: absolute; left: 7px; right: 7px; bottom: 5px;
-    font-family: "Klee One", "Zen Maru Gothic", sans-serif;
-    font-size: 0.66rem; font-weight: 600; letter-spacing: 0.12em;
+    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.12em;
     color: #a1937a; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
@@ -215,22 +213,23 @@
     padding: 14px 40px 12px 14px; border-radius: 3px; min-width: 0;  /* 右は「⋯」メニュー分を空ける */
     box-shadow: 0 2px 4px rgba(120,100,40,0.08), 3px 8px 20px rgba(120,100,40,0.14);
     transform: rotate(1.8deg);
+    display: flex; flex-direction: column;  /* タイトル上・メタ下で高さいっぱい使う */
     transition: transform 0.45s cubic-bezier(0.22, 1.35, 0.36, 1), box-shadow 0.3s;
   }
   .trip-card:nth-child(3n+2) .card-note { background: linear-gradient(150deg, #ffe0e6 0%, #ffd0da 100%); }
   .note-title {
+    margin-top: auto;  /* メタ(下端固定)と合わせて、本文を付箋の中央に置く */
     font-weight: 700; font-size: 1.0em; color: #5b4a2a; line-height: 1.45;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .trip-card:nth-child(3n+2) .note-title { color: #7a3b48; }
   .note-memo {
-    font-family: "Klee One", "Zen Maru Gothic", sans-serif;  /* 付箋の一言は手書きで */
-    margin-top: 6px; font-size: 0.88em; font-weight: 600; color: #7a6a3a; line-height: 1.55;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-top: 6px; font-size: 0.86em; font-weight: 500; color: #7a6a3a; line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
   .trip-card:nth-child(3n+2) .note-memo { color: #96566a; }
   .note-meta {
-    margin-top: 10px; font-size: 0.7em; color: rgba(90,74,42,0.62);
+    margin-top: auto; padding-top: 10px;  /* メタは付箋の下端に沈める */ font-size: 0.7em; color: rgba(90,74,42,0.62);
     letter-spacing: 0.04em;
     display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 6px;
   }
@@ -367,12 +366,23 @@
   }
   .empty-state .empty-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 168, 58, 0.38); }
 
+  /* ジャーナルの角に貼ったちゃむのステッカー（余白の寂しさをうめる）*/
+  .journal-mate {
+    position: absolute; right: -6px; bottom: -16px; height: 76px; width: auto;
+    transform: rotate(-8deg); z-index: 8; pointer-events: none;
+    filter: drop-shadow(0 4px 8px rgba(120,100,70,0.28));
+  }
+
   /* 空状態はボード内で中央表示（text-align:center 済み）*/
   #trips .empty-state { align-self: stretch; }
 
   /* PCでも旅は横に1つ（縦に積む）。幅だけ少し広げて中央寄せする */
   @media (min-width: 768px) {
-    .feed { max-width: 600px; }
+    .feed { max-width: 660px; }
+    #trips { padding: 30px 26px; gap: 26px; }
+    /* 大きな付箋では文字も少しゆったり見せる */
+    .note-title { font-size: 1.12em; }
+    .note-memo { font-size: 0.95em; -webkit-line-clamp: 4; }
   }
 
   /* 旅カードの登場アニメ（少し下からふわっと。傾きは子要素側なので transform を使ってよい）*/

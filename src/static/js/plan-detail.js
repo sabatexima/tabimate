@@ -111,11 +111,11 @@ function mountRate(card, plan) {
   });
 }
 
-// 詳細ページでは中身が主役なので、各セクションは最初からひらいておく
+// セクションは閉じた状態が既定（見出しだけで全体を見渡し、気になる所だけひらく）
 function accordion(icon, label, items) {
   if (!items || items.length === 0) return '';
   const lis = items.map(i => `<li>${esc(i)}</li>`).join('');
-  return `<details open>
+  return `<details>
     <summary>${icon} ${esc(label)}</summary>
     <div class="plan-accordion-body"><ul>${lis}</ul></div>
   </details>`;

@@ -111,8 +111,8 @@
     text-underline-offset: 5px;
   }
   .cover-shared {
-    margin-left: 8px; font-size: 0.6em; font-weight: 700; color: #4a7aa8;
-    background: #eaf3fb; border: 1px solid #cfe2f2; border-radius: 10px;
+    margin-left: 8px; font-size: 0.6em; font-weight: 700; color: #4f8f46;
+    background: #eef7e8; border: 1px solid #d7ebcc; border-radius: 10px;
     padding: 2px 8px; vertical-align: 2px; text-decoration: none; display: inline-block;
   }
   .cover-chips { display: flex; flex-wrap: wrap; gap: 6px; }

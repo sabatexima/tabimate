@@ -11,6 +11,12 @@
 
 <p align="center"><a href="README_jp.md">日本語版</a></p>
 
+## Screenshots
+
+| Trip journal (reflection) | Saved plans (bookshelf) | Plan detail (booklet) |
+|:---:|:---:|:---:|
+| <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal.png" alt="Trip journal" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf.png" alt="Saved plans bookshelf" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail.png" alt="Plan detail booklet" width="250"> |
+
 ## Tech Stack
 
 ![Flask](https://img.shields.io/badge/Flask-3.1-000000.svg?logo=flask&logoColor=white)
@@ -39,7 +45,7 @@
 - **Business-day awareness for dining**: the gourmet agent considers the travel date's day-of-week and avoids restaurants likely closed on that day (e.g., a café on its regular day off).
 - **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for candidate extraction, selection and conversation parsing, and a stronger model (`gemini-3.5-flash`) where reasoning matters most — scheduling, cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
-- Generated plans can be saved, viewed, and deleted from the saved plans list.
+- Generated plans can be saved and browsed on a picture-book **"bookshelf"** list; opening a cover navigates to a booklet-style detail page (`/plan/<id>`) with weather, map, rating, sharing and delete — sections are collapsed by default so the whole plan can be scanned at a glance.
 - **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles). Sightseeing spots are numbered green teardrop pins (with a four-leaf-clover accent matching the mascot) connected in route order, while restaurants (orange) and accommodation (blue) are shown as color-coded pins with a legend. Each pin's popup links to Google Maps navigation. Coordinates are geocoded **lazily on first map open** and cached (`geo_done`); geocoding is biased to the destination area (`viewbox`) and falls back through `name → "name, destination" → trimmed suffix` to improve hit rate. The shared-plan view and the photo "footprints" map reuse the same component.
 - **User-placed custom pins**: on your own plan's map you can drop pins by tapping, give each a name/type (sightseeing/dining/lodging/memo) and a color, drag to reposition, and delete them — useful for places Nominatim can't find. Spots that failed to geocode are listed as "unplaced" chips for one-tap placement. Custom pins persist (`custom_pins`) and are visible on the shared view too.
 - **Travel-date weather & calendar export**: saved (and shared) plans show the forecast for the travel date as a small strip (Open-Meteo, today through +16 days; plans without cached coordinates fall back to geocoding the destination name). Relative dates like "tomorrow" or "this weekend" are normalized to absolute dates in code. The `.ics` export includes an all-day overview event plus **each schedule line as a timed, per-day event** (explicit Asia/Tokyo timezone, a day-before reminder, RFC 5545 line folding).
@@ -52,7 +58,7 @@
 - Create trips and upload multiple photos (saved to GCS or local storage). HEIC/HEIF photos are converted to JPEG on upload, and lightweight thumbnails are generated (lists show thumbnails; the lightbox shows the original).
 - Extract shoot time and GPS coordinates from photo EXIF metadata, summarizing them into features (time-of-day bias, travel distance, activity range, etc.) on the backend.
 - Feed summarized features and representative photos to Gemini to generate 3 to 6 virtual sticky notes. Notes are re-pinned upon regeneration.
-- SNS-style feed on the home page. Each trip card features a large thumbnail and sticky note badges.
+- The trip list is a craft-paper **"travel journal"** board: each trip is a pinned polaroid photo paired with a pastel washi-taped sticky note, with search (kana-normalized, multi-word AND), sorting, and a favorites filter.
 - In trip details, tap photos to open in a lightbox. Supports navigation (prev/next buttons, arrow keys, and swipe gestures).
 - **Trip footprints map**: photos that carry GPS (EXIF) are plotted in shoot-time order and connected as a dashed "footprints" route. A trip can be **linked to a saved plan** so the planned sightseeing spots (green) are overlaid on the actual photo locations (pink) for a planned-vs-actual comparison.
 - Trip titles can be edited later. Deleting a trip or photo cleans up the underlying storage to prevent orphaned files.
@@ -129,7 +135,8 @@ tabimate/
     │   ├── reflection.py     #  APIs & views for trips, photos, and sticky notes
     │   └── sharing.py        #  Sharing links, email sharing, & permission controls
     ├── templates/            # Jinja2 Templates
-    │   ├── layout.html, home.html, saved_plans.html, sidebar.html
+    │   ├── layout.html, home.html, welcome.html, sidebar.html
+    │   ├── saved_plans.html, plan_detail.html
     │   ├── _share_modal.html
     │   └── reflection/
     │       ├── index.html    #  Trip list (feed-style, sticky note badges)
@@ -272,6 +279,7 @@ rm -rf src/uploads/*               # Delete all locally saved photos
 |----------|------|------|
 | GET | `/` | Home (Chat Interface) |
 | GET | `/saved_plans` | Saved Plans page (login required) |
+| GET | `/plan/<id>` | Booklet-style detail page for a saved plan (owner only) |
 | POST | `/send_message` | Submits message & streams AI response via SSE (login required, rate limit: 5 requests / 60 seconds) |
 | POST | `/abort_request` | Cancels the active generation request |
 | POST | `/reset_chat` | Resets chat history |
@@ -367,7 +375,7 @@ START
 - **Rejection Limit**: `MAX_BALANCER_RETRIES = 5`. `recursion_limit = 60` prevents infinite loops.
 - **Budget Allocation**: Target cap is 40% of remaining budget for accommodation, and 25% for dining.
 - **Out of Budget**: If transportation costs exceed the total budget, `transport_agent` throws a `ValueError` to abort and notify the user.
-- **Day Trip Check**: `is_day_trip()` inspects the duration string to skip accommodation nodes.
+- **Lodging-free Check**: the shared `parse_duration()` parses the duration string into (nights, days); accommodation nodes are skipped when nights = 0. This covers overnight-transit itineraries like "0泊2日" (night bus / car stay), where the timekeeper still builds a schedule for every itinerary day.
 - **User Feedback Priority**: During planning adjustments, `user_feedback` is prioritized in prompts for all agents.
 - **Time Preference**: `schedule_pref` (e.g., "home by evening") is injected into the timekeeper as a top-priority constraint; the day-trip schedule is computed by back-calculating from the return-home time.
 - **Rating-based Preferences**: `user_preferences` is built from the user's past ★ ratings/comments (`get_rated_plans`) and softly injected into the sightseeing, accommodation, gourmet, and timekeeper agents.

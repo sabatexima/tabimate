@@ -64,18 +64,45 @@
   }
   .sticker {
     position: relative;
-    background: linear-gradient(135deg, #fff8e1 0%, #fffdf5 100%);
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 4px;
-    padding: 14px 16px;
-    font-weight: 700; color: var(--text-main); font-size: 1.0em;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    background: linear-gradient(150deg, #fff6c9 0%, #fdefac 100%);
+    border: none;
+    border-radius: 3px;
+    padding: 16px 16px 14px;
+    font-weight: 700; color: #5b4a2a; font-size: 1.0em; line-height: 1.55;
+    box-shadow: 0 2px 4px rgba(120,100,40,0.08), 3px 8px 20px rgba(120,100,40,0.14);
     max-width: 240px;
   }
-  /* 付箋らしく1枚ずつ少し傾ける（派手にしない範囲で） */
+  /* 一覧ページの付箋と同じマスキングテープ（ページをまたいで同じ「付箋」に見せる）*/
+  .sticker::before {
+    content: ""; position: absolute; z-index: 2; pointer-events: none;
+    top: -8px; left: 50%; width: 46px; height: 15px;
+    transform: translateX(-50%) rotate(-4deg);
+    background: repeating-linear-gradient(45deg,
+      rgba(243,150,178,0.42) 0 7px, rgba(255,210,224,0.42) 7px 14px);
+    box-shadow: 0 1px 3px rgba(120,80,50,0.15);
+    clip-path: polygon(0 0, 100% 0, 97% 15%, 100% 30%, 97% 50%, 100% 70%, 97% 85%, 100% 100%,
+                       0 100%, 3% 85%, 0 70%, 3% 50%, 0 30%, 3% 15%);
+  }
+  /* 付箋らしく1枚ずつ少し傾け、一覧と同じ3色（黄・桃・ミント）で彩る */
   .sticker:nth-child(3n+1) { transform: rotate(-1.5deg); }
-  .sticker:nth-child(3n+2) { transform: rotate(1deg); }
-  .sticker:nth-child(3n)   { transform: rotate(-0.5deg); }
+  .sticker:nth-child(3n+2) {
+    transform: rotate(1deg);
+    background: linear-gradient(150deg, #ffe0e6 0%, #ffd0da 100%); color: #7a3b48;
+  }
+  .sticker:nth-child(3n+2)::before {
+    transform: translateX(-50%) rotate(3deg);
+    background: repeating-linear-gradient(45deg,
+      rgba(105,196,150,0.38) 0 7px, rgba(180,232,204,0.38) 7px 14px);
+  }
+  .sticker:nth-child(3n) {
+    transform: rotate(-0.5deg);
+    background: linear-gradient(150deg, #e2f6ea 0%, #cdeedd 100%); color: #2f6b4f;
+  }
+  .sticker:nth-child(3n)::before {
+    transform: translateX(-50%) rotate(-3deg);
+    background: repeating-linear-gradient(45deg,
+      rgba(240,200,95,0.42) 0 7px, rgba(255,236,178,0.42) 7px 14px);
+  }
   .sticker .del {
     position: absolute; top: 2px; right: 4px;
     background: none; border: none; cursor: pointer;

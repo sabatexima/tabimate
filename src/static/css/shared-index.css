@@ -1,6 +1,21 @@
-.page-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-  .page-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text-main); margin: 0; }
-  .page-lead { color: var(--text-muted); font-size: 0.9em; margin: 0 0 24px; max-width: 60ch; }
+/* エディトリアルな見出し（振り返り・保存プランと同じ作法）*/
+  .page-header { margin-bottom: 4px; }
+  .kicker {
+    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.38em;
+    color: #c2a05e; margin: 0 0 8px 2px;
+  }
+  .page-header h1 {
+    font-size: 1.9rem; font-weight: 700; color: var(--text-main);
+    margin: 0; line-height: 1.25; letter-spacing: 0.02em;
+  }
+  .page-header h1 .accent {
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+    text-underline-offset: 8px;
+  }
+  .page-lead {
+    color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
+    margin: 12px 0 20px; max-width: 60ch;
+  }
 
   .group-title { font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin: 20px 0 12px; }
   .share-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); max-width: 1040px; }

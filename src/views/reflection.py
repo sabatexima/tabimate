@@ -163,9 +163,23 @@ def create_trip():
 @reflection.route("/trips/<int:trip_id>", methods=["PATCH"])
 @login_required
 def update_trip(trip_id: int):
-    """旅の情報（タイトル / 出発日・帰宅日）を後から編集する。"""
+    """旅の情報（タイトル / 出発日・帰宅日 / 一覧の表紙写真）を後から編集する。"""
     _require_trip(trip_id)
     data = request.get_json(silent=True) or request.form
+    # 表紙写真の更新（null/空文字で解除＝最古の写真に戻す）
+    if "cover_photo_id" in data:
+        raw = data.get("cover_photo_id")
+        photo_id = None
+        if raw not in (None, "", "null"):
+            try:
+                photo_id = int(raw)
+            except (TypeError, ValueError):
+                return jsonify({"error": "cover_photo_id が不正です"}), 400
+        ok = repo.set_trip_cover(trip_id, _uid(), photo_id)
+        if not ok:
+            return jsonify({"error": "この旅の写真ではありません"}), 400
+        logger.info("旅の表紙変更: trip_id=%s photo_id=%s user=%s", trip_id, photo_id, _uid())
+        return jsonify({"updated": True, "cover_photo_id": photo_id})
     # 日付の更新（start_date / end_date のいずれかが含まれていれば日付モード）
     if "start_date" in data or "end_date" in data:
         start_date = (data.get("start_date") or "").strip() or None

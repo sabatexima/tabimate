@@ -170,6 +170,22 @@
   }
   .photo:hover .photo-del { opacity: 1; }
   .photo-del:hover { background: #e74c3c; color: #fff; }
+  /* 一覧の表紙に指定するチップ（左上・ホバーで出現、選択中は常時表示）*/
+  .photo-cover {
+    position: absolute; top: 9px; left: 9px;
+    background: rgba(255,255,255,0.9); border: none; cursor: pointer; color: #a1937a;
+    border-radius: 12px; padding: 3px 9px; font-size: 0.62rem; font-weight: 700;
+    font-family: inherit; line-height: 1.4;
+    box-shadow: 0 1px 4px rgba(90,70,40,0.28);
+    opacity: 0; transition: opacity 0.1s, background 0.15s, color 0.15s;
+  }
+  .photo:hover .photo-cover { opacity: 1; }
+  .photo-cover:hover { background: #fff; color: var(--primary-color); }
+  .photo-cover.on { opacity: 1; background: var(--primary-color); color: #fff; }
+  /* タッチ端末はホバーが無いので、操作ボタンは常に見せる */
+  @media (hover: none) {
+    .photo-del, .photo-cover { opacity: 1; }
+  }
   .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
 

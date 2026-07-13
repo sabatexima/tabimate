@@ -140,6 +140,8 @@ def _ensure_all(conn) -> None:
     _ensure_column(conn, "trips", "is_favorite", "is_favorite TINYINT NOT NULL DEFAULT 0")
     # 既存DB向け: 旅に紐付ける旅行プランID列が無ければ追加（実績↔プランの重ね合わせ用）
     _ensure_column(conn, "trips", "linked_plan_id", "linked_plan_id INT NULL")
+    # 既存DB向け: 一覧カードの表紙に使う写真ID（未設定なら最古の写真を表紙にする）
+    _ensure_column(conn, "trips", "cover_photo_id", "cover_photo_id INT NULL")
     # 旧来のお気に入りをユーザー別テーブルへ移送
     _migrate_favorites_once(conn)
 
@@ -219,8 +221,12 @@ def get_trips(user_id: str) -> list:
             text(
                 "SELECT t.*, "
                 "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
-                "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
-                "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path, "
+                "  COALESCE("
+                "    (SELECT p.storage_path FROM photos p "
+                "       WHERE p.id = t.cover_photo_id AND p.trip_id = t.id), "
+                "    (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
+                "       ORDER BY p.taken_at ASC, p.id ASC LIMIT 1)"
+                "  ) AS cover_path, "
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
                 "     ORDER BY s.id DESC LIMIT 1) AS sticker1, "
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
@@ -261,8 +267,12 @@ def get_trip_cards(trip_ids: list, viewer_id: str | None = None) -> list:
             text(
                 "SELECT t.*, "
                 "  (SELECT COUNT(*) FROM photos p WHERE p.trip_id = t.id) AS photo_count, "
-                "  (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
-                "     ORDER BY p.taken_at ASC, p.id ASC LIMIT 1) AS cover_path, "
+                "  COALESCE("
+                "    (SELECT p.storage_path FROM photos p "
+                "       WHERE p.id = t.cover_photo_id AND p.trip_id = t.id), "
+                "    (SELECT p.storage_path FROM photos p WHERE p.trip_id = t.id "
+                "       ORDER BY p.taken_at ASC, p.id ASC LIMIT 1)"
+                "  ) AS cover_path, "
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
                 "     ORDER BY s.id DESC LIMIT 1) AS sticker1, "
                 "  (SELECT s.text FROM stickers s WHERE s.trip_id = t.id "
@@ -282,6 +292,34 @@ def get_trip_cards(trip_ids: list, viewer_id: str | None = None) -> list:
         d["stickers_preview"] = [s for s in (d.pop("sticker1", None), d.pop("sticker2", None)) if s]
         result.append(d)
     return result
+
+
+def set_trip_cover(trip_id: int, user_id: str, photo_id: int | None) -> bool:
+    """一覧カードの表紙写真を設定する（None で解除＝最古の写真に戻る）。
+
+    photo_id はこの旅に属する写真であることを検証し、他の旅の写真は指定できない。
+    旅の所有者本人のみ変更できる。
+    """
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        owner = conn.execute(
+            text("SELECT 1 FROM trips WHERE id = :tid AND user_id = :uid"),
+            {"tid": trip_id, "uid": user_id},
+        ).fetchone()
+        if not owner:
+            return False
+        if photo_id is not None:
+            owned = conn.execute(
+                text("SELECT 1 FROM photos WHERE id = :pid AND trip_id = :tid"),
+                {"pid": photo_id, "tid": trip_id},
+            ).fetchone()
+            if not owned:
+                return False
+        conn.execute(
+            text("UPDATE trips SET cover_photo_id = :pid WHERE id = :tid"),
+            {"pid": photo_id, "tid": trip_id},
+        )
+    return True
 
 
 def is_trip_favorite(user_id: str, trip_id: int) -> bool:
@@ -425,6 +463,12 @@ def delete_photo(photo_id: int, trip_id: int) -> str | None:
         conn.execute(
             text("DELETE FROM photos WHERE id = :pid AND trip_id = :tid"),
             {"pid": photo_id, "tid": trip_id},
+        )
+        # この写真が一覧の表紙に指定されていたら解除（最古の写真の表紙に戻す）
+        conn.execute(
+            text("UPDATE trips SET cover_photo_id = NULL "
+                 "WHERE id = :tid AND cover_photo_id = :pid"),
+            {"tid": trip_id, "pid": photo_id},
         )
     return storage_path
 

@@ -59,6 +59,8 @@
     <figure class="photo" data-id="{{ p.id }}">
       <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
            onerror="this.onerror=null;this.src=this.dataset.full;">
+      <button class="photo-cover {{ 'on' if trip.cover_photo_id == p.id else '' }}" type="button"
+              aria-label="一覧の表紙にする" title="一覧の表紙にする">表紙</button>
       <button class="photo-del" aria-label="写真を削除">×</button>
     </figure>
     {% endfor %}

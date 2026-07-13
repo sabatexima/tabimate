@@ -161,9 +161,13 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     img.dataset.full = p.url;
     img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
     img.onerror = () => { img.onerror = null; img.src = img.dataset.full; };
+    const cov = document.createElement('button');
+    cov.className = 'photo-cover'; cov.type = 'button';
+    cov.setAttribute('aria-label', '一覧の表紙にする'); cov.title = '一覧の表紙にする';
+    cov.textContent = '表紙';
     const del = document.createElement('button');
     del.className = 'photo-del'; del.setAttribute('aria-label', '写真を削除'); del.textContent = '×';
-    fig.appendChild(img); fig.appendChild(del);
+    fig.appendChild(img); fig.appendChild(cov); fig.appendChild(del);
     return fig;
   }
 
@@ -186,6 +190,30 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
         cnt.textContent = `現在 ${photoGrid.querySelectorAll('.photo').length} 枚`;
       } else { alert('削除に失敗しました'); del.disabled = false; }
     } catch (e) { alert('削除に失敗しました'); del.disabled = false; }
+  });
+
+  // --- 一覧の表紙写真を選ぶ（もう一度押すと解除＝最古の写真に戻る）---
+  photoGrid.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.photo-cover');
+    if (!btn) return;
+    const fig = btn.closest('.photo');
+    const id = fig.dataset.id;
+    if (!id) { alert('アップロード直後の写真は、ページを再読み込みしてから表紙にできます'); return; }
+    const clearing = btn.classList.contains('on');
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/reflection/trips/${TRIP_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cover_photo_id: clearing ? null : Number(id) }),
+      });
+      const data = await res.json();
+      if (res.ok && data.updated) {
+        photoGrid.querySelectorAll('.photo-cover.on').forEach((b) => b.classList.remove('on'));
+        if (!clearing) btn.classList.add('on');
+      } else { alert(data.error || '表紙の設定に失敗しました'); }
+    } catch (e) { alert('表紙の設定に失敗しました'); }
+    btn.disabled = false;
   });
 
   // --- 写真の拡大表示（ライトボックス）---
@@ -220,9 +248,9 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     document.body.style.overflow = '';
   }
 
-  // 写真をタップで拡大（削除ボタンのクリックは除外）
+  // 写真をタップで拡大（削除・表紙ボタンのクリックは除外）
   photoGrid.addEventListener('click', (ev) => {
-    if (ev.target.closest('.photo-del')) return;
+    if (ev.target.closest('.photo-del') || ev.target.closest('.photo-cover')) return;
     const fig = ev.target.closest('.photo');
     if (!fig || !fig.querySelector('img')) return;
     lbOpen(lbFigures().indexOf(fig));

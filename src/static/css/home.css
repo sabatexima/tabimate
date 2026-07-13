@@ -202,6 +202,12 @@
     gap: 10px;
   }
 
+  /* 各一覧ページの見出しと同じ波線アンダーライン（世界観の統一）*/
+  h1 .accent {
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+    text-underline-offset: 7px;
+  }
+
   @media (max-width: 768px) {
     .main {
       height: 100%;

@@ -11,7 +11,11 @@
     flex-shrink: 0; white-space: nowrap; margin-top: 1px;
   }
   .title-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 2px; }
-  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+  .trip-title {
+    font-size: 1.6rem; font-weight: 700; color: var(--text-main);
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+    text-underline-offset: 7px;
+  }
   .trip-dates { color: var(--text-muted); font-size: 0.88em; margin-bottom: 24px; }
   .fav-toggle {
     flex: 0 0 auto; background: #fff; border: 1px solid #f5b301; color: #b9820a;

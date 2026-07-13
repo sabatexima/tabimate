@@ -13,7 +13,8 @@
     <span class="drift" style="left:10%; animation-delay:0s;">🍀</span>
     <span class="drift" style="right:12%; animation-delay:2.5s;">🍀</span>
     <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ">
-    <h1>{{ session.get('user_name') or 'あなた' }}さん、次はどこへ行く？</h1>
+    <p class="kicker">TRAVEL&nbsp;WITH&nbsp;CHAMU</p>
+    <h1>{{ session.get('user_name') or 'あなた' }}さん、<span class="accent">次はどこへ行く？</span></h1>
     <p class="lead">AIと話すだけで、旅のしおりができあがる。🍀</p>
     <a class="cta" href="{{ url_for('planner.chat') }}">✨ 新しい旅を計画する</a>
   </div>
@@ -43,7 +44,8 @@
     <span class="drift" style="right:10%; animation-delay:2s;">🍀</span>
     <span class="drift" style="left:24%; animation-delay:4s;">🍀</span>
     <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ">
-    <h1>旅の「前」と「後」に、そっと寄り添う。</h1>
+    <p class="kicker">TRAVEL&nbsp;WITH&nbsp;CHAMU</p>
+    <h1>旅の「前」と「後」に、<span class="accent">そっと寄り添う。</span></h1>
     <p class="lead">AIと話すだけで旅のプランができて、帰ったら写真が思い出の付箋になる。<br>やさしい旅の相棒「たびメイト」。</p>
     <a class="cta" href="{{ url_for('auth.login') }}">🍀 Googleでログインして始める</a>
     {% if session.get('login_error') %}<p style="color:#c0392b; margin-top:12px;">{{ session.get('login_error') }}</p>{% endif %}

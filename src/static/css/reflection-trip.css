@@ -3,7 +3,11 @@
   .detail { max-width: 820px; margin: 0 auto; }
   .back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }
   .title-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
-  .trip-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+  .trip-title {
+    font-size: 1.6rem; font-weight: 700; color: var(--text-main);
+    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+    text-underline-offset: 7px;
+  }
   .title-edit {
     background: none; border: none; cursor: pointer; color: var(--text-muted);
     font-size: 1.05rem; padding: 4px 8px; border-radius: 8px; line-height: 1;

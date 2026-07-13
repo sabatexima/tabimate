@@ -117,22 +117,59 @@
   .sticker .del:hover { color: #e74c3c; }
   .sticker-empty { color: var(--text-muted); font-size: 0.9em; margin-top: 14px; }
 
-  /* 写真は幅に応じて自動充填（右側の余白を残さない）*/
+  /* 写真＝アルバムに貼ったポラロイド（一覧ページと同じ言語）。
+     幅に応じて自動充填しつつ、1枚ずつわずかに傾けて手貼り感を出す */
   .photo-grid {
-    display: grid; gap: 8px; margin-bottom: 14px;
-    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    display: grid; gap: 16px 12px; margin-bottom: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   }
-  .photo { position: relative; margin: 0; }
-  .photo img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; display: block; cursor: zoom-in; }
+  .photo {
+    position: relative; margin: 0;
+    background: #fff; padding: 5px 5px 15px; border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(80,70,50,0.10), 2px 6px 14px rgba(80,70,50,0.14);
+    transform: rotate(-1.6deg);
+    transition: transform 0.4s cubic-bezier(0.22, 1.35, 0.36, 1), box-shadow 0.3s;
+  }
+  .photo:nth-child(even) { transform: rotate(1.4deg); }
+  .photo:nth-child(3n) { transform: rotate(-0.5deg); }
+  .photo:hover {
+    transform: rotate(0) translateY(-3px); z-index: 2;
+    box-shadow: 0 3px 6px rgba(80,70,50,0.12), 4px 12px 22px rgba(80,70,50,0.20);
+  }
+  /* ときどきマスキングテープ（4枚に1枚・桃とミントを交互に）*/
+  .photo:nth-child(4n+1)::before,
+  .photo:nth-child(4n+3)::before {
+    content: ""; position: absolute; z-index: 3; pointer-events: none;
+    top: -7px; left: 50%; width: 38px; height: 13px;
+    transform: translateX(-50%) rotate(-4deg);
+    background: repeating-linear-gradient(45deg,
+      rgba(243,150,178,0.42) 0 6px, rgba(255,210,224,0.42) 6px 12px);
+    box-shadow: 0 1px 2px rgba(120,80,50,0.15);
+    clip-path: polygon(0 0, 100% 0, 97% 15%, 100% 30%, 97% 50%, 100% 70%, 97% 85%, 100% 100%,
+                       0 100%, 3% 85%, 0 70%, 3% 50%, 0 30%, 3% 15%);
+  }
+  .photo:nth-child(4n+3)::before {
+    transform: translateX(-50%) rotate(3deg);
+    background: repeating-linear-gradient(45deg,
+      rgba(105,196,150,0.38) 0 6px, rgba(180,232,204,0.38) 6px 12px);
+  }
+  .photo img {
+    width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; cursor: zoom-in;
+    background: #efe9dc;
+    /* 注意: ここに filter を付けてはいけない。回転した親×lazy画像×filter の組み合わせで
+       WebKit/Blink が初回描画をスキップし「ホバーするまで画像が出ない」バグになる */
+    transform: translateZ(0);
+  }
   .photo-del {
-    position: absolute; top: 4px; right: 4px;
-    background: rgba(0,0,0,0.55); border: none; cursor: pointer; color: #fff;
+    position: absolute; top: 9px; right: 9px;
+    background: rgba(255,255,255,0.9); border: none; cursor: pointer; color: #a1937a;
     width: 24px; height: 24px; border-radius: 50%; font-size: 0.95em; line-height: 1;
     display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 4px rgba(90,70,40,0.28);
     opacity: 0; transition: opacity 0.1s;
   }
   .photo:hover .photo-del { opacity: 1; }
-  .photo-del:hover { background: #e74c3c; }
+  .photo-del:hover { background: #e74c3c; color: #fff; }
   .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
 

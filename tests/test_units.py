@@ -54,3 +54,43 @@ def test_within_local_rejects_traversal():
 def test_read_local_rejects_traversal(tmp_path):
     # 実在しても範囲外なら None（読み出さない）
     assert storage.read_local("../../../etc/hosts") is None
+
+
+# ----------------------------------------------------------------------
+# geocoding: 表記ゆらぎ候補・候補選択（ネットワークを呼ばない純粋関数）
+# ----------------------------------------------------------------------
+import geocoding  # noqa: E402
+
+
+def test_geocode_normalize():
+    # NFKC正規化（全角英数→半角）と空白圧縮
+    assert geocoding._normalize("　兼六園  ライトアップ ") == "兼六園 ライトアップ"
+    assert geocoding._normalize("ＵＳＪ") == "USJ"
+
+
+def test_geocode_variants_paren_and_suffix():
+    v = geocoding._variants("兼六園（ライトアップ）")
+    assert v[0] == "兼六園（ライトアップ）"
+    assert "兼六園" in v
+    v2 = geocoding._variants("城崎温泉街")
+    assert v2 == ["城崎温泉街", "城崎温泉"]
+    # 重複しない・空にならない
+    assert geocoding._variants("金沢21世紀美術館") == ["金沢21世紀美術館"]
+
+
+def test_pick_candidate_prefers_nearest_to_center():
+    kyoto = (35.0, 135.76)
+    cands = [
+        {"lat": 35.66, "lng": 139.70},  # 東京の同名スポット（先頭ヒット）
+        {"lat": 35.00, "lng": 135.77},  # 京都の正解
+    ]
+    hit = geocoding._pick_candidate(cands, kyoto)
+    assert hit["lng"] == 135.77
+
+
+def test_pick_candidate_rejects_far_hits():
+    kyoto = (35.0, 135.76)
+    # 東京しか候補がない → 同名の別地とみなして棄却（誤ピンより未配置）
+    assert geocoding._pick_candidate([{"lat": 35.66, "lng": 139.70}], kyoto) is None
+    # center が無ければ先頭を信じる
+    assert geocoding._pick_candidate([{"lat": 35.66, "lng": 139.70}], None) is not None

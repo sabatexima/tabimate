@@ -1,0 +1,16 @@
+{
+  "name": "たびメイト — 旅の相棒",
+  "short_name": "たびメイト",
+  "description": "AIと話すだけで旅のプランができて、帰ったら写真が思い出の付箋になる。やさしい旅の相棒。",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdfaf2",
+  "theme_color": "#7d6a52",
+  "icons": [
+    { "src": "/static/img/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

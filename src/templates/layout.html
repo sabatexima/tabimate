@@ -6,6 +6,12 @@
   <meta name="theme-color" content="#7d6a52">
   <title>{% block title %}たびメイト{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/mate-head.png') }}">
+  <!-- PWA: ホーム画面に追加してアプリとして起動できるようにする -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/icons/apple-touch-icon.png') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="たびメイト">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
@@ -29,5 +35,9 @@
 
 <script src="{{ url_for('static', filename='js/layout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/openmoji.js') }}"></script>
+<script>
+  // PWA: Service Worker登録（未対応ブラウザでは何もしない）
+  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function () {}); }
+</script>
 </body>
 </html>

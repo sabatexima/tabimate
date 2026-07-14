@@ -55,6 +55,12 @@ app.config.update(
 )
 
 
+@app.route('/sw.js')
+def service_worker():
+    """Service Worker はスコープの制約上、ルート直下のURLで配信する必要がある。"""
+    return app.send_static_file('sw.js')
+
+
 @app.errorhandler(413)
 def _too_large(_e):
     """アップロードが上限超過のとき、クラッシュではなく分かりやすいエラーを返す。"""

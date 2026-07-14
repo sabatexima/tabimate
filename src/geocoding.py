@@ -29,8 +29,20 @@ _HEADERS = {"User-Agent": "tabimate/1.0 (travel planner app)", "Accept-Language"
 # Nominatim の利用規約上のレート制限（1 req/s）。モジュール全体で順守する。
 _RATE_LIMIT_SEC = 1.0
 _last_nominatim_at = 0.0
-# 目的地中心からこれ以上離れたヒットは「同名の別地」とみなして棄却する
+# 目的地中心からこれ以上離れたヒットは「同名の別地」とみなして棄却する既定値。
+# 目的地の行政界が分かる場合は _radius_from_bbox で広さに応じた半径を使う
+# （金沢のような市なら狭く、北海道のような広域なら広く）。
 _MAX_DIST_KM = 120.0
+# 適応半径の下限/上限。下限は「市が目的地でも近郊へ足を伸ばす」旅程を守る
+# （金沢→白川郷≈50km・和倉温泉≈60km）。上限は広域旅行（道内周遊など）向け。
+_MIN_RADIUS_KM = 80.0
+_MAX_RADIUS_KM = 300.0
+
+
+def _radius_from_bbox(south: float, west: float, north: float, east: float) -> float:
+    """行政界バウンディングボックスから許容半径(km)を決める（半対角×1.5をクランプ）。"""
+    half_diag = _dist_km(south, west, north, east) / 2
+    return min(max(half_diag * 1.5, _MIN_RADIUS_KM), _MAX_RADIUS_KM)
 
 
 def _throttle_nominatim() -> None:
@@ -47,10 +59,11 @@ def _dist_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return (((lat1 - lat2) * 111.0) ** 2 + ((lng1 - lng2) * 91.0) ** 2) ** 0.5
 
 
-def _pick_candidate(cands: list, center: tuple | None) -> dict | None:
+def _pick_candidate(cands: list, center: tuple | None,
+                    max_km: float = _MAX_DIST_KM) -> dict | None:
     """候補 [{"lat","lng"},...] から採用する1件を選ぶ。
 
-    center 指定時は最も近いものを選び、それでも遠すぎるなら None（誤マッチ扱い）。
+    center 指定時は最も近いものを選び、max_km より遠ければ None（誤マッチ扱い）。
     center 無しは先頭（プロバイダのスコア順）を返す。
     """
     if not cands:
@@ -58,13 +71,14 @@ def _pick_candidate(cands: list, center: tuple | None) -> dict | None:
     if not center:
         return cands[0]
     best = min(cands, key=lambda c: _dist_km(c["lat"], c["lng"], center[0], center[1]))
-    if _dist_km(best["lat"], best["lng"], center[0], center[1]) > _MAX_DIST_KM:
+    if _dist_km(best["lat"], best["lng"], center[0], center[1]) > max_km:
         return None
     return best
 
 
 def _query_nominatim(q: str, viewbox: str | None = None,
-                     center: tuple | None = None) -> dict | None:
+                     center: tuple | None = None,
+                     max_km: float = _MAX_DIST_KM) -> dict | None:
     """Nominatim に1回問い合わせ、採用候補の {"lat","lng"} を返す（日本に限定）。
 
     候補は5件まで取得し、center（目的地中心）があれば最寄りを採用・遠方は棄却。
@@ -81,13 +95,14 @@ def _query_nominatim(q: str, viewbox: str | None = None,
         data = resp.json()
         if isinstance(data, list):
             cands = [{"lat": float(d["lat"]), "lng": float(d["lon"])} for d in data]
-            return _pick_candidate(cands, center)
+            return _pick_candidate(cands, center, max_km)
     except Exception as e:
         logger.warning("ジオコーディング失敗(Nominatim): q=%s, error=%s", q, e)
     return None
 
 
-def _query_gsi(q: str, center: tuple | None = None) -> dict | None:
+def _query_gsi(q: str, center: tuple | None = None,
+               max_km: float = _MAX_DIST_KM) -> dict | None:
     """国土地理院の住所検索でフォールバック検索する。失敗・該当なしは None。
 
     OSMに登録の少ない地名・施設でも当たることがある。座標形式は [lng, lat]。
@@ -101,7 +116,7 @@ def _query_gsi(q: str, center: tuple | None = None) -> dict | None:
                 coords = (d.get("geometry") or {}).get("coordinates") or []
                 if len(coords) >= 2:
                     cands.append({"lat": float(coords[1]), "lng": float(coords[0])})
-            return _pick_candidate(cands, center)
+            return _pick_candidate(cands, center, max_km)
     except Exception as e:
         logger.warning("ジオコーディング失敗(地理院): q=%s, error=%s", q, e)
     return None
@@ -149,8 +164,38 @@ def _variants(query: str) -> list:
     return out
 
 
+def geocode_center(query: str) -> dict | None:
+    """目的地の中心座標と、その広さに応じた許容半径(km)を返す。失敗時は None。
+
+    Nominatim の boundingbox（行政界）から半径を適応的に決める：
+    市が目的地なら狭く（誤マッチに厳しく）、都道府県・広域なら広く
+    （道内周遊の知床のような遠方の正解を弾かない）。
+    返り値: {"lat": float, "lng": float, "radius_km": float}
+    """
+    q = _normalize(query)
+    if not q:
+        return None
+    try:
+        params = {"q": q, "format": "json", "limit": 1, "countrycodes": "jp"}
+        _throttle_nominatim()
+        resp = requests.get(_NOMINATIM_URL, params=params, headers=_HEADERS, timeout=3)
+        data = resp.json()
+        if isinstance(data, list) and data:
+            d = data[0]
+            radius = _MAX_DIST_KM
+            bb = d.get("boundingbox")
+            if bb and len(bb) == 4:
+                south, north, west, east = (float(x) for x in bb)
+                radius = _radius_from_bbox(south, west, north, east)
+            return {"lat": float(d["lat"]), "lng": float(d["lon"]), "radius_km": radius}
+    except Exception as e:
+        logger.warning("ジオコーディング失敗(中心取得): q=%s, error=%s", q, e)
+    return None
+
+
 def geocode_one(query: str, context: str | None = None, viewbox: str | None = None,
-                center: tuple | None = None) -> dict | None:
+                center: tuple | None = None,
+                max_km: float = _MAX_DIST_KM) -> dict | None:
     """スポット名1件を緯度経度に変換する。失敗時は None。
 
     表記ゆらぎ候補（_variants）を順に、次の2プロバイダで段階的に検索する:
@@ -164,22 +209,23 @@ def geocode_one(query: str, context: str | None = None, viewbox: str | None = No
         return None
     variants = _variants(query)
     for q in variants:
-        hit = _query_nominatim(q, viewbox=viewbox, center=center)
+        hit = _query_nominatim(q, viewbox=viewbox, center=center, max_km=max_km)
         if hit:
             return hit
         if context:
-            hit = _query_nominatim(f"{q}, {context}", viewbox=viewbox, center=center)
+            hit = _query_nominatim(f"{q}, {context}", viewbox=viewbox, center=center, max_km=max_km)
             if hit:
                 return hit
     for q in variants:
-        hit = _query_gsi(q, center=center)
+        hit = _query_gsi(q, center=center, max_km=max_km)
         if hit:
             return hit
     return None
 
 
 def geocode_spots(spots: list, known: dict | None = None, context: str | None = None,
-                  viewbox: str | None = None, center: tuple | None = None) -> list:
+                  viewbox: str | None = None, center: tuple | None = None,
+                  max_km: float = _MAX_DIST_KM) -> list:
     """スポット名のリストを順にジオコーディングし、成功したものだけ返す。
 
     返り値: [{"name": str, "lat": float, "lng": float}, ...]（順序は入力どおり）
@@ -199,7 +245,7 @@ def geocode_spots(spots: list, known: dict | None = None, context: str | None = 
         if hit and hit.get("lat") is not None and hit.get("lng") is not None:
             results.append({"name": name, "lat": hit["lat"], "lng": hit["lng"]})
             continue
-        coords = geocode_one(name, context=context, viewbox=viewbox, center=center)
+        coords = geocode_one(name, context=context, viewbox=viewbox, center=center, max_km=max_km)
         if coords:
             results.append({"name": name, "lat": coords["lat"], "lng": coords["lng"]})
     return results
@@ -221,17 +267,21 @@ def ensure_plan_coords(plan: dict) -> dict:
     changed = False
 
     # 目的地を一度ジオコーディングして中心を得て、その周辺を優先範囲(viewbox)にする。
-    # center は「最寄り候補の採用」と「同名の別地の棄却」にも使う。
+    # center は「最寄り候補の採用」に、max_km（目的地の広さに応じた許容半径）は
+    # 「同名の別地の棄却」に使う。
     viewbox = None
     center = None
+    max_km = _MAX_DIST_KM
     need = any(not plan.get(f) and plan.get(n) for f, n in (
         ("spot_coords", "spots"), ("restaurant_coords", "restaurants"),
         ("accommodation_coords", "accommodation")))
     if dest and need:
-        c = geocode_one(dest)
+        c = geocode_center(dest)
         if c:
             center = (c["lat"], c["lng"])
-            viewbox = _viewbox_around(c["lat"], c["lng"])
+            max_km = c["radius_km"]
+            # 優先範囲も許容半径に合わせて広げる（1度≈91〜111km）
+            viewbox = _viewbox_around(c["lat"], c["lng"], pad=max(0.4, max_km / 100))
 
     def fill(coord_field, name_field, context=None):
         nonlocal changed
@@ -240,7 +290,8 @@ def ensure_plan_coords(plan: dict) -> dict:
         names = plan.get(name_field) or []
         if not names:
             return
-        plan[coord_field] = geocode_spots(names, context=context, viewbox=viewbox, center=center)
+        plan[coord_field] = geocode_spots(names, context=context, viewbox=viewbox,
+                                          center=center, max_km=max_km)
         changed = True
 
     # context は「名前単独で失敗したとき」だけ使う（観光も含め、化けを防ぎつつ精度を上げる）

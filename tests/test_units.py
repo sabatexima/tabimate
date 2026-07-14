@@ -94,3 +94,17 @@ def test_pick_candidate_rejects_far_hits():
     assert geocoding._pick_candidate([{"lat": 35.66, "lng": 139.70}], kyoto) is None
     # center が無ければ先頭を信じる
     assert geocoding._pick_candidate([{"lat": 35.66, "lng": 139.70}], None) is not None
+    # 広域旅行では max_km が広がり、同じヒットでも通る（例: 道内周遊の遠方スポット）
+    assert geocoding._pick_candidate([{"lat": 35.66, "lng": 139.70}], kyoto, max_km=500) is not None
+
+
+def test_radius_from_bbox_adapts_to_destination_size():
+    # 市サイズ（金沢市 ≈ 0.3度四方）→ 下限の80kmに張り付く（誤マッチに厳しい）
+    small = geocoding._radius_from_bbox(36.45, 136.55, 36.75, 136.85)
+    assert small == geocoding._MIN_RADIUS_KM
+    # 広域（北海道 ≈ 緯度4度×経度8度）→ 上限の300kmまで広がる（遠方の正解を守る）
+    large = geocoding._radius_from_bbox(41.5, 139.5, 45.5, 147.0)
+    assert large == geocoding._MAX_RADIUS_KM
+    # 中間（都道府県規模）は下限と上限の間に収まる
+    mid = geocoding._radius_from_bbox(34.8, 135.0, 35.8, 136.1)
+    assert geocoding._MIN_RADIUS_KM < mid < geocoding._MAX_RADIUS_KM

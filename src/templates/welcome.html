@@ -46,7 +46,7 @@
     <img class="mascot" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ">
     <p class="kicker">TRAVEL&nbsp;WITH&nbsp;CHAMU</p>
     <h1>旅の「前」と「後」に、<span class="accent">そっと寄り添う。</span></h1>
-    <p class="lead">AIと話すだけで旅のプランができて、帰ったら写真が思い出の付箋になる。<br>やさしい旅の相棒「たびメイト」。</p>
+    <p class="lead"><span class="ph">AIと話すだけで旅のプランができて、</span><span class="ph">帰ったら写真が思い出の付箋になる。</span><br>やさしい旅の相棒「たびメイト」。</p>
     <a class="cta" href="{{ url_for('auth.login') }}">🍀 Googleでログインして始める</a>
     {% if session.get('login_error') %}<p style="color:#c0392b; margin-top:12px;">{{ session.get('login_error') }}</p>{% endif %}
   </div>

@@ -169,7 +169,7 @@ def chat():
 @planner.route("/saved_plans")
 @login_required
 def saved_plans():
-    """保存済みプラン一覧の画面を表示する。"""
+    """保存プラン一覧の画面を表示する。"""
     return render_template("saved_plans.html")
 
 
@@ -389,7 +389,7 @@ def _plan_to_view_dict(state: dict, plan_id: int, created_at) -> dict:
 @planner.route('/edit_saved_plan/<int:plan_id>', methods=['POST'])
 @login_required
 def edit_saved_plan(plan_id):
-    """保存済みプランをチャット指示で修正し、修正案（プレビュー）を返す。
+    """保存プランをチャット指示で修正し、修正案（プレビュー）を返す。
 
     この時点では保存しない。確定は /apply_saved_plan で行う。
     """

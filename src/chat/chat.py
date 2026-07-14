@@ -400,7 +400,7 @@ def _as_list(value) -> list:
 
 
 def edit_saved_plan(plan: dict, message: str) -> dict:
-    """保存済みプランに対するチャット修正を実行し、更新後の最終状態を返す。
+    """保存プランに対するチャット修正を実行し、更新後の最終状態を返す。
 
     変更要望から対象領域を判定し、対象だけを再生成する（指定外は前回値を維持）。
     予算超過時は generate_travel_plan が ValueError を送出する。

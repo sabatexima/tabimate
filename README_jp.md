@@ -13,9 +13,9 @@
 
 ## スクリーンショット
 
-| 旅の振り返り（ジャーナル） | 保存済みプラン（本棚） | プラン詳細（ブックレット） |
+| 旅の振り返り（ジャーナル） | 保存プラン（本棚） | プラン詳細（ブックレット） |
 |:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal.png" alt="旅の振り返り" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf.png" alt="保存済みプラン" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail.png" alt="プラン詳細" width="250"> |
+| <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal.png" alt="旅の振り返り" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf.png" alt="保存プラン" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail.png" alt="プラン詳細" width="250"> |
 
 ## 技術スタック
 

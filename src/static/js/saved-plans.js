@@ -1,4 +1,4 @@
-/* 保存済みプラン一覧。表紙カード（本棚）だけを描画し、
+/* 保存プラン一覧。表紙カード（本棚）だけを描画し、
    クリックで詳細ページ（自分: /plan/<id> ・共有: /shared/plan/<id>）へ移動する。 */
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

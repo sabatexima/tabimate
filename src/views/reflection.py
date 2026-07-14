@@ -93,6 +93,55 @@ def index():
     return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 
 
+@reflection.route("/digest")
+@login_required
+def digest():
+    """年間ダイジェスト：その年の旅・写真・付箋を絵本の1ページにまとめて見せる。"""
+    from datetime import date
+
+    all_trips = repo.get_trips(_uid())
+
+    def trip_year(t: dict) -> str:
+        d = t.get("start_date") or t.get("created_at") or ""
+        return str(d)[:4]
+
+    years = sorted({trip_year(t) for t in all_trips if trip_year(t)}, reverse=True)
+    year = request.args.get("year") or ""
+    if year not in years:
+        year = years[0] if years else str(date.today().year)
+
+    trips = [t for t in all_trips if trip_year(t) == year]
+    # タイムラインは日付の古い順（日付未設定は作成日で代用済み）
+    trips.sort(key=lambda t: str(t.get("start_date") or t.get("created_at") or ""))
+
+    # 表紙サムネイル
+    cover_paths = [t["cover_path"] for t in trips if t.get("cover_path")]
+    cover_thumbs = storage.get_thumb_urls(cover_paths)
+    for t in trips:
+        cp = t.get("cover_path")
+        t["cover_url"] = cover_thumbs.get(cp) if cp else None
+
+    # 月ごとにまとめる（旅がある月だけ）
+    months: dict[int, list] = {}
+    for t in trips:
+        d = str(t.get("start_date") or t.get("created_at") or "")
+        try:
+            m = int(d[5:7])
+        except ValueError:
+            m = 0
+        months.setdefault(m, []).append(t)
+    month_groups = [(m, months[m]) for m in sorted(months)]
+
+    photo_total = sum(t.get("photo_count") or 0 for t in trips)
+    stickers = [s for t in trips for s in (t.get("stickers_preview") or [])]
+
+    return render_template(
+        "reflection/digest.html",
+        year=year, years=years, trips=trips, month_groups=month_groups,
+        photo_total=photo_total, stickers=stickers,
+    )
+
+
 @reflection.route("/trips/<int:trip_id>")
 @login_required
 def trip_detail(trip_id: int):

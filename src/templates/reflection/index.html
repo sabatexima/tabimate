@@ -145,6 +145,12 @@
       </div>
     {% endif %}
   </div>
+
+  {% if trips %}
+  <div class="digest-link-row">
+    <a class="digest-link" href="{{ url_for('reflection.digest') }}">📖 一年のまとめを見る</a>
+  </div>
+  {% endif %}
 </div>
 
 <script type="application/json" id="page-config">{{ {"createUrl": url_for('reflection.create_trip')}|tojson }}</script>

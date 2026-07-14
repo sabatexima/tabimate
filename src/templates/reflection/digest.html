@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ year }}年の旅のきろく — たびメイト{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reflection-digest.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="digest">
+  <a class="back" href="{{ url_for('reflection.index') }}">‹ 旅の振り返りへ戻る</a>
+
+  <div class="page-header">
+    <p class="kicker">YEAR&nbsp;IN&nbsp;TRAVEL</p>
+    <h1><span class="accent">{{ year }}年の旅のきろく</span></h1>
+  </div>
+
+  {% if years|length > 1 %}
+  <nav class="year-nav" aria-label="年の切り替え">
+    {% for y in years %}
+      {% if y == year %}<span class="y on">{{ y }}</span>
+      {% else %}<a class="y" href="{{ url_for('reflection.digest', year=y) }}">{{ y }}</a>{% endif %}
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  {% if trips %}
+  <div class="stats">
+    <div class="stat"><span class="num">{{ trips|length }}</span><span class="lbl">回の旅</span></div>
+    <div class="stat"><span class="num">{{ photo_total }}</span><span class="lbl">枚の写真</span></div>
+    <div class="stat"><span class="num">{{ month_groups|length }}</span><span class="lbl">つの月に出発</span></div>
+  </div>
+
+  <div class="timeline">
+    {% for m, ts in month_groups %}
+    <section class="month">
+      <h2 class="month-ttl">{{ m }}月{% if m == 0 %}（日付なし）{% endif %}</h2>
+      <div class="month-trips">
+        {% for t in ts %}
+        <a class="d-card" href="{{ url_for('reflection.trip_detail', trip_id=t.id) }}">
+          <figure class="d-cover">
+            {% if t.cover_url %}<img src="{{ t.cover_url }}" alt="" loading="lazy" decoding="async">
+            {% else %}<div class="d-empty">📷</div>{% endif %}
+          </figure>
+          <div class="d-info">
+            <div class="d-title">{{ t.title }}</div>
+            {% if t.start_date %}<div class="d-date">{{ t.start_date|string|replace('-', '.') }}</div>{% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  {% if stickers %}
+  <section class="words">
+    <h2 class="words-ttl">ことばのアルバム</h2>
+    <p class="words-lead">今年の旅から生まれた付箋たち。</p>
+    <div class="words-board">
+      {% for s in stickers[:12] %}<div class="w-sticker">{{ s }}</div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="digest-foot">
+    <img class="foot-mate" src="{{ url_for('static', filename='img/mate.png') }}" alt="" aria-hidden="true">
+    <p>また来年も、いい旅を。🍀</p>
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    <img class="empty-mate" src="{{ url_for('static', filename='img/mate.png') }}" alt="ちゃむ">
+    <p>{{ year }}年の旅はまだありません。</p>
+    <a class="empty-cta" href="{{ url_for('reflection.index') }}">旅の振り返りをはじめる</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

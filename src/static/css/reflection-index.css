@@ -388,6 +388,17 @@
   /* 空状態はボード内で中央表示（text-align:center 済み）*/
   #trips .empty-state { align-self: stretch; }
 
+  /* 年間ダイジェストへの入口（ボードの下にそっと置く）*/
+  .digest-link-row { text-align: center; margin: 22px 0 8px; }
+  .digest-link {
+    display: inline-block; background: rgba(255,255,255,0.8); color: var(--primary-color);
+    text-decoration: none; font-weight: 700; font-size: 0.9em;
+    padding: 10px 22px; border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(120,110,90,0.12);
+    transition: background 0.15s, transform 0.15s;
+  }
+  .digest-link:hover { background: #fff; transform: translateY(-1px); }
+
   /* PCでも旅は横に1つ（縦に積む）。幅だけ少し広げて中央寄せする */
   @media (min-width: 768px) {
     .feed { max-width: 660px; }

@@ -11,6 +11,7 @@ Nominatim(OpenStreetMap) を日本(countrycodes=jp)に絞って利用し、
   - 中心から遠すぎるヒット（同名の別地）は棄却する
     （誤ピンを立てるより「未配置」にしてカスタムピンで置いてもらう方が良い）
 """
+import os
 import re
 import time
 import unicodedata
@@ -24,6 +25,9 @@ logger = get_logger("geocoding")
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 # 国土地理院の住所検索API（無料・キー不要。地名・住所に強い日本特化のフォールバック）
 _GSI_URL = "https://msearch.gsi.go.jp/address-search/AddressSearch"
+# Google Places API (New) Text Search。GOOGLE_MAPS_API_KEY 設定時のみ使う。
+# OSM/地理院に載らない飲食店・宿の名前に圧倒的に強い（月あたりの無料枠あり）。
+_GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText"
 # ブラウザからは User-Agent を設定できないため、サーバー側で必ず付与する。
 _HEADERS = {"User-Agent": "tabimate/1.0 (travel planner app)", "Accept-Language": "ja"}
 # Nominatim の利用規約上のレート制限（1 req/s）。モジュール全体で順守する。
@@ -122,6 +126,40 @@ def _query_gsi(q: str, center: tuple | None = None,
     return None
 
 
+def _query_google_places(q: str, center: tuple | None = None,
+                         max_km: float = _MAX_DIST_KM) -> dict | None:
+    """Google Places (New) の Text Search で検索する。キー未設定・失敗時は None。
+
+    飲食店・宿など「固有の店名」はOSM/地理院ではほぼ当たらないため、
+    GOOGLE_MAPS_API_KEY があるときはこれを最初に試す。
+    center 指定時はその周辺を優先（locationBias の上限は半径50km）。
+    """
+    key = os.getenv("GOOGLE_MAPS_API_KEY")
+    if not key:
+        return None
+    try:
+        body = {"textQuery": q, "languageCode": "ja", "regionCode": "JP"}
+        if center:
+            body["locationBias"] = {"circle": {
+                "center": {"latitude": center[0], "longitude": center[1]},
+                "radius": min(max_km * 1000.0, 50000.0),
+            }}
+        resp = requests.post(_GOOGLE_PLACES_URL, json=body, timeout=4, headers={
+            "X-Goog-Api-Key": key,
+            # 必要なのは座標だけ。FieldMaskを絞ると安価なSKUで済む
+            "X-Goog-FieldMask": "places.location",
+        })
+        data = resp.json()
+        cands = [
+            {"lat": p["location"]["latitude"], "lng": p["location"]["longitude"]}
+            for p in (data.get("places") or [])[:5] if p.get("location")
+        ]
+        return _pick_candidate(cands, center, max_km)
+    except Exception as e:
+        logger.warning("ジオコーディング失敗(Google Places): q=%s, error=%s", q, e)
+    return None
+
+
 def _viewbox_around(lat: float, lng: float, pad: float = 0.4) -> str:
     """中心(lat,lng)の周囲 ±pad度の viewbox 文字列 'x1,y1,x2,y2'（x=経度,y=緯度）。"""
     return f"{lng - pad},{lat - pad},{lng + pad},{lat + pad}"
@@ -198,8 +236,9 @@ def geocode_one(query: str, context: str | None = None, viewbox: str | None = No
                 max_km: float = _MAX_DIST_KM) -> dict | None:
     """スポット名1件を緯度経度に変換する。失敗時は None。
 
-    表記ゆらぎ候補（_variants）を順に、次の2プロバイダで段階的に検索する:
-      1. Nominatim: 候補そのまま → 「候補, context」（店名など単独で当たりにくいもの向け）
+    プロバイダの優先順:
+      0. Google Places（GOOGLE_MAPS_API_KEY 設定時のみ）: 店名・宿名に圧倒的に強い
+      1. Nominatim: 表記ゆらぎ候補そのまま → 「候補, context」
       2. 国土地理院: 候補そのまま（OSM未登録の地名の救済）
     viewbox はNominatimの順位補正、center は最寄り採用と遠方誤マッチの棄却に使う。
     返り値: {"lat": float, "lng": float} もしくは None
@@ -207,6 +246,11 @@ def geocode_one(query: str, context: str | None = None, viewbox: str | None = No
     query = _normalize(query)
     if not query:
         return None
+    # Google はあいまいな表記に強いので、1回だけ「名前＋目的地」で当てにいく
+    hit = _query_google_places(f"{query} {context}" if context else query,
+                               center=center, max_km=max_km)
+    if hit:
+        return hit
     variants = _variants(query)
     for q in variants:
         hit = _query_nominatim(q, viewbox=viewbox, center=center, max_km=max_km)

@@ -44,9 +44,11 @@ _upsert_secret "GOOGLE_CLIENT_SECRET" "$GOOGLE_CLIENT_SECRET"
 _upsert_secret "DB_PASS"              "$DB_PASS"
 _upsert_secret "SECRET_KEY"           "$SECRET_KEY"
 _upsert_secret "STADIA_API_KEY"       "$STADIA_API_KEY"
+# 任意: Google Places によるジオコーディング強化（未設定なら空でよい）
+_upsert_secret "GOOGLE_MAPS_API_KEY"  "$GOOGLE_MAPS_API_KEY"
 
 echo "=== Cloud Run サービスアカウントに Secret Manager アクセス権を付与 ==="
-for secret in GOOGLE_API_KEY TAVILY_API_KEY GOOGLE_CLIENT_SECRET DB_PASS SECRET_KEY STADIA_API_KEY; do
+for secret in GOOGLE_API_KEY TAVILY_API_KEY GOOGLE_CLIENT_SECRET DB_PASS SECRET_KEY STADIA_API_KEY GOOGLE_MAPS_API_KEY; do
   gcloud secrets add-iam-policy-binding "$secret" \
     --member="serviceAccount:${SA}" \
     --role="roles/secretmanager.secretAccessor" \
@@ -85,7 +87,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --concurrency=20 \
   --max-instances=3 \
   --set-env-vars "DB_HOST=${DB_HOST},DB_PORT=${DB_PORT},DB_USER=${DB_USER},DB_NAME=${DB_NAME},DB_SSL=true,GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GCS_BUCKET=${GCS_BUCKET}" \
-  --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,TAVILY_API_KEY=TAVILY_API_KEY:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,DB_PASS=DB_PASS:latest,SECRET_KEY=SECRET_KEY:latest,STADIA_API_KEY=STADIA_API_KEY:latest" \
+  --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,TAVILY_API_KEY=TAVILY_API_KEY:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,DB_PASS=DB_PASS:latest,SECRET_KEY=SECRET_KEY:latest,STADIA_API_KEY=STADIA_API_KEY:latest,GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest" \
   --project "$PROJECT_ID"
 
 echo "=== デプロイ完了 ==="

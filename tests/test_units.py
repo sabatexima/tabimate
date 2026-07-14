@@ -98,6 +98,12 @@ def test_pick_candidate_rejects_far_hits():
     assert geocoding._pick_candidate([{"lat": 35.66, "lng": 139.70}], kyoto, max_km=500) is not None
 
 
+def test_google_places_disabled_without_key(monkeypatch):
+    # キー未設定なら外部APIを一切呼ばず None（無料スタックのみで動く）
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
+    assert geocoding._query_google_places("すし処 みさき 金沢") is None
+
+
 def test_radius_from_bbox_adapts_to_destination_size():
     # 市サイズ（金沢市 ≈ 0.3度四方）→ 下限の80kmに張り付く（誤マッチに厳しい）
     small = geocoding._radius_from_bbox(36.45, 136.55, 36.75, 136.85)

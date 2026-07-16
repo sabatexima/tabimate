@@ -24,10 +24,28 @@ PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" \
   --format="value(projectNumber)" --project "$PROJECT_ID")
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
+echo "=== 必須キーの事前チェック ==="
+# 必須キーが .env に無いまま進めると「空のSecretで全機能が静かに無効」になるため止める
+for req in GOOGLE_API_KEY TAVILY_API_KEY GOOGLE_CLIENT_SECRET DB_PASS SECRET_KEY; do
+  if [ -z "${!req}" ]; then
+    echo "ERROR: ${req} が src/.env にありません。設定してから再実行してください。" >&2
+    exit 1
+  fi
+done
+
 echo "=== Secret Manager にシークレットを登録/更新 ==="
 _upsert_secret() {
   local name=$1
   local value=$2
+  # 空値の扱い: 既存Secretは上書きしない（値を消す事故防止）。
+  # 未作成なら空で作るが警告する（--set-secrets が参照するため存在は必要）。
+  if [ -z "$value" ]; then
+    if gcloud secrets describe "$name" --project "$PROJECT_ID" &>/dev/null; then
+      echo "⚠ ${name} は .env に無いため、既存のSecretの値をそのまま使います"
+      return
+    fi
+    echo "⚠ ${name} は空のSecretとして作成されます。使うときは .env に値を書いて再デプロイしてください"
+  fi
   # printf を使うことで改行・特殊文字を安全に扱う
   if gcloud secrets describe "$name" --project "$PROJECT_ID" &>/dev/null; then
     printf '%s' "$value" | gcloud secrets versions add "$name" \

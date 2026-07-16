@@ -126,6 +126,23 @@ def _query_gsi(q: str, center: tuple | None = None,
     return None
 
 
+def _first_within(cands: list, center: tuple | None,
+                  max_km: float = _MAX_DIST_KM) -> dict | None:
+    """関連度順の候補から、許容半径内に入る最初の1件を返す（Google用）。
+
+    Google は関連度順に返すため、その順位を尊重しつつ遠方の同名別地だけ弾く
+    （最寄り優先にすると「似た名前の近所の別店」を拾い得る）。
+    """
+    if not cands:
+        return None
+    if not center:
+        return cands[0]
+    for c in cands:
+        if _dist_km(c["lat"], c["lng"], center[0], center[1]) <= max_km:
+            return c
+    return None
+
+
 def _query_google_places(q: str, center: tuple | None = None,
                          max_km: float = _MAX_DIST_KM) -> dict | None:
     """Google Places (New) の Text Search で検索する。キー未設定・失敗時は None。
@@ -150,11 +167,18 @@ def _query_google_places(q: str, center: tuple | None = None,
             "X-Goog-FieldMask": "places.location",
         })
         data = resp.json()
+        # キー制限・API未有効化などは例外にならず error オブジェクトで返る。
+        # 静かに失敗すると原因調査ができないため、必ずログに残す。
+        if resp.status_code != 200 or "error" in data:
+            err = data.get("error") or {}
+            logger.warning("Google Places エラー: q=%s http=%s status=%s message=%s",
+                           q, resp.status_code, err.get("status"), err.get("message"))
+            return None
         cands = [
             {"lat": p["location"]["latitude"], "lng": p["location"]["longitude"]}
             for p in (data.get("places") or [])[:5] if p.get("location")
         ]
-        return _pick_candidate(cands, center, max_km)
+        return _first_within(cands, center, max_km)
     except Exception as e:
         logger.warning("ジオコーディング失敗(Google Places): q=%s, error=%s", q, e)
     return None

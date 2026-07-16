@@ -154,3 +154,17 @@ def test_ensure_plan_coords_skips_partial_without_gmaps_key(monkeypatch):
     }
     geocoding.ensure_plan_coords(plan)
     assert len(plan["restaurant_coords"]) == 1
+
+
+def test_first_within_respects_relevance_order():
+    atami = (35.10, 139.07)
+    cands = [
+        {"lat": 35.66, "lng": 139.70},  # 関連度1位だが東京（遠方）
+        {"lat": 35.09, "lng": 139.06},  # 関連度2位・熱海 → これを採用
+        {"lat": 35.11, "lng": 139.08},  # 3位（2位より中心に近くても順位を尊重）
+    ]
+    hit = geocoding._first_within(cands, atami, max_km=80)
+    assert (hit["lat"], hit["lng"]) == (35.09, 139.06)
+    # 全部遠方なら棄却、centerが無ければ関連度1位
+    assert geocoding._first_within([{"lat": 35.66, "lng": 139.70}], atami, max_km=80) is None
+    assert geocoding._first_within(cands, None)["lat"] == 35.66

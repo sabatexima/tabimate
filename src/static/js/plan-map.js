@@ -354,6 +354,24 @@
     rerender();
   }
 
+  // ほぼ同一地点のピンは後から追加した方が上に重なり、下のピン（番号）が
+  // 完全に隠れて見えなくなる。既出の点と極近（≈15m以内）の場合は少しずつ
+  // 北東へずらして、全部のピンが見えるようにする（カスタムピンは対象外）。
+  function spreadOverlaps(points) {
+    const seen = [];
+    points.forEach((p) => {
+      let bump = 0;
+      seen.forEach((q) => {
+        if (Math.abs(p.lat - q.lat) < 0.00015 && Math.abs(p.lng - q.lng) < 0.00015) bump++;
+      });
+      if (bump > 0) {
+        p.lng += 0.00022 * bump;  // 1件重なるごとに約20m 北東へ
+        p.lat += 0.00013 * bump;
+      }
+      seen.push(p);
+    });
+  }
+
   // plan: { spots, spot_coords, restaurants, restaurant_coords, accommodation,
   //         accommodation_coords, custom_pins }
   // opts: { editable }  自分のプランなら editable=true でピン編集UIを出す
@@ -370,6 +388,8 @@
     const restPoints = mapStored(plan.restaurant_coords);
     const accPoints = mapStored(plan.accommodation_coords);
     const customPins = mapStored(plan.custom_pins);
+    // 同一地点に重なった自動ピンをずらして、番号が隠れないようにする
+    spreadOverlaps([...spotPoints, ...restPoints, ...accPoints]);
     const all = [...spotPoints, ...restPoints, ...accPoints, ...customPins];
 
     // 自動ピンが全滅でも、自分のプランなら手動ピンを置けるよう地図は出す。

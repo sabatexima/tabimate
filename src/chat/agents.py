@@ -220,8 +220,10 @@ def sightseeing_candidates(state: TravelPlanState):
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(SightseeingCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
-    _pp(response.candidates, "✨ 候補スポット:")
-    return {"spot_candidates": response.candidates}
+    # LLMが創作したスポット名を候補段階で落とす（Google Placesキー設定時のみ）
+    candidates = _filter_real_places(response.candidates, state["destination"], min_keep=4)
+    _pp(candidates, "✨ 候補スポット:")
+    return {"spot_candidates": candidates}
 
 
 def sightseeing_expert(state: TravelPlanState):

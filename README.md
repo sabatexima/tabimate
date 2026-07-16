@@ -46,7 +46,7 @@
 - **Hybrid models**: a fast, low-cost model (`gemini-3.1-flash-lite`) for candidate extraction, selection and conversation parsing, and a stronger model (`gemini-3.5-flash`) where reasoning matters most — scheduling, cost estimation and review. A numeric budget guard prevents over-budget plans (and clearly reports when a budget is structurally infeasible). Per-generation token usage and estimated cost are logged.
 - SSE (Server-Sent Events) streaming for responses. Sends "thinking" indicators during generation, allowing users to cancel mid-way. Notifies users of errors or disconnections in the chat to prevent silent hanging.
 - Generated plans can be saved and browsed on a picture-book **"bookshelf"** list; opening a cover navigates to a booklet-style detail page (`/plan/<id>`) with weather, map, rating, sharing and delete — sections are collapsed by default so the whole plan can be scanned at a glance.
-- **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles). Sightseeing spots are numbered green teardrop pins (with a four-leaf-clover accent matching the mascot) connected in route order, while restaurants (orange) and accommodation (blue) are shown as color-coded pins with a legend. Each pin's popup links to Google Maps navigation. Coordinates are geocoded **lazily on first map open** and cached (`geo_done`); geocoding is biased to the destination area (`viewbox`), queries are NFKC-normalized and retried with parenthetical annotations / generic suffixes stripped and with `"name, destination"`, multiple candidates are fetched and **the one closest to the destination is chosen** (far-away homonyms are rejected), and names Nominatim can't find **fall back to the GSI (Geospatial Information Authority of Japan) address search** — both free and key-less. Optionally, setting `GOOGLE_MAPS_API_KEY` puts **Google Places first, resolving restaurant/hotel names missing from OSM with high accuracy**. The shared-plan view and the photo "footprints" map reuse the same component.
+- **Interactive spot map**: saved plans render a watercolor-styled map (Leaflet + Stadia Maps / Stamen Watercolor tiles). Pins are numbered in **itinerary order** (the order names appear in the schedule) with a single sequence across sightseeing (green teardrops with a four-leaf-clover accent), restaurants (orange) and accommodation (blue), and the dashed route line follows the same order (plans whose schedule can't be matched fall back to the classic per-category display); a legend distinguishes categories. Each pin's popup links to Google Maps navigation. Coordinates are geocoded **lazily on first map open** and cached (`geo_done`); geocoding is biased to the destination area (`viewbox`), queries are NFKC-normalized and retried with parenthetical annotations / generic suffixes stripped and with `"name, destination"`, multiple candidates are fetched and **the one closest to the destination is chosen** (far-away homonyms are rejected), and names Nominatim can't find **fall back to the GSI (Geospatial Information Authority of Japan) address search** — both free and key-less. Optionally, setting `GOOGLE_MAPS_API_KEY` puts **Google Places first, resolving restaurant/hotel names missing from OSM with high accuracy**. The shared-plan view and the photo "footprints" map reuse the same component.
 - **User-placed custom pins**: on your own plan's map you can drop pins by tapping, give each a name/type (sightseeing/dining/lodging/memo) and a color, drag to reposition, and delete them — useful for places Nominatim can't find. Spots that failed to geocode are listed as "unplaced" chips for one-tap placement. Custom pins persist (`custom_pins`) and are visible on the shared view too.
 - **Travel-date weather & calendar export**: saved (and shared) plans show the forecast for the travel date as a small strip (Open-Meteo, today through +16 days; plans without cached coordinates fall back to geocoding the destination name). Relative dates like "tomorrow" or "this weekend" are normalized to absolute dates in code. The `.ics` export includes an all-day overview event plus **each schedule line as a timed, per-day event** (explicit Asia/Tokyo timezone, a day-before reminder, RFC 5545 line folding).
 - Post-generation adjustments are supported via chat (e.g., "make Day 2 more relaxing", "reduce the budget", "change the accommodation"). Supports **partial editing**, which regenerates only specified areas while keeping the rest unchanged.
@@ -59,6 +59,8 @@
 - Extract shoot time and GPS coordinates from photo EXIF metadata, summarizing them into features (time-of-day bias, travel distance, activity range, etc.) on the backend.
 - Feed summarized features and representative photos to Gemini to generate 3 to 6 virtual sticky notes. Notes are re-pinned upon regeneration.
 - The trip list is a craft-paper **"travel journal"** board: each trip is a pinned polaroid photo paired with a pastel washi-taped sticky note, with search (kana-normalized, multi-word AND), sorting, and a favorites filter.
+- The **cover photo of each list card is user-selectable** from the trip detail page (a "表紙" chip on each photo; defaults to the oldest photo).
+- **Yearly digest**: a "year in travel" page recaps the year with per-month mini polaroids, stats (trips / photos / months traveled), and a pastel wall of the year's sticky notes, with a year switcher.
 - In trip details, tap photos to open in a lightbox. Supports navigation (prev/next buttons, arrow keys, and swipe gestures).
 - **Trip footprints map**: photos that carry GPS (EXIF) are plotted in shoot-time order and connected as a dashed "footprints" route. A trip can be **linked to a saved plan** so the planned sightseeing spots (green) are overlaid on the actual photo locations (pink) for a planned-vs-actual comparison.
 - Trip titles can be edited later. Deleting a trip or photo cleans up the underlying storage to prevent orphaned files.
@@ -70,6 +72,10 @@
 - The owner always retains full permissions, and can revoke links or delete grants.
 - Recipients of a shared item can remove it from their shared list (the owner's original data remains intact, and it will reappear if shared again).
 - Shared trips and plans are integrated into the recipient's "Shared List", album, and saved plans views.
+
+### 4. PWA (Add to Home Screen)
+- Ships with a manifest, icons and a Service Worker: added to a phone's home screen, the app **launches standalone (no browser UI)** from the mascot icon.
+- The Service Worker is a minimal no-cache passthrough (it never conflicts with SSE streaming, OAuth redirects, or signed photo URLs).
 
 ---
 
@@ -107,8 +113,13 @@ tabimate/
 ├── requirements.txt          # Python dependencies
 ├── dockerfile                # ubuntu22.04 + python3.10 + gunicorn
 ├── deploy.sh                 # Cloud Run deployment (includes Secret/GCS/IAM setup)
+├── .github/workflows/ci.yml  # CI on push/PR (offline tests, JS syntax, templates)
+├── scripts/
+│   ├── backfill_thumbnails.py # Backfill thumbnails for old photos
+│   └── setup_alerts.sh       # One-shot Cloud Run 5xx email alert setup
 ├── tests/
-│   └── test_smoke.py         # End-to-end smoke test for plan generation
+│   ├── test_smoke.py         # End-to-end smoke test for plan generation
+│   └── test_units.py         # Offline unit tests (no API keys)
 └── src/
     ├── .env                  # Environment variables (excluded from Git)
     ├── app.py                # Flask app initialization & Blueprint registration
@@ -395,7 +406,9 @@ pytest tests/                       # Runs all tests
 
 `tests/test_smoke.py` executes the full planning workflow to verify that destinations are preserved and `spots` are returned as a list (requires Gemini/Tavily API keys).
 
-`tests/test_units.py` runs **offline (no API keys/DB)** and checks pure helpers — thumbnail key derivation, local URL generation/dedup, and path-traversal protection. Fast to run in CI.
+`tests/test_units.py` runs **offline (no API keys/DB)** and checks pure helpers — thumbnail key derivation, local URL generation/dedup, path-traversal protection, and geocoding name-variant/candidate-selection logic.
+
+**GitHub Actions** (`.github/workflows/ci.yml`) runs the offline tests, a syntax check of every JS file, and a compile check of every template on each push / pull request.
 
 ---
 

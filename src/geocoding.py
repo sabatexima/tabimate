@@ -178,7 +178,14 @@ def _query_google_places(q: str, center: tuple | None = None,
             {"lat": p["location"]["latitude"], "lng": p["location"]["longitude"]}
             for p in (data.get("places") or [])[:5] if p.get("location")
         ]
-        return _first_within(cands, center, max_km)
+        if not cands:
+            logger.info("Google Places: 該当なし q=%s", q)
+            return None
+        hit = _first_within(cands, center, max_km)
+        if hit is None:
+            logger.info("Google Places: 候補%d件すべて許容半径(%.0fkm)外で棄却 q=%s",
+                        len(cands), max_km, q)
+        return hit
     except Exception as e:
         logger.warning("ジオコーディング失敗(Google Places): q=%s, error=%s", q, e)
     return None
@@ -399,12 +406,14 @@ def ensure_plan_coords(plan: dict) -> dict:
 
     def fill(coord_field, name_field, context=None):
         nonlocal changed
-        if not _missing(coord_field, name_field):
+        missing = _missing(coord_field, name_field)
+        if not missing:
             return
         # 部分的にでも取得済みで、Google Places が使えない場合は再試行しない
         # （無料スタックだけで外れた名前は次も外れる可能性が高く、開くたびに遅くなるだけ）
         if plan.get(coord_field) and not os.getenv("GOOGLE_MAPS_API_KEY"):
             return
+        logger.info("座標を取得: plan_id=%s %s=%s", plan.get("id"), name_field, missing)
         names = plan.get(name_field) or []
         plan[coord_field] = geocode_spots(names, known=_existing(coord_field),
                                           context=context, viewbox=viewbox,

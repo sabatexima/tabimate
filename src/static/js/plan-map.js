@@ -136,12 +136,35 @@
       + `<a href="${url}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
   }
 
-  function addMarkers(map, points, cat) {
+  function addMarkers(map, points, cat, labelFor) {
     points.forEach((p, i) => {
-      const icon = makeIcon(cat.glyph || (i + 1), cat);
+      const label = labelFor ? labelFor(p) : (cat.glyph || (i + 1));
+      const icon = makeIcon(label, cat);
       const m = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml(p));
       m.on('popupopen', (e) => loadThumb(e.popup, p.name));
     });
+  }
+
+  // 「移動する順番」をスケジュール本文から決める。
+  // 各ピン名がスケジュール（タイムライン行）に最初に登場する位置で並べ、
+  // 観光・グルメ・宿を横断した通し番号を振る。照合できた点が2つ未満なら
+  // null を返し、従来のカテゴリ別表示（観光のみ配列順の番号）に落とす。
+  function orderByItinerary(points, schedule) {
+    const text = Array.isArray(schedule) ? schedule.join('\n') : '';
+    if (!text || points.length === 0) return null;
+    const hit = [];
+    const miss = [];
+    points.forEach((p) => {
+      const i = p.name ? text.indexOf(p.name) : -1;
+      if (i >= 0) hit.push({ p, i }); else miss.push(p);
+    });
+    if (hit.length < 2) return null;
+    hit.sort((a, b) => a.i - b.i);
+    const orderOf = new Map();
+    let n = 0;
+    hit.forEach((h) => orderOf.set(h.p, ++n));
+    miss.forEach((p) => orderOf.set(p, ++n));  // 照合できない分は末尾に続番
+    return { orderOf, route: hit.map((h) => h.p) };
   }
 
   function addLegend(map, present) {
@@ -359,15 +382,21 @@
     const map = L.map(el, { zoomControl: true, scrollWheelZoom: false });
     L.tileLayer(tileUrl(), { attribution: tileAttrib(), maxZoom: 18 }).addTo(map);
 
-    // 観光スポットはルート順に点線でつなぐ（グルメ・宿はつながない）。
-    if (spotPoints.length > 1) {
-      L.polyline(spotPoints.map(p => [p.lat, p.lng]),
+    // スケジュールに登場する順（＝移動する順番）で、観光・グルメ・宿を
+    // 横断した通し番号を振る。色はカテゴリのまま、番号だけ移動順。
+    const seq = orderByItinerary([...spotPoints, ...restPoints, ...accPoints], plan.schedule);
+
+    // 点線も移動順につなぐ（スケジュールと照合できないときは従来どおり観光の並び順）。
+    const routePts = seq ? seq.route : spotPoints;
+    if (routePts.length > 1) {
+      L.polyline(routePts.map(p => [p.lat, p.lng]),
         { color: '#7ab870', weight: 2.5, opacity: 0.7, dashArray: '6,4' }).addTo(map);
     }
 
-    addMarkers(map, spotPoints, CATEGORIES.spot);
-    addMarkers(map, restPoints, CATEGORIES.restaurant);
-    addMarkers(map, accPoints, CATEGORIES.accommodation);
+    const labelFor = seq ? ((p) => seq.orderOf.get(p)) : null;
+    addMarkers(map, spotPoints, CATEGORIES.spot, labelFor);
+    addMarkers(map, restPoints, CATEGORIES.restaurant, labelFor);
+    addMarkers(map, accPoints, CATEGORIES.accommodation, labelFor);
 
     // カスタムピン：自分のプランは編集UI付き、それ以外（共有閲覧）は表示のみ
     const customMarkers = [];

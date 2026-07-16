@@ -17,6 +17,7 @@ gcloud services enable \
   secretmanager.googleapis.com \
   storage.googleapis.com \
   iamcredentials.googleapis.com \
+  places.googleapis.com \
   --project "$PROJECT_ID"
 
 # Cloud Run がデフォルトで使うサービスアカウント（Compute SA）

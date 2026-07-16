@@ -114,3 +114,43 @@ def test_radius_from_bbox_adapts_to_destination_size():
     # 中間（都道府県規模）は下限と上限の間に収まる
     mid = geocoding._radius_from_bbox(34.8, 135.0, 35.8, 136.1)
     assert geocoding._MIN_RADIUS_KM < mid < geocoding._MAX_RADIUS_KM
+
+
+def test_ensure_plan_coords_fills_only_missing_names(monkeypatch):
+    # 「3軒中1軒だけ座標あり」の旧プラン: Googleキーがあれば残り2軒だけ再検索する
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "dummy")
+    monkeypatch.setattr(geocoding, "geocode_center",
+                        lambda q: {"lat": 35.10, "lng": 139.07, "radius_km": 80.0})
+    searched = []
+
+    def fake_geocode_one(name, **kw):
+        searched.append(name)
+        return {"lat": 35.11, "lng": 139.08}
+    monkeypatch.setattr(geocoding, "geocode_one", fake_geocode_one)
+
+    plan = {
+        "destination": "熱海",
+        "geo_done": 1,  # 旧プラン（キー導入前にジオコーディング済み）
+        "restaurants": ["おさかな食堂", "囲炉茶屋", "海鮮処 磯丸"],
+        "restaurant_coords": [{"name": "おさかな食堂", "lat": 35.09, "lng": 139.07}],
+    }
+    geocoding.ensure_plan_coords(plan)
+    # 取得済みの1軒は再検索せず、足りない2軒だけ検索して順序どおりマージされる
+    assert "おさかな食堂" not in searched
+    assert searched == ["囲炉茶屋", "海鮮処 磯丸"]
+    assert [c["name"] for c in plan["restaurant_coords"]] == ["おさかな食堂", "囲炉茶屋", "海鮮処 磯丸"]
+
+
+def test_ensure_plan_coords_skips_partial_without_gmaps_key(monkeypatch):
+    # Googleキーが無ければ、部分的に取得済みのプランは再検索しない（従来どおり）
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
+    monkeypatch.setattr(geocoding, "geocode_one",
+                        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("呼ばれてはいけない")))
+    plan = {
+        "destination": "熱海",
+        "geo_done": 1,
+        "restaurants": ["おさかな食堂", "囲炉茶屋"],
+        "restaurant_coords": [{"name": "おさかな食堂", "lat": 35.09, "lng": 139.07}],
+    }
+    geocoding.ensure_plan_coords(plan)
+    assert len(plan["restaurant_coords"]) == 1

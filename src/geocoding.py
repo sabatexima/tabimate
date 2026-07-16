@@ -302,10 +302,10 @@ def ensure_plan_coords(plan: dict) -> dict:
     キャッシュを使う。保存処理をブロックしないための遅延取得。
     観光は名前のみ、グルメ/宿は目的地を文脈にして精度を上げる。
     """
-    # 既に一度ジオコーディング済み（geo_done）なら基本は何もしない。失敗カテゴリの
+    # 既に一度ジオコーディング済み（geo_done）なら基本は何もしない。失敗分の
     # 毎回再取得（地図を開くたびに数秒）を防ぐ。編集時は geo_done が 0 に戻る。
-    # 例外: Google Places キーが使えるときは、「名前はあるのに座標ゼロ」のカテゴリ
-    # だけ再挑戦する（キー導入前に諦めた旧プランの飲食店・宿を救済するため。
+    # 例外: Google Places キーが使えるときは、「まだ座標が付いていない名前」だけ
+    # 再挑戦する（キー導入前に諦めた旧プランの飲食店・宿を救済するため。
     # それでも当たらない名前は開くたび数件の再検索になるが、コストは小さい）。
     if plan.get("geo_done") and not os.getenv("GOOGLE_MAPS_API_KEY"):
         return plan
@@ -313,16 +313,27 @@ def ensure_plan_coords(plan: dict) -> dict:
     dest = plan.get("destination")
     changed = False
 
+    # 既に座標が付いている名前は再検索しない。足りない名前だけを対象にする
+    # （「グルメ3軒中1軒だけ当たった」プランの残り2軒を救済できるように、
+    #  カテゴリ単位ではなく名前単位で判定する）。
+    def _existing(coord_field):
+        return {c["name"]: c for c in (plan.get(coord_field) or [])
+                if c and c.get("name") and c.get("lat") is not None}
+
+    def _missing(coord_field, name_field):
+        done = _existing(coord_field)
+        return [n for n in (plan.get(name_field) or []) if n and n not in done]
+
+    fields = (("spot_coords", "spots"), ("restaurant_coords", "restaurants"),
+              ("accommodation_coords", "accommodation"))
+
     # 目的地を一度ジオコーディングして中心を得て、その周辺を優先範囲(viewbox)にする。
     # center は「最寄り候補の採用」に、max_km（目的地の広さに応じた許容半径）は
     # 「同名の別地の棄却」に使う。
     viewbox = None
     center = None
     max_km = _MAX_DIST_KM
-    need = any(not plan.get(f) and plan.get(n) for f, n in (
-        ("spot_coords", "spots"), ("restaurant_coords", "restaurants"),
-        ("accommodation_coords", "accommodation")))
-    if dest and need:
+    if dest and any(_missing(f, n) for f, n in fields):
         c = geocode_center(dest)
         if c:
             center = (c["lat"], c["lng"])
@@ -332,12 +343,15 @@ def ensure_plan_coords(plan: dict) -> dict:
 
     def fill(coord_field, name_field, context=None):
         nonlocal changed
-        if plan.get(coord_field):
+        if not _missing(coord_field, name_field):
+            return
+        # 部分的にでも取得済みで、Google Places が使えない場合は再試行しない
+        # （無料スタックだけで外れた名前は次も外れる可能性が高く、開くたびに遅くなるだけ）
+        if plan.get(coord_field) and not os.getenv("GOOGLE_MAPS_API_KEY"):
             return
         names = plan.get(name_field) or []
-        if not names:
-            return
-        plan[coord_field] = geocode_spots(names, context=context, viewbox=viewbox,
+        plan[coord_field] = geocode_spots(names, known=_existing(coord_field),
+                                          context=context, viewbox=viewbox,
                                           center=center, max_km=max_km)
         changed = True
 

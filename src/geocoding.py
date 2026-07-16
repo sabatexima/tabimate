@@ -184,6 +184,38 @@ def _query_google_places(q: str, center: tuple | None = None,
     return None
 
 
+def verify_place_exists(name: str, context: str | None = None) -> bool | None:
+    """Google Places で「その名前の場所が実在するか」を確認する。
+
+    プラン生成時に、LLMが創作した店・宿を候補から落とすために使う。
+    返り値: True=実在 / False=見つからない / None=検証できない（キー未設定・APIエラー）。
+    None は「わからない」なので、呼び出し側は除外しないこと。
+    """
+    key = os.getenv("GOOGLE_MAPS_API_KEY")
+    if not key:
+        return None
+    q = _normalize(f"{name} {context}" if context else name)
+    if not q:
+        return None
+    try:
+        resp = requests.post(_GOOGLE_PLACES_URL, json={
+            "textQuery": q, "languageCode": "ja", "regionCode": "JP",
+        }, timeout=4, headers={
+            "X-Goog-Api-Key": key,
+            "X-Goog-FieldMask": "places.location",
+        })
+        data = resp.json()
+        if resp.status_code != 200 or "error" in data:
+            err = data.get("error") or {}
+            logger.warning("Google Places エラー(実在確認): q=%s http=%s status=%s message=%s",
+                           q, resp.status_code, err.get("status"), err.get("message"))
+            return None
+        return bool(data.get("places"))
+    except Exception as e:
+        logger.warning("実在確認失敗(Google Places): q=%s error=%s", q, e)
+        return None
+
+
 def _viewbox_around(lat: float, lng: float, pad: float = 0.4) -> str:
     """中心(lat,lng)の周囲 ±pad度の viewbox 文字列 'x1,y1,x2,y2'（x=経度,y=緯度）。"""
     return f"{lng - pad},{lat - pad},{lng + pad},{lat + pad}"

@@ -103,6 +103,27 @@ def _directive(state=None) -> str:
     )
 
 
+def _filter_real_places(names: list, destination: str, min_keep: int) -> list:
+    """候補名を Google Places で実在確認し、見つからない名前を候補から落とす。
+
+    プロンプトで「実在する店のみ」と指示してもLLMは店名を創作することがある
+    （例:「海鮮処 磯丸」）。GOOGLE_MAPS_API_KEY 設定時のみ動き、未設定なら素通し。
+    検証できない名前（None＝APIエラー等）は落とさない。実在確認できた候補が
+    min_keep 未満になる場合は、選択肢を保つため絞り込みを諦めて全件返す。
+    """
+    from geocoding import verify_place_exists
+    checked = [(n, verify_place_exists(n, destination)) for n in names or []]
+    dropped = [n for n, ok in checked if ok is False]
+    if not dropped:
+        return list(names or [])
+    kept = [n for n, ok in checked if ok is not False]
+    if len(kept) < min_keep:
+        log.info("[実在確認] 未確認候補が多いため絞り込みを中止: dropped=%s", dropped)
+        return list(names)
+    log.info("[実在確認] Google Placesで見つからず候補から除外: %s", dropped)
+    return kept
+
+
 def transport_agent(state: TravelPlanState):
     """往復交通費を概算し、予算上限から差し引いた残予算を返す。
 
@@ -296,8 +317,10 @@ def accommodation_candidates(state: TravelPlanState):
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(AccommodationCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
-    _pp(response.accommodation, "🏨 候補宿泊施設:")
-    return {"accommodation_candidates": response.accommodation}
+    # LLMが創作した宿名を候補段階で落とす（Google Placesキー設定時のみ）
+    accommodation = _filter_real_places(response.accommodation, state["destination"], min_keep=2)
+    _pp(accommodation, "🏨 候補宿泊施設:")
+    return {"accommodation_candidates": accommodation}
 
 
 def accommodation_agent(state: TravelPlanState):
@@ -421,8 +444,10 @@ def gourmet_candidates(state: TravelPlanState):
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(GourmetCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
-    _pp(response.restaurants, "🍱 候補飲食店:")
-    return {"restaurant_candidates": response.restaurants}
+    # LLMが創作した店名を候補段階で落とす（Google Placesキー設定時のみ）
+    restaurants = _filter_real_places(response.restaurants, state["destination"], min_keep=3)
+    _pp(restaurants, "🍱 候補飲食店:")
+    return {"restaurant_candidates": restaurants}
 
 
 def gourmet_hunter(state: TravelPlanState):

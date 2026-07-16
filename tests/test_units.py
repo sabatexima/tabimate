@@ -168,3 +168,28 @@ def test_first_within_respects_relevance_order():
     # 全部遠方なら棄却、centerが無ければ関連度1位
     assert geocoding._first_within([{"lat": 35.66, "lng": 139.70}], atami, max_km=80) is None
     assert geocoding._first_within(cands, None)["lat"] == 35.66
+
+
+def test_filter_real_places_drops_hallucinated_names(monkeypatch):
+    # 「海鮮処 磯丸」のようなLLM創作店名を候補段階で落とす
+    os.environ.setdefault("GOOGLE_API_KEY", "dummy")
+    os.environ.setdefault("TAVILY_API_KEY", "dummy")
+    from chat import agents
+
+    real = {"熱海銀座おさかな食堂": True, "囲炉茶屋": True, "海鮮処 磯丸": False,
+            "熱海プリン": True, "存在しない食堂": False}
+    monkeypatch.setattr(geocoding, "verify_place_exists",
+                        lambda n, c=None: real.get(n))
+    names = list(real)
+    out = agents._filter_real_places(names, "熱海", min_keep=3)
+    assert out == ["熱海銀座おさかな食堂", "囲炉茶屋", "熱海プリン"]
+
+    # 実在確認できた候補が少なすぎるときは絞り込みを諦める（選択肢を保つ）
+    mostly_fake = {"A": False, "B": False, "C": False, "D": True}
+    monkeypatch.setattr(geocoding, "verify_place_exists",
+                        lambda n, c=None: mostly_fake.get(n))
+    assert agents._filter_real_places(list(mostly_fake), "熱海", min_keep=3) == list(mostly_fake)
+
+    # キー未設定（全部None＝検証不能）なら何も落とさない
+    monkeypatch.setattr(geocoding, "verify_place_exists", lambda n, c=None: None)
+    assert agents._filter_real_places(["X", "Y"], "熱海", min_keep=3) == ["X", "Y"]

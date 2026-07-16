@@ -16,6 +16,8 @@
     color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
     margin: 12px 0 20px; max-width: 60ch;
   }
+  /* リード文は文節スパンごと折り返す（単語の途中で改行しない）*/
+  .page-lead .ph { display: inline-block; }
 
   .group-title { font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin: 20px 0 12px; }
   .share-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); max-width: 1040px; }

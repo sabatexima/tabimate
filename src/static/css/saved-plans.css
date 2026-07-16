@@ -26,6 +26,8 @@
     color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
     margin: 14px auto 24px; max-width: 640px;
   }
+  /* リード文は文節スパンごと折り返す（単語の途中で改行しない）*/
+  .page-lead .ph { display: inline-block; }
 
   /* ===== 一覧 = 本棚。表紙カードを縦に並べ、タップで詳細ページへ ===== */
   #plans-container {

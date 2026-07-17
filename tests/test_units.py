@@ -193,3 +193,24 @@ def test_filter_real_places_drops_hallucinated_names(monkeypatch):
     # キー未設定（全部None＝検証不能）なら何も落とさない
     monkeypatch.setattr(geocoding, "verify_place_exists", lambda n, c=None: None)
     assert agents._filter_real_places(["X", "Y"], "熱海", min_keep=3) == ["X", "Y"]
+
+
+def test_geocode_one_negative_cache(monkeypatch):
+    # 全プロバイダで外れた名前はTTL内は再検索しない（毎回の待ち時間とAPI消費を抑える）
+    geocoding._neg_cache.clear()
+    calls = []
+    monkeypatch.setattr(geocoding, "_query_google_places", lambda *a, **k: calls.append("g") or None)
+    monkeypatch.setattr(geocoding, "_query_nominatim", lambda *a, **k: calls.append("n") or None)
+    monkeypatch.setattr(geocoding, "_query_gsi", lambda *a, **k: calls.append("s") or None)
+    assert geocoding.geocode_one("存在しない店", context="熱海") is None
+    first = len(calls)
+    assert first > 0
+    assert geocoding.geocode_one("存在しない店", context="熱海") is None
+    assert len(calls) == first  # 2回目はプロバイダを一切呼ばない
+    # 成功したらキャッシュは解除される
+    geocoding._neg_cache.clear()
+    monkeypatch.setattr(geocoding, "_query_google_places",
+                        lambda *a, **k: {"lat": 35.1, "lng": 139.07})
+    hit = geocoding.geocode_one("存在しない店", context="熱海")
+    assert hit == {"lat": 35.1, "lng": 139.07}
+    assert not geocoding._neg_cache

@@ -150,18 +150,34 @@
     return String(s || '').normalize('NFKC').replace(/\s+/g, '');
   }
 
+  // 店名の断片として照合すると誤マッチしやすい一般語。
+  // スケジュール本文で「（別の店の）食事」を指して使われがちな語だけに絞る
+  // （ガーデン・テラス等は店名の識別部分になり得るため入れない。
+  //  他ピンとの曖昧性は otherNames ガードが防ぐ）。
+  const GENERIC_WORDS = ['レストラン', 'ラーメン', 'ビュッフェ', 'カフェテリア'];
+  // 一般語の「断片」（レスト・ストラン等）も情報を持たないため除外する。
+  // 一般語＋固有部分を含む長い断片（ガーデンレストラン等）は有効なまま。
+  function isGenericFragment(w) {
+    return GENERIC_WORDS.some((g) => g.indexOf(w) >= 0);
+  }
+
   // ピン名がスケジュール本文に最初に登場する位置を探す。
   // 完全一致で見つからなければ、名前の部分文字列（長い順・4文字以上）でも探す
   // （スケジュール側は「熱海銀座おさかな食堂」→「おさかな食堂で昼食」のように
-  //  省略されがちなため。4文字未満は「ホテル」等の誤マッチを招くので使わない）。
-  function findInSchedule(text, name) {
+  //  省略されがちなため）。誤マッチ対策の二段ガード:
+  //   1. 一般語そのもの（レストラン等）は断片として使わない
+  //   2. 他のピン名にも含まれる断片は使わない（別ピンの記述位置を拾わない）
+  function findInSchedule(text, name, otherNames) {
     const n = normText(name);
     if (!n) return -1;
     const direct = text.indexOf(n);
     if (direct >= 0) return direct;
     for (let len = Math.min(n.length - 1, 10); len >= 4; len--) {
       for (let s = 0; s + len <= n.length; s++) {
-        const i = text.indexOf(n.substr(s, len));
+        const w = n.substr(s, len);
+        if (isGenericFragment(w)) continue;
+        if (otherNames.some((o) => o !== n && o.indexOf(w) >= 0)) continue;
+        const i = text.indexOf(w);
         if (i >= 0) return i;
       }
     }
@@ -176,10 +192,11 @@
   function orderByItinerary(points, schedule) {
     const text = normText(Array.isArray(schedule) ? schedule.join('\n') : '');
     if (!text || points.length === 0) return null;
+    const allNames = points.map((p) => normText(p.name));
     const hit = [];
     const miss = [];
     points.forEach((p) => {
-      const i = findInSchedule(text, p.name);
+      const i = findInSchedule(text, p.name, allNames);
       if (i >= 0) hit.push({ p, i }); else miss.push(p);
     });
     if (hit.length < 2) return null;

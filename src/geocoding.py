@@ -294,6 +294,17 @@ def geocode_center(query: str) -> dict | None:
     return None
 
 
+# 見つからなかった名前を一定時間おぼえて、地図を開くたびの再検索を抑える
+# （プロセス内・TTL付き）。API不調による失敗を永久に焼き付けないよう、
+# DBには保存せず時間経過とインスタンス再起動で自然に再試行へ戻る。
+_NEG_TTL_SEC = 6 * 3600
+_neg_cache: dict = {}
+
+
+def _neg_key(query: str, context: str | None) -> str:
+    return f"{query}\x00{context or ''}"
+
+
 def geocode_one(query: str, context: str | None = None, viewbox: str | None = None,
                 center: tuple | None = None,
                 max_km: float = _MAX_DIST_KM) -> dict | None:
@@ -309,24 +320,31 @@ def geocode_one(query: str, context: str | None = None, viewbox: str | None = No
     query = _normalize(query)
     if not query:
         return None
+    # 直近に全プロバイダで外れた名前はTTL内は再検索しない（毎回の待ち時間とAPI消費を抑える）
+    key = _neg_key(query, context)
+    failed_at = _neg_cache.get(key)
+    if failed_at and (time.monotonic() - failed_at) < _NEG_TTL_SEC:
+        return None
     # Google はあいまいな表記に強いので、1回だけ「名前＋目的地」で当てにいく
     hit = _query_google_places(f"{query} {context}" if context else query,
                                center=center, max_km=max_km)
     if hit:
+        _neg_cache.pop(key, None)
         return hit
     variants = _variants(query)
     for q in variants:
         hit = _query_nominatim(q, viewbox=viewbox, center=center, max_km=max_km)
-        if hit:
-            return hit
-        if context:
+        if hit is None and context:
             hit = _query_nominatim(f"{q}, {context}", viewbox=viewbox, center=center, max_km=max_km)
-            if hit:
-                return hit
+        if hit:
+            _neg_cache.pop(key, None)
+            return hit
     for q in variants:
         hit = _query_gsi(q, center=center, max_km=max_km)
         if hit:
+            _neg_cache.pop(key, None)
             return hit
+    _neg_cache[key] = time.monotonic()
     return None
 
 

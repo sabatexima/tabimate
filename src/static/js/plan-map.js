@@ -379,9 +379,11 @@
 
   // ほぼ同一地点のピンは後から追加した方が上に重なり、下のピン（番号）が
   // 完全に隠れて見えなくなる。既出の点と極近（≈15m以内）の場合は少しずつ
-  // 北東へずらして、全部のピンが見えるようにする（カスタムピンは対象外）。
-  function spreadOverlaps(points) {
-    const seen = [];
+  // 北東へずらして、全部のピンが見えるようにする。
+  // fixed には動かしたくない点（ユーザーが置いたカスタムピン）を渡す。
+  // 自動ピン側が避けることで、カスタムピンの位置は尊重しつつ番号の隠れを防ぐ。
+  function spreadOverlaps(points, fixed) {
+    const seen = (fixed || []).slice();
     points.forEach((p) => {
       let bump = 0;
       seen.forEach((q) => {
@@ -412,7 +414,8 @@
     const accPoints = mapStored(plan.accommodation_coords);
     const customPins = mapStored(plan.custom_pins);
     // 同一地点に重なった自動ピンをずらして、番号が隠れないようにする
-    spreadOverlaps([...spotPoints, ...restPoints, ...accPoints]);
+    // （カスタムピンは動かさず、自動ピン側が避ける）
+    spreadOverlaps([...spotPoints, ...restPoints, ...accPoints], customPins);
     const all = [...spotPoints, ...restPoints, ...accPoints, ...customPins];
 
     // 自動ピンが全滅でも、自分のプランなら手動ピンを置けるよう地図は出す。

@@ -145,26 +145,49 @@
     });
   }
 
+  // 表記ゆれ吸収（全角/半角・空白差でスケジュールとの照合を落とさない）
+  function normText(s) {
+    return String(s || '').normalize('NFKC').replace(/\s+/g, '');
+  }
+
+  // ピン名がスケジュール本文に最初に登場する位置を探す。
+  // 完全一致で見つからなければ、名前の部分文字列（長い順・4文字以上）でも探す
+  // （スケジュール側は「熱海銀座おさかな食堂」→「おさかな食堂で昼食」のように
+  //  省略されがちなため。4文字未満は「ホテル」等の誤マッチを招くので使わない）。
+  function findInSchedule(text, name) {
+    const n = normText(name);
+    if (!n) return -1;
+    const direct = text.indexOf(n);
+    if (direct >= 0) return direct;
+    for (let len = Math.min(n.length - 1, 10); len >= 4; len--) {
+      for (let s = 0; s + len <= n.length; s++) {
+        const i = text.indexOf(n.substr(s, len));
+        if (i >= 0) return i;
+      }
+    }
+    return -1;
+  }
+
   // 「移動する順番」をスケジュール本文から決める。
   // 各ピン名がスケジュール（タイムライン行）に最初に登場する位置で並べ、
-  // 観光・グルメ・宿を横断した通し番号を振る。照合できた点が2つ未満なら
-  // null を返し、従来のカテゴリ別表示（観光のみ配列順の番号）に落とす。
+  // 観光・グルメ・宿を横断した通し番号を振る。照合できない分は末尾に続番。
+  // 線（route）は番号と完全に同じ順で全ピンをつなぐ（番号＝線の順序を保証）。
+  // 照合できた点が2つ未満なら null を返し、従来表示に落とす。
   function orderByItinerary(points, schedule) {
-    const text = Array.isArray(schedule) ? schedule.join('\n') : '';
+    const text = normText(Array.isArray(schedule) ? schedule.join('\n') : '');
     if (!text || points.length === 0) return null;
     const hit = [];
     const miss = [];
     points.forEach((p) => {
-      const i = p.name ? text.indexOf(p.name) : -1;
+      const i = findInSchedule(text, p.name);
       if (i >= 0) hit.push({ p, i }); else miss.push(p);
     });
     if (hit.length < 2) return null;
     hit.sort((a, b) => a.i - b.i);
+    const ordered = hit.map((h) => h.p).concat(miss);
     const orderOf = new Map();
-    let n = 0;
-    hit.forEach((h) => orderOf.set(h.p, ++n));
-    miss.forEach((p) => orderOf.set(p, ++n));  // 照合できない分は末尾に続番
-    return { orderOf, route: hit.map((h) => h.p) };
+    ordered.forEach((p, idx) => orderOf.set(p, idx + 1));
+    return { orderOf, route: ordered };
   }
 
   function addLegend(map, present) {

@@ -9,13 +9,31 @@
   旅行プラン作成・旅の振り返り（付箋）・共有を、1つの Flask アプリにまとめています。
 </p>
 
-<p align="center"><a href="README.md">English</a></p>
+<p align="center">
+  <a href="README.md">English</a><br><br>
+  <a href="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml"><img src="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
 
 ## スクリーンショット
 
 | 旅の振り返り（ジャーナル） | 保存プラン（本棚） | プラン詳細（ブックレット） |
 |:---:|:---:|:---:|
 | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal.png" alt="旅の振り返り" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf.png" alt="保存プラン" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail.png" alt="プラン詳細" width="250"> |
+
+## 目次
+
+- [技術スタック](#技術スタック)
+- [主な機能](#主な機能)
+- [環境変数一覧](#環境変数一覧)
+- [ディレクトリ構成](#ディレクトリ構成)
+- [アーキテクチャ](#アーキテクチャ)
+- [開発環境の構築方法](#開発環境の構築方法)
+- [データベース設計](#データベース設計)
+- [HTTP エンドポイント一覧](#http-エンドポイント一覧)
+- [プラン生成エージェントの仕組み](#プラン生成エージェントの仕組み)
+- [テスト](#テスト)
+- [セキュリティ方針](#セキュリティ方針)
+- [トラブルシューティング](#トラブルシューティング)
 
 ## 技術スタック
 

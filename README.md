@@ -9,13 +9,33 @@
   Plan creation, trip reflection (sticky notes), and sharing in a single Flask app.
 </p>
 
-<p align="center"><a href="README_jp.md">日本語版</a></p>
+<p align="center">
+  <a href="README_jp.md">日本語版</a><br><br>
+  <a href="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml"><img src="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
 
 ## Screenshots
 
 | Trip journal (reflection) | Saved plans (bookshelf) | Plan detail (booklet) |
 |:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal.png" alt="Trip journal" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf.png" alt="Saved plans bookshelf" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail.png" alt="Plan detail booklet" width="250"> |
+| <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal-en.png" alt="Trip journal" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf-en.png" alt="Saved plans bookshelf" width="250"> | <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail-en.png" alt="Plan detail booklet" width="250"> |
+
+> The app UI is Japanese; these screenshots are English-localized mockups of the same screens.
+
+## Table of Contents
+
+- [Tech Stack](#tech-stack)
+- [Key Features](#key-features)
+- [Environment Variables](#environment-variables)
+- [Directory Structure](#directory-structure)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started-development-setup)
+- [Database Schema](#database-schema)
+- [HTTP Endpoints](#http-endpoints)
+- [Plan Generation Agents](#plan-generation-agent-architecture)
+- [Testing](#testing)
+- [Security Policy](#security-policy)
+- [Troubleshooting](#troubleshooting)
 
 ## Tech Stack
 

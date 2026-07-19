@@ -37,17 +37,13 @@
 
 ## 技術スタック
 
-![Flask](https://img.shields.io/badge/Flask-3.1-000000.svg?logo=flask&logoColor=white)
-![LangChain](https://img.shields.io/badge/LangChain-1.3-1DA1F2.svg?logo=langchain)
-![LangGraph](https://img.shields.io/badge/LangGraph-1.2-1DA1F2.svg?logo=langgraph&logoColor=white)
-![Google%20Gemini](https://img.shields.io/badge/Gemini-3.5_Flash_%2F_3.1_Flash--Lite-4285F4.svg?logo=google%20gemini&logoColor=white)
-![Tavily](https://img.shields.io/badge/Tavily-Search-F97316.svg?logo=tavily&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg?logo=mysql&logoColor=white)
-![Google%20Cloud%20Run](https://img.shields.io/badge/Cloud_Run-Cloud-4285F4.svg?logo=google%20cloud&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Build-2496ED.svg?logo=docker&logoColor=white)
-![Google%20OAuth](https://img.shields.io/badge/Google_OAuth-2.0-4285F4.svg?logo=google&logoColor=white)
-![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900.svg?logo=leaflet&logoColor=white)
-![Stadia%20Maps](https://img.shields.io/badge/Stadia_Maps-Watercolor-7AB870.svg)
+| | |
+|---|---|
+| **AI** | LangGraph 1.2 · LangChain 1.3 · Gemini 3.5 Flash / 3.1 Flash-Lite · Tavily Search |
+| **バックエンド** | Flask 3.1 · SQLAlchemy · MySQL 8.0 / TiDB · gunicorn |
+| **地図・位置情報** | Leaflet 1.9 · Stadia Maps（Stamen Watercolor）· Google Places · OSM Nominatim · 国土地理院 |
+| **インフラ** | Google Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
+| **フロントエンド** | Jinja2 · Vanilla JS · PWA · Zen Maru Gothic |
 
 ## 主な機能
 

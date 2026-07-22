@@ -43,8 +43,11 @@
       });
       li.querySelector('.del').addEventListener('click', async () => {
         if (!confirm('このリンクを取り消しますか？')) return;
-        const res = await fetch(`/share/link/${l.id}`, { method: 'DELETE' });
-        if (res.ok) refresh();
+        try {
+          const res = await fetch(`/share/link/${l.id}`, { method: 'DELETE' });
+          if (res.ok) refresh();
+          else alert('リンクの取り消しに失敗しました');
+        } catch (e) { alert('リンクの取り消しに失敗しました'); }
       });
       linkList.appendChild(li);
     });
@@ -85,8 +88,11 @@
       });
       li.querySelector('.del').addEventListener('click', async () => {
         if (!confirm(`${g.grantee_email} への共有を取り消しますか？`)) return;
-        const res = await fetch(`/share/grant/${g.id}`, { method: 'DELETE' });
-        if (res.ok) refresh();
+        try {
+          const res = await fetch(`/share/grant/${g.id}`, { method: 'DELETE' });
+          if (res.ok) refresh();
+          else alert('共有の取り消しに失敗しました');
+        } catch (e) { alert('共有の取り消しに失敗しました'); }
       });
       grantList.appendChild(li);
     });

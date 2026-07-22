@@ -3,20 +3,8 @@
 .digest { max-width: 660px; margin: 0 auto; }
 .back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }
 
-/* エディトリアル見出し（各一覧ページと同じ作法）*/
+/* 見出し・キッカー・波線の共通様式は layout.css に集約。ここは固有の余白だけ */
 .page-header { margin: 10px 0 4px; }
-.kicker {
-  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.38em;
-  color: #c2a05e; margin: 0 0 8px 2px;
-}
-.page-header h1 {
-  font-size: 1.9rem; font-weight: 700; color: var(--text-main);
-  margin: 0; line-height: 1.25; letter-spacing: 0.02em;
-}
-.page-header h1 .accent {
-  text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
-  text-underline-offset: 8px;
-}
 
 /* 年の切り替え（白いピル・選択中は緑）*/
 .year-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }

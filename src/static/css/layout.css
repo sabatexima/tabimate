@@ -142,6 +142,26 @@
       background: url("https://cdn.jsdelivr.net/npm/openmoji@15.0.0/color/svg/1F340.svg") center/contain no-repeat;
     }
 
+    /* ページ見出しの共通様式（英字キッカー＋波線タイトル）。
+       各一覧ページ（振り返り・保存プラン・共有一覧・年間ダイジェスト）で共有する。
+       ページ固有の余白（.page-header の margin / .page-lead の幅）だけ各CSSで指定。
+       ※layout.css は block head の後に読み込まれるため、この共通値が最終適用される。 */
+    .kicker {
+      font-size: 0.64rem; font-weight: 700; letter-spacing: 0.38em;
+      color: #c2a05e; margin: 0 0 8px 2px;
+    }
+    .page-header h1 {
+      font-size: 1.9rem; font-weight: 700; color: var(--text-main);
+      margin: 0; line-height: 1.25; letter-spacing: 0.02em;
+    }
+    .page-header h1 .accent {
+      text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
+      text-underline-offset: 8px;
+    }
+    /* リード文の見た目は共通・折り返しは文節スパン単位（余白は各ページ）*/
+    .page-lead { color: var(--text-muted); font-size: 0.9em; line-height: 1.9; }
+    .page-lead .ph { display: inline-block; }
+
     .sidebar a {
       display: block;
       color: white;

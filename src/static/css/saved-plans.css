@@ -1,33 +1,8 @@
-/* 文字色は全ページ共通の暖色トーン（layout.css）に合わせる（寒色グレーをやめて統一） */
-:root {
-    --primary-color: #4fa83a;
-    --text-main: #4a4540;
-    --text-muted: #8a817a;
-  }
-
-  /* エディトリアルな見出し：英字キッカー＋手書きの表題＋波線（振り返りと同じ言語）*/
-  .page-header {
-    margin: 0 auto 4px;
-    max-width: 640px;
-  }
-  .kicker {
-    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.38em;
-    color: #c2a05e; margin: 0 0 8px 2px;
-  }
-  .page-header h1 {
-    font-size: 1.9rem; font-weight: 700; color: var(--text-main);
-    margin: 0; line-height: 1.25; letter-spacing: 0.02em;
-  }
-  .page-header h1 .accent {
-    text-decoration: underline wavy rgba(122, 190, 96, 0.5) 3px;
-    text-underline-offset: 8px;
-  }
-  .page-lead {
-    color: var(--text-muted); font-size: 0.9em; line-height: 1.9;
-    margin: 14px auto 24px; max-width: 640px;
-  }
-  /* リード文は文節スパンごと折り返す（単語の途中で改行しない）*/
-  .page-lead .ph { display: inline-block; }
+  /* カラー変数（--primary-color 等）は layout.css の :root で全ページ共通に定義。
+     見出し・キッカー・波線・リード文の共通様式も layout.css に集約。
+     ここではこのページ固有の余白・中央寄せだけ指定する。 */
+  .page-header { margin: 0 auto 4px; max-width: 640px; }
+  .page-lead { margin: 14px auto 24px; max-width: 640px; }
 
   /* ===== 一覧 = 本棚。表紙カードを縦に並べ、タップで詳細ページへ ===== */
   #plans-container {

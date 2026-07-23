@@ -293,6 +293,19 @@ def abort_request():
     return json.dumps({'status': 'ABORT_SIGNAL_SENT_AND_REMOVED'}), 200, {'Content-Type': 'application/json'}
 
 
+@planner.route('/generation_status', methods=['GET'])
+@login_required
+def generation_status():
+    """指定 request_id の生成がまだ続いているかを返す（リロード後の状態復元用）。
+
+    active_requests から外れるのは save_chat_message の後（finally）なので、
+    active=false は「結果がDBに確定済み（完了 or 中断）」を意味する。
+    """
+    request_id = request.args.get('request_id', '')
+    active = bool(request_id) and request_id in active_requests
+    return json.dumps({'active': active}), 200, {'Content-Type': 'application/json'}
+
+
 @planner.route('/reset_chat', methods=['POST'])
 @login_required
 def reset_chat():

@@ -163,6 +163,8 @@ const chatBox = document.getElementById('chat-box');
     if (!message) return;
 
     currentRequestId = generateId();
+    // リロードしても「生成中」を復元できるよう、進行中の request_id を控えておく
+    try { localStorage.setItem('tabimate_gen', currentRequestId); } catch (e) { /* 非対応環境は無視 */ }
 
     messageInput.disabled = true;
     sendButton.style.display = 'none';
@@ -266,8 +268,57 @@ const chatBox = document.getElementById('chat-box');
       messageInput.focus();
       abortController = null;
       currentRequestId = null;
+      try { localStorage.removeItem('tabimate_gen'); } catch (e) { /* 非対応環境は無視 */ }
     }
   });
+
+  // リロード後、生成が続いていたら「作成中」表示を復元し、完了を待って結果を出す。
+  // （SSEストリームには再接続できないため、状態をポーリングして完了を検知する）
+  async function resumeIfGenerating() {
+    let rid = null;
+    try { rid = localStorage.getItem('tabimate_gen'); } catch (e) { return; }
+    if (!rid) return;
+
+    const isActive = async () => {
+      try {
+        const r = await fetch('/generation_status?request_id=' + encodeURIComponent(rid));
+        return (await r.json()).active === true;
+      } catch (e) { return null; }  // 判定不能
+    };
+
+    const active = await isActive();
+    if (active === false) {
+      // 既に完了/中断済み → 最新の履歴を表示してマーカーを消す
+      try { localStorage.removeItem('tabimate_gen'); } catch (e) {}
+      loadMessages(true);
+      return;
+    }
+    if (active === null) return;  // 通信失敗時は次回のリロードに任せる
+
+    // まだ生成中 → 作成中UIを復帰（停止ボタンも currentRequestId 経由で機能する）
+    currentRequestId = rid;
+    messageInput.disabled = true;
+    sendButton.style.display = 'none';
+    stopButton.style.display = 'flex';
+    startThinking();
+
+    let ticks = 0;
+    const poll = setInterval(async () => {
+      ticks += 1;
+      const still = await isActive();
+      if (still === null) return;                 // 一時的な通信エラーは次回リトライ
+      if (still && ticks < 360) return;           // まだ生成中（上限15分で強制解除）
+      clearInterval(poll);
+      try { localStorage.removeItem('tabimate_gen'); } catch (e) {}
+      currentRequestId = null;
+      messageInput.disabled = false;
+      sendButton.style.display = 'flex';
+      stopButton.style.display = 'none';
+      stopThinking();
+      messageInput.focus();
+      loadMessages(true);
+    }, 2500);
+  }
 
   // 保存ボタンのクリック処理（動的に追加される要素に対応）
   chatBox.addEventListener('click', async (e) => {
@@ -311,3 +362,4 @@ const chatBox = document.getElementById('chat-box');
 
   renderGreeting();
   loadMessages();
+  resumeIfGenerating();

@@ -522,6 +522,27 @@ def rate_plan(plan_id):
     return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 
+@planner.route('/save_actual_total/<int:plan_id>', methods=['POST'])
+@login_required
+def save_actual_total(plan_id):
+    """旅の実際にかかった総額（円/人）を記録する（本人のみ）。空/0で記録を消す。"""
+    from db import set_plan_actual_total
+    data = request.get_json(silent=True) or request.form
+    raw = data.get('actual_total')
+    amount = None
+    if raw not in (None, '', 'null'):
+        try:
+            amount = int(raw)
+        except (TypeError, ValueError):
+            return json.dumps({'status': 'ERROR', 'message': '金額は数字で入力してください'}), 400, {'Content-Type': 'application/json'}
+        if amount < 0 or amount > 100000000:
+            return json.dumps({'status': 'ERROR', 'message': '金額の範囲が正しくありません'}), 400, {'Content-Type': 'application/json'}
+    ok = set_plan_actual_total(plan_id, session['user_id'], amount)
+    if not ok:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+    return json.dumps({'status': 'OK', 'actual_total': amount}), 200, {'Content-Type': 'application/json'}
+
+
 def _fold_ical_line(line: str) -> list:
     """RFC 5545 の行折りたたみ。1行75オクテット以内に分割し、継続行は先頭に空白を付ける。
 

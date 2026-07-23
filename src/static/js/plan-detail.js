@@ -17,6 +17,86 @@ function bookingUrl(destination) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((destination || '') + ' 宿')}`;
 }
 
+// 旅の会計（おこづかい帳）: 見積もりと実績を並べて差額を出す。見積もりが無い
+// プランには出さない。実績が入力済みなら比較表示、未入力なら記録フォーム。
+function accountingHtml(plan) {
+  const est = plan.total_per_person || plan.budget_limit || null;
+  if (!est) return '';  // 費用の目安が無いプランでは会計を出さない
+  const actual = plan.actual_total;
+  if (actual == null) {
+    return `
+      <div class="plan-account" data-est="${est}">
+        <span class="account-label">💰 旅の会計</span>
+        <div class="account-row">
+          <span class="account-est">見積もり ${fmt(est)}円/人</span>
+          <span class="account-input-wrap">
+            <input type="number" class="account-input" inputmode="numeric" min="0"
+                   placeholder="使った額" aria-label="実際に使った額（円/人）">
+            <span class="account-yen">円/人</span>
+          </span>
+          <button class="account-save" type="button">記録</button>
+        </div>
+        <p class="account-hint">旅のあとに、実際にかかった費用を残しておけます🍀</p>
+      </div>`;
+  }
+  const diff = actual - est;
+  const within = diff <= 0;
+  const diffText = within
+    ? `🍀 見積もりより ${fmt(-diff)}円 おトク`
+    : `見積もりより ${fmt(diff)}円 多め`;
+  return `
+    <div class="plan-account rated" data-est="${est}">
+      <span class="account-label">💰 旅の会計</span>
+      <div class="account-compare">
+        <span class="account-col"><b>${fmt(est)}</b><span>見積もり</span></span>
+        <span class="account-arrow">→</span>
+        <span class="account-col actual"><b>${fmt(actual)}</b><span>実際</span></span>
+      </div>
+      <span class="account-diff ${within ? 'ok' : 'over'}">${diffText}</span>
+      <button class="account-edit" type="button">修正</button>
+    </div>`;
+}
+
+// 会計フォーム/表示のイベントを配線。記録・修正で /save_actual_total を叩き再描画。
+function mountAccounting(card, plan) {
+  const box = card.querySelector('.plan-account');
+  if (!box) return;
+  const save = async (amount) => {
+    try {
+      const res = await fetch(`/save_actual_total/${plan.id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actual_total: amount }),
+      });
+      const d = await res.json();
+      if (res.ok && d.status === 'OK') {
+        plan.actual_total = d.actual_total;
+        box.replaceWith(buildFromHtml(accountingHtml(plan)));
+        mountAccounting(card, plan);
+      } else { alert(d.message || '記録に失敗しました'); }
+    } catch (e) { alert('通信エラーが発生しました。もう一度お試しください。'); }
+  };
+  const saveBtn = box.querySelector('.account-save');
+  if (saveBtn) {
+    const input = box.querySelector('.account-input');
+    const submit = () => {
+      const v = (input.value || '').trim();
+      if (v === '') { input.focus(); return; }
+      save(parseInt(v, 10));
+    };
+    saveBtn.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  }
+  const editBtn = box.querySelector('.account-edit');
+  if (editBtn) editBtn.addEventListener('click', () => { plan.actual_total = null; box.replaceWith(buildFromHtml(accountingHtml(plan))); mountAccounting(card, plan); });
+}
+
+// HTML文字列 → 最初の要素ノード（差し替え用の小ヘルパ）
+function buildFromHtml(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
 // 評価済みの表示（1プラン1評価・上書き式）。「修正」で再編集できる（誤入力の救済）。
 function ratedRateHtml(rating, comment) {
   const stars = [1, 2, 3, 4, 5]
@@ -285,10 +365,12 @@ function renderDetail(plan) {
                placeholder="例: 2日目をゆっくりに / 宿を変えて / 予算を抑えて">
         <button class="plan-edit-send" type="button">修正する</button>
       </div>
+      ${accountingHtml(plan)}
       ${plan.rating ? ratedRateHtml(plan.rating, plan.rating_comment || '') : editableRateHtml(plan)}
     </div>
   `;
   root.replaceChildren(card);
+  mountAccounting(card, plan);
 
   // チャットで修正：入力欄の開閉
   const editBox = card.querySelector('.plan-edit');

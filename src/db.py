@@ -152,7 +152,8 @@ def _ensure_plan_columns(conn) -> None:
                      ("spot_coords", "JSON NULL"), ("restaurant_coords", "JSON NULL"),
                      ("accommodation_coords", "JSON NULL"), ("custom_pins", "JSON NULL"),
                      ("geo_done", "TINYINT NOT NULL DEFAULT 0"),
-                     ("total_per_person", "INT NULL")):
+                     ("total_per_person", "INT NULL"),
+                     ("actual_total", "INT NULL")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -224,7 +225,7 @@ _PLAN_SELECT_COLS = (
     "departure_location, transport_cost, remaining_budget, total_per_person, status, feedback, "
     "themes, special_requirements, spots, spot_coords, restaurants, restaurant_coords, "
     "schedule_items, accommodation, accommodation_coords, budget_estimate, custom_pins, "
-    "geo_done, rating, rating_comment, created_at"
+    "geo_done, rating, rating_comment, actual_total, created_at"
 )
 
 
@@ -299,6 +300,21 @@ def rate_travel_plan(plan_id: int, google_user_id: str, rating: int, comment: st
                 "WHERE id = :id AND google_user_id = :uid"
             ),
             {"rating": rating, "comment": comment or "", "id": plan_id, "uid": google_user_id},
+        )
+        return result.rowcount > 0
+
+
+def set_plan_actual_total(plan_id: int, google_user_id: str, actual_total) -> bool:
+    """旅の実際の総額（円/人）を記録する（本人のプランのみ）。None で記録を消す。"""
+    with _get_engine().begin() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
+        result = conn.execute(
+            text(
+                "UPDATE travel_plans SET actual_total = :amount "
+                "WHERE id = :id AND google_user_id = :uid"
+            ),
+            {"amount": actual_total, "id": plan_id, "uid": google_user_id},
         )
         return result.rowcount > 0
 

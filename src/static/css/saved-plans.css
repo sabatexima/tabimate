@@ -208,7 +208,7 @@
   /* 二次操作（共有/しおり/カレンダー/チャット修正）は控えめな共通アウトラインに統一 */
   .share-btn, .cal-btn {
     background: none;
-    border: 1px solid #d9cfbe;
+    border: 1px solid var(--border-input);
     color: #6b6358;
     border-radius: 20px;
     padding: 6px 16px;
@@ -236,7 +236,7 @@
   .edit-btn {
     margin-right: auto;  /* 左寄せ（共有・削除は右側に残す）*/
     background: none;
-    border: 1px solid #d9cfbe;
+    border: 1px solid var(--border-input);
     color: #6b6358;
     border-radius: 20px;
     padding: 6px 16px;
@@ -255,7 +255,7 @@
   .plan-edit-input {
     flex: 1;
     min-width: 0;
-    border: 1px solid #e0d5c0;
+    border: 1px solid var(--border-input);
     border-radius: 20px;
     padding: 8px 14px;
     font-size: 0.9em;

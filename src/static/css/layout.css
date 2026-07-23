@@ -11,6 +11,7 @@
       /* 統一感のための共通トークン（面・境界線・角丸・影） */
       --surface: #fffdf8;         /* カード等の面 */
       --border: #e7ddca;          /* やわらかい共通の境界線 */
+      --border-input: #e0d5c0;    /* フォーム入力欄・セレクトの境界線 */
       --radius: 16px;             /* カードの角丸 */
       --radius-pill: 20px;        /* ボタン・チップ */
       --shadow-card: 0 4px 16px rgba(120, 110, 90, 0.08);

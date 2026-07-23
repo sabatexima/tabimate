@@ -18,10 +18,10 @@
   .sm-section .sm-hint { margin: 0 0 12px; font-size: 0.8em; color: var(--text-muted); line-height: 1.5; }
   .sm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .sm-row input[type=email], .sm-row input[type=text] {
-    flex: 1 1 180px; min-width: 0; border: 1px solid #e0d5c0; border-radius: 10px;
+    flex: 1 1 180px; min-width: 0; border: 1px solid var(--border-input); border-radius: 10px;
     padding: 9px 11px; font-size: 0.9em; background: #fff;
   }
-  .sm-row select { border: 1px solid #e0d5c0; border-radius: 10px; padding: 9px 8px; font-size: 0.9em; background: #fff; }
+  .sm-row select { border: 1px solid var(--border-input); border-radius: 10px; padding: 9px 8px; font-size: 0.9em; background: #fff; }
   .sm-btn {
     background: var(--primary-color); color: #fff; border: none; border-radius: 18px;
     padding: 9px 16px; font-weight: 600; cursor: pointer; font-size: 0.88em; white-space: nowrap;
@@ -40,7 +40,7 @@
     background: #b8ab92; color: #fff;
   }
   .sm-badge.edit { background: var(--primary-color); }
-  .sm-perm { border: 1px solid #e0d5c0; border-radius: 10px; padding: 4px 6px; font-size: 0.82em; background: #fff; cursor: pointer; }
+  .sm-perm { border: 1px solid var(--border-input); border-radius: 10px; padding: 4px 6px; font-size: 0.82em; background: #fff; cursor: pointer; }
   .sm-mini { background: none; border: none; cursor: pointer; font-size: 0.85em; padding: 2px 6px; border-radius: 6px; }
   .sm-mini.copy { color: var(--primary-color); }
   .sm-mini.del { color: var(--danger); }

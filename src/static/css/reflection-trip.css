@@ -22,7 +22,7 @@
   .title-editor { display: flex; gap: 8px; align-items: center; margin: 8px 0 2px; flex-wrap: wrap; }
   .title-editor[hidden] { display: none; }
   .title-editor input {
-    flex: 1 1 200px; min-width: 0; border: 1px solid #e0d5c0; border-radius: 10px;
+    flex: 1 1 200px; min-width: 0; border: 1px solid var(--border-input); border-radius: 10px;
     padding: 9px 12px; font-size: 1.1rem; font-weight: 700;
   }
   .trip-dates {
@@ -43,7 +43,7 @@
     font-size: 0.8em; color: var(--text-muted);
   }
   .dates-editor input[type="date"] {
-    border: 1px solid #e0d5c0; border-radius: 10px; padding: 8px 10px; font-size: 0.95em;
+    border: 1px solid var(--border-input); border-radius: 10px; padding: 8px 10px; font-size: 0.95em;
   }
 
   .section {

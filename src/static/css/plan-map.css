@@ -153,21 +153,21 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
 .leaflet-popup-content .pin-form { display: flex; flex-direction: column; gap: 6px; }
 .leaflet-popup-content .pin-form-top { display: flex; align-items: center; gap: 4px; }
 .leaflet-popup-content .pin-form .pin-name {
-  flex: 1 1 auto; min-width: 90px; padding: 4px 8px; border: 1px solid #d9cfbe; border-radius: 8px;
+  flex: 1 1 auto; min-width: 90px; padding: 4px 8px; border: 1px solid var(--border-input); border-radius: 8px;
   font-size: 13px; font-family: 'Zen Maru Gothic', sans-serif;
 }
 .leaflet-popup-content .pin-form .pin-type {
-  padding: 4px 6px; border: 1px solid #d9cfbe; border-radius: 8px; font-size: 12px;
+  padding: 4px 6px; border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
 .leaflet-popup-content .pin-colors { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .leaflet-popup-content .pin-color {
   width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #d9cfbe; cursor: pointer; padding: 0;
+  box-shadow: 0 0 0 1px var(--border-input); cursor: pointer; padding: 0;
 }
 .leaflet-popup-content .pin-color[data-color=""] {
   width: auto; height: auto; border-radius: 10px; background: #fff; color: #6b6358;
-  box-shadow: none; border: 1px solid #d9cfbe; font-size: 11px; padding: 2px 8px;
+  box-shadow: none; border: 1px solid var(--border-input); font-size: 11px; padding: 2px 8px;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
 .leaflet-popup-content .pin-color.sel { box-shadow: 0 0 0 2px var(--primary-color); }
@@ -191,7 +191,7 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   font-size: 0.95em;
   padding: 6px 10px;
   border-radius: 10px;
-  border: 1px solid #d9cfbe;
+  border: 1px solid var(--border-input);
   background: #fff;
   color: var(--text-main);
 }

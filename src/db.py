@@ -153,7 +153,8 @@ def _ensure_plan_columns(conn) -> None:
                      ("accommodation_coords", "JSON NULL"), ("custom_pins", "JSON NULL"),
                      ("geo_done", "TINYINT NOT NULL DEFAULT 0"),
                      ("total_per_person", "INT NULL"),
-                     ("actual_total", "INT NULL")):
+                     ("actual_total", "INT NULL"),
+                     ("packing_list", "JSON NULL")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -218,6 +219,7 @@ _PLAN_JSON_COLS = (
     "themes", "special_requirements", "spots", "spot_coords",
     "restaurants", "restaurant_coords", "schedule_items",
     "accommodation", "accommodation_coords", "budget_estimate", "custom_pins",
+    "packing_list",
 )
 # 取得時に SELECT する列（id / google_user_id は呼び出し側で付け足す）
 _PLAN_SELECT_COLS = (
@@ -225,7 +227,7 @@ _PLAN_SELECT_COLS = (
     "departure_location, transport_cost, remaining_budget, total_per_person, status, feedback, "
     "themes, special_requirements, spots, spot_coords, restaurants, restaurant_coords, "
     "schedule_items, accommodation, accommodation_coords, budget_estimate, custom_pins, "
-    "geo_done, rating, rating_comment, actual_total, created_at"
+    "geo_done, rating, rating_comment, actual_total, packing_list, created_at"
 )
 
 
@@ -315,6 +317,22 @@ def set_plan_actual_total(plan_id: int, google_user_id: str, actual_total) -> bo
                 "WHERE id = :id AND google_user_id = :uid"
             ),
             {"amount": actual_total, "id": plan_id, "uid": google_user_id},
+        )
+        return result.rowcount > 0
+
+
+def set_plan_packing_list(plan_id: int, google_user_id: str, items) -> bool:
+    """旅の持ち物リスト（文字列の配列）を保存する（本人のプランのみ）。"""
+    import json as _json
+    with _get_engine().begin() as conn:
+        conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
+        result = conn.execute(
+            text(
+                "UPDATE travel_plans SET packing_list = :items "
+                "WHERE id = :id AND google_user_id = :uid"
+            ),
+            {"items": _json.dumps(items or [], ensure_ascii=False), "id": plan_id, "uid": google_user_id},
         )
         return result.rowcount > 0
 

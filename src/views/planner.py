@@ -522,6 +522,27 @@ def rate_plan(plan_id):
     return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 
+@planner.route('/api/packing_list/<int:plan_id>', methods=['POST'])
+@login_required
+def api_packing_list(plan_id):
+    """プランから持ち物リストをLLMで生成し、保存して返す（本人のみ・レート制限あり）。"""
+    from db import get_travel_plan_by_id, set_plan_packing_list
+    user_id = session['user_id']
+    if _is_rate_limited(user_id):
+        return json.dumps({'status': 'ERROR', 'message': 'リクエストが多すぎます。しばらくお待ちください。'}), 429, {'Content-Type': 'application/json'}
+    plan = get_travel_plan_by_id(plan_id)
+    if not plan or plan.get('google_user_id') != user_id:
+        return json.dumps({'status': 'ERROR', 'message': 'プランが見つかりません'}), 404, {'Content-Type': 'application/json'}
+    try:
+        from services.packing import generate_packing_list
+        items = generate_packing_list(plan)
+    except Exception:
+        logger.exception("持ち物リスト生成に失敗: plan_id=%s", plan_id)
+        return json.dumps({'status': 'ERROR', 'message': '持ち物リストを作れませんでした。もう一度お試しください。'}), 500, {'Content-Type': 'application/json'}
+    set_plan_packing_list(plan_id, user_id, items)
+    return json.dumps({'status': 'OK', 'items': items}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+
+
 @planner.route('/save_actual_total/<int:plan_id>', methods=['POST'])
 @login_required
 def save_actual_total(plan_id):

@@ -17,6 +17,79 @@ function bookingUrl(destination) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((destination || '') + ' 宿')}`;
 }
 
+// 持ち物リスト: 未生成なら「作る」ボタン、生成済みならチェックリスト。
+// チェック状態は自分用アプリなので localStorage に保存（DBはリストだけ持つ）。
+function packingKey(planId) { return `tabimate_pack_${planId}`; }
+function loadChecked(planId) {
+  try { return new Set(JSON.parse(localStorage.getItem(packingKey(planId)) || '[]')); }
+  catch (e) { return new Set(); }
+}
+function saveChecked(planId, set) {
+  try { localStorage.setItem(packingKey(planId), JSON.stringify([...set])); } catch (e) {}
+}
+function packingHtml(plan) {
+  const items = plan.packing_list;
+  if (!items || !items.length) {
+    return `
+      <div class="plan-packing">
+        <span class="packing-label">🎒 持ちもの</span>
+        <p class="packing-hint">ちゃむが、この旅にぴったりの持ちものリストを作ります。</p>
+        <button class="packing-make" type="button">持ちものリストを作る</button>
+      </div>`;
+  }
+  const checked = loadChecked(plan.id);
+  const done = items.filter((_, i) => checked.has(i)).length;
+  const lis = items.map((it, i) => `
+    <li class="pack-item${checked.has(i) ? ' on' : ''}" data-i="${i}">
+      <span class="pack-check" aria-hidden="true">${checked.has(i) ? '🍀' : ''}</span>
+      <span class="pack-name">${esc(it)}</span>
+    </li>`).join('');
+  return `
+    <div class="plan-packing has-list">
+      <div class="packing-head">
+        <span class="packing-label">🎒 持ちもの</span>
+        <span class="packing-count">${done}/${items.length}</span>
+        <button class="packing-remake" type="button" aria-label="作り直す">↻</button>
+      </div>
+      <ul class="pack-list">${lis}</ul>
+    </div>`;
+}
+function mountPacking(card, plan) {
+  const box = card.querySelector('.plan-packing');
+  if (!box) return;
+  const rerender = () => { box.replaceWith(buildFromHtml(packingHtml(plan))); mountPacking(card, plan); };
+
+  const makeBtn = box.querySelector('.packing-make');
+  const remakeBtn = box.querySelector('.packing-remake');
+  const make = async (btn) => {
+    btn.disabled = true; btn.textContent = '作っています…';
+    try {
+      const res = await fetch(`/api/packing_list/${plan.id}`, { method: 'POST' });
+      const d = await res.json();
+      if (res.ok && d.status === 'OK') {
+        plan.packing_list = d.items;
+        try { localStorage.removeItem(packingKey(plan.id)); } catch (e) {}  // チェックはリセット
+        rerender();
+      } else { alert(d.message || '持ちものリストを作れませんでした'); btn.disabled = false; btn.textContent = '持ちものリストを作る'; }
+    } catch (e) { alert('通信エラーが発生しました。もう一度お試しください。'); btn.disabled = false; btn.textContent = '持ちものリストを作る'; }
+  };
+  if (makeBtn) makeBtn.addEventListener('click', () => make(makeBtn));
+  if (remakeBtn) remakeBtn.addEventListener('click', () => {
+    if (!confirm('持ちものリストを作り直しますか？\nチェックはリセットされます。')) return;
+    remakeBtn.textContent = '…'; make(remakeBtn);
+  });
+  // 項目タップでチェックのオン/オフ（四つ葉が咲く）
+  box.querySelectorAll('.pack-item').forEach((li) => {
+    li.addEventListener('click', () => {
+      const i = Number(li.dataset.i);
+      const set = loadChecked(plan.id);
+      if (set.has(i)) set.delete(i); else set.add(i);
+      saveChecked(plan.id, set);
+      rerender();
+    });
+  });
+}
+
 // 旅の会計（おこづかい帳）: 見積もりと実績を並べて差額を出す。見積もりが無い
 // プランには出さない。実績が入力済みなら比較表示、未入力なら記録フォーム。
 function accountingHtml(plan) {
@@ -365,11 +438,13 @@ function renderDetail(plan) {
                placeholder="例: 2日目をゆっくりに / 宿を変えて / 予算を抑えて">
         <button class="plan-edit-send" type="button">修正する</button>
       </div>
+      ${packingHtml(plan)}
       ${accountingHtml(plan)}
       ${plan.rating ? ratedRateHtml(plan.rating, plan.rating_comment || '') : editableRateHtml(plan)}
     </div>
   `;
   root.replaceChildren(card);
+  mountPacking(card, plan);
   mountAccounting(card, plan);
 
   // チャットで修正：入力欄の開閉

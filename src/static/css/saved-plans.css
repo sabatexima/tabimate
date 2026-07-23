@@ -375,6 +375,48 @@
     border: 1px solid #ece3d0;
   }
 
+  /* 持ちものリスト（クラフトのチェックリスト・四つ葉チェック）*/
+  .plan-packing {
+    margin: 12px 16px 0; padding: 14px 16px; border-radius: 16px;
+    background: linear-gradient(135deg, #fbf6ec 0%, #f1f7e9 100%);
+    border: 1px solid #ece3d0;
+  }
+  .packing-label { font-size: 0.95em; font-weight: 700; color: var(--text-main); }
+  .packing-hint { margin: 8px 0 12px; font-size: 0.85em; color: var(--text-muted); }
+  .packing-make {
+    background: var(--primary-color); color: #fff; border: none; border-radius: 999px;
+    padding: 9px 22px; font-family: inherit; font-weight: 700; font-size: 0.9em; cursor: pointer;
+  }
+  .packing-make:hover { background: var(--primary-hover); }
+  .packing-make:disabled { background: #b8ae9c; cursor: default; }
+  .packing-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .packing-count {
+    font-size: 0.72em; font-weight: 700; color: #4f8f46;
+    background: #eef7e6; border: 1px solid #cfe6bb; border-radius: 999px; padding: 2px 10px;
+  }
+  .packing-remake {
+    margin-left: auto; background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 1.1em; line-height: 1; padding: 2px 6px; border-radius: 8px;
+  }
+  .packing-remake:hover { background: #eef4e8; color: var(--primary-color); }
+  .pack-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+  .pack-item {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 7px 10px; border-radius: 10px; background: #fff;
+    border: 1px solid #ece3d0; transition: background 0.12s, border-color 0.12s;
+  }
+  .pack-item:hover { background: #fbfdf7; }
+  .pack-check {
+    width: 20px; height: 20px; flex: 0 0 auto; border-radius: 6px;
+    border: 1.5px dashed #c9bfa6; display: flex; align-items: center; justify-content: center;
+    font-size: 0.8em; line-height: 1;
+  }
+  .pack-item.on { background: #f2f9ec; border-color: #cfe6bb; }
+  .pack-item.on .pack-check { border-style: solid; border-color: #a8d494; background: #eef7e6; }
+  .pack-item.on .pack-name { color: var(--text-muted); text-decoration: line-through; text-decoration-color: #c9bfa6; }
+  .pack-name { font-size: 0.9em; color: var(--text-main); line-height: 1.35; }
+  @media (max-width: 520px) { .pack-list { grid-template-columns: 1fr; } }
+
   /* 旅の会計（おこづかい帳）: 評価カードと同じクラフトトーンで揃える */
   .plan-account {
     margin: 12px 16px 0; padding: 14px 16px; border-radius: 16px;

@@ -75,7 +75,7 @@
 
 /* ことばのアルバム（パステル付箋の壁）*/
 .words { margin-top: 30px; }
-.words-ttl { font-size: 1.05em; font-weight: 700; color: var(--text-main); margin: 0 0 2px; }
+.words-ttl { font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin: 0 0 2px; }
 .words-lead { font-size: 0.82em; color: var(--text-muted); margin: 0 0 14px; }
 .words-board { display: flex; flex-wrap: wrap; gap: 12px; }
 .w-sticker {

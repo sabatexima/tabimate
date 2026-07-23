@@ -303,6 +303,28 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     stickerBtn.disabled = false; stickerBtn.textContent = '付箋を作る';
   });
 
+  // --- ちゃむのベストショット選出（生成後はリロードで最新DB状態を反映）---
+  const bestBtn = document.getElementById('bestshot-btn');
+  if (bestBtn) {
+    bestBtn.addEventListener('click', async () => {
+      const orig = bestBtn.textContent;
+      bestBtn.disabled = true; bestBtn.textContent = 'ちゃむが選んでいます…';
+      try {
+        const res = await fetch(`/reflection/trips/${TRIP_ID}/best_shots`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          location.reload();  // サーバーレンダリングで金枠のベストショットを反映
+        } else {
+          alert(data.error || 'ベストショットを選べませんでした');
+          bestBtn.disabled = false; bestBtn.textContent = orig;
+        }
+      } catch (e) {
+        alert('ベストショットを選べませんでした');
+        bestBtn.disabled = false; bestBtn.textContent = orig;
+      }
+    });
+  }
+
   // --- 付箋を1枚削除 ---
   board.addEventListener('click', async (ev) => {
     const del = ev.target.closest('.del');

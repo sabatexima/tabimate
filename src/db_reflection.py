@@ -142,6 +142,8 @@ def _ensure_all(conn) -> None:
     _ensure_column(conn, "trips", "linked_plan_id", "linked_plan_id INT NULL")
     # 既存DB向け: 一覧カードの表紙に使う写真ID（未設定なら最古の写真を表紙にする）
     _ensure_column(conn, "trips", "cover_photo_id", "cover_photo_id INT NULL")
+    # 既存DB向け: ちゃむが選んだベストショット [{photo_id, reason}] を保存する列
+    _ensure_column(conn, "trips", "best_shots", "best_shots JSON NULL")
     # 旧来のお気に入りをユーザー別テーブルへ移送
     _migrate_favorites_once(conn)
 
@@ -320,6 +322,17 @@ def set_trip_cover(trip_id: int, user_id: str, photo_id: int | None) -> bool:
             {"pid": photo_id, "tid": trip_id},
         )
     return True
+
+
+def set_trip_best_shots(trip_id: int, user_id: str, best: list) -> bool:
+    """ちゃむが選んだベストショット [{photo_id, reason}] を保存する（本人のみ）。"""
+    with get_engine().begin() as conn:
+        _ensure_all(conn)
+        result = conn.execute(
+            text("UPDATE trips SET best_shots = :b WHERE id = :tid AND user_id = :uid"),
+            {"b": json.dumps(best or [], ensure_ascii=False), "tid": trip_id, "uid": user_id},
+        )
+        return result.rowcount > 0
 
 
 def is_trip_favorite(user_id: str, trip_id: int) -> bool:

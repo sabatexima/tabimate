@@ -156,6 +156,25 @@ def trip_detail(trip_id: int):
         p["url"] = url_map.get(p["storage_path"])
         p["thumb_url"] = thumb_map.get(p["storage_path"])
     stickers = repo.get_stickers(trip_id)
+
+    # ちゃむのベストショット（保存済みなら photo_id → 表示URL を解決して渡す）
+    best_shots = []
+    raw_best = trip.get("best_shots")
+    if isinstance(raw_best, str):
+        try:
+            import json as _json
+            raw_best = _json.loads(raw_best)
+        except Exception:
+            raw_best = []
+    if raw_best:
+        by_id = {p["id"]: p for p in photos}  # 削除済みの写真は自然に除外される
+        for b in raw_best:
+            p = by_id.get(b.get("photo_id"))
+            if p:
+                best_shots.append({
+                    "url": p.get("url"), "thumb_url": p.get("thumb_url"),
+                    "reason": b.get("reason", ""),
+                })
     # 撮影地マップ用：GPS のある写真だけを撮影時刻順に並べた「足あと」点列
     footprints = [
         {
@@ -188,6 +207,7 @@ def trip_detail(trip_id: int):
         "reflection/trip.html",
         trip=trip, photos=photos, stickers=stickers, footprints=footprints,
         my_plans=my_plans, linked_plan_id=linked_plan_id, planned_points=planned,
+        best_shots=best_shots,
     )
 
 
@@ -429,6 +449,35 @@ def generate_stickers(trip_id: int):
                 trip_id, len(items), usage["input_tokens"], usage["output_tokens"])
     # 付箋の言葉のみ返す。basis（生成根拠）・トークン等の内部情報は返さない。
     return jsonify({"stickers": [{"text": it["text"]} for it in items]})
+
+
+@reflection.route("/trips/<int:trip_id>/best_shots", methods=["POST"])
+@login_required
+def generate_best_shots(trip_id: int):
+    """写真から、ちゃむが「飾りたいベストショット」を最大3枚選んで保存する。"""
+    _require_trip(trip_id)
+    photos = repo.get_photos(trip_id)
+    if len(photos) < 3:
+        return jsonify({"error": "写真が3枚以上あると、ベストショットを選べます"}), 400
+    # 旅全体を均等サンプリングしつつ、選ばれた画像→写真を特定できるよう対応を保つ
+    sample_n = min(12, len(photos))
+    step = max(1, len(photos) // sample_n)
+    sampled = photos[::step][:sample_n]
+    images, valid = [], []
+    for p in sampled:
+        data = storage.read_bytes(p["storage_path"])
+        if data:
+            images.append(data)
+            valid.append(p)
+    if len(images) < 3:
+        return jsonify({"error": "写真を読み込めませんでした。もう一度お試しください。"}), 400
+    picks, usage = trip_interpreter.select_best_photos(images)
+    best = [{"photo_id": valid[pk["index"]]["id"], "reason": pk["reason"]}
+            for pk in picks if pk["index"] < len(valid)]
+    repo.set_trip_best_shots(trip_id, _uid(), best)
+    logger.info("ベストショット選出: trip_id=%s picks=%d tokens(in/out)=%d/%d",
+                trip_id, len(best), usage.get("input_tokens", 0), usage.get("output_tokens", 0))
+    return jsonify({"count": len(best)})
 
 
 @reflection.route("/trips/<int:trip_id>/stickers", methods=["GET"])

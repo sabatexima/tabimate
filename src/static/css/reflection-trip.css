@@ -189,6 +189,29 @@
   .photo-count { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; }
   .muted { color: var(--text-muted); font-size: 0.9em; }
 
+  /* ちゃむのベストショット（金の額縁に飾った一枚）*/
+  .bestshot-section { border-color: rgba(224,180,90,0.4); }
+  .bestshot-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px; margin: 4px 0 16px;
+  }
+  .bestshot { margin: 0; }
+  .bestshot-frame {
+    padding: 6px; border-radius: 8px;
+    background: linear-gradient(135deg, #f6e5b0 0%, #e8c874 50%, #f2d98e 100%);
+    box-shadow: 0 2px 5px rgba(150,110,40,0.28), inset 0 0 0 1px rgba(255,255,255,0.5);
+  }
+  .bestshot-frame img {
+    width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;
+    border-radius: 4px; background: #efe9dc;
+    border: 2px solid #fffdf6; transform: translateZ(0);  /* 回転はしないが描画安定のため */
+  }
+  .bestshot-reason {
+    margin-top: 8px; font-size: 0.82em; line-height: 1.5; color: #7a6a4a;
+    text-align: center;
+  }
+  .bestshot-reason::before { content: "🍀 "; }
+
   .danger-zone { border-color: rgba(231,76,60,0.3); }
   .danger-zone h2 { color: var(--danger); }
   .btn.danger { background: var(--danger); }

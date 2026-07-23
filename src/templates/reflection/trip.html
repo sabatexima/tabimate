@@ -70,6 +70,24 @@
   <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
 </div>
 
+<!-- ちゃむのベストショット（写真が3枚以上あるときだけ）-->
+{% if photos|length >= 3 %}
+<div class="section bestshot-section">
+  <h2>🏅 ちゃむのベストショット</h2>
+  <p class="hint">たくさんの写真から、飾りたい一枚をちゃむが選びます。</p>
+  <div class="bestshot-grid" id="bestshot-grid">
+    {% for b in best_shots %}
+    <figure class="bestshot">
+      <div class="bestshot-frame"><img src="{{ b.thumb_url or b.url }}" data-full="{{ b.url }}" alt="ベストショット"
+           loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.full;"></div>
+      {% if b.reason %}<figcaption class="bestshot-reason">{{ b.reason }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+  <button class="btn" id="bestshot-btn">{{ 'ベストショットを選び直す' if best_shots else 'ベストショットを選ぶ' }}</button>
+</div>
+{% endif %}
+
 {% if footprints or my_plans %}
 <!-- 旅の足あと（撮影地マップ）＋プランの重ね合わせ -->
 <div class="section">

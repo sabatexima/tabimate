@@ -60,7 +60,7 @@ function coverCard(plan, opts = {}) {
   const del = item.querySelector('.menu-del');
   if (del) del.addEventListener('click', async () => {
     menu.hidden = true;
-    if (!confirm(`「${plan.destination}」のプランを削除しますか？`)) return;
+    if (!confirm(`「${plan.destination}」のプランを削除しますか？\n元に戻せません。`)) return;
     try {
       const res = await fetch(`/delete_plan/${plan.id}`, { method: 'DELETE' });
       const result = await res.json();

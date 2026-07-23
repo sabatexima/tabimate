@@ -1,6 +1,7 @@
 :root {
       --primary-color: #4fa83a;
       --primary-dark: #3b8a2c;    /* 文字・濃いめのアクセント */
+      --primary-hover: #418c30;   /* プライマリボタンのホバー背景 */
       --accent-pink: #f08ba0;     /* ちゃむの耳のやわらかいピンク */
       --glow-cream: #f6f6a5;      /* 四つ葉まわりの淡い光 */
       --text-main: #4a4540;
@@ -14,6 +15,9 @@
       --radius-pill: 20px;        /* ボタン・チップ */
       --shadow-card: 0 4px 16px rgba(120, 110, 90, 0.08);
       --shadow-soft: 0 2px 8px rgba(120, 110, 90, 0.06);
+      /* 削除・取消などの危険操作の赤（暖色寄りに統一し、絵本トーンに馴染ませる）*/
+      --danger: #e05a4a;
+      --danger-hover: #cf4636;
       /* プランヘッダー等の緑グラデ。ビビッドなライムを避け、落ち着いた葉色に */
       --header-grad: linear-gradient(135deg, #4a9d3a 0%, #6fb152 100%);
     }

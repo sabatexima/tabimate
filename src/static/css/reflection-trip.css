@@ -114,7 +114,7 @@
     opacity: 0; transition: opacity 0.1s;
   }
   .sticker:hover .del { opacity: 1; }
-  .sticker .del:hover { color: #e74c3c; }
+  .sticker .del:hover { color: var(--danger); }
   .sticker-empty { color: var(--text-muted); font-size: 0.9em; margin-top: 14px; }
 
   /* 写真＝アルバムに貼ったポラロイド（一覧ページと同じ言語）。
@@ -169,7 +169,7 @@
     opacity: 0; transition: opacity 0.1s;
   }
   .photo:hover .photo-del { opacity: 1; }
-  .photo-del:hover { background: #e74c3c; color: #fff; }
+  .photo-del:hover { background: var(--danger); color: #fff; }
   /* 一覧の表紙に指定するチップ（左上・ホバーで出現、選択中は常時表示）*/
   .photo-cover {
     position: absolute; top: 9px; left: 9px;
@@ -190,9 +190,9 @@
   .muted { color: var(--text-muted); font-size: 0.9em; }
 
   .danger-zone { border-color: rgba(231,76,60,0.3); }
-  .danger-zone h2 { color: #e74c3c; }
-  .btn.danger { background: #e74c3c; }
-  .btn.danger:hover { background: #d63a2a; }
+  .danger-zone h2 { color: var(--danger); }
+  .btn.danger { background: var(--danger); }
+  .btn.danger:hover { background: var(--danger-hover); }
 
   /* 写真の拡大表示（ライトボックス）*/
   .lightbox {

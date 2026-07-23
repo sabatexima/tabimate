@@ -346,7 +346,7 @@ function renderDetail(plan) {
   });
 
   card.querySelector('.delete-btn').addEventListener('click', async (e) => {
-    if (!confirm('このプランを削除しますか？')) return;
+    if (!confirm(`「${plan.destination}」のプランを削除しますか？\n元に戻せません。`)) return;
     const btn = e.currentTarget;
     btn.disabled = true;
     btn.textContent = '削除中...';

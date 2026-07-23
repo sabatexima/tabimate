@@ -26,6 +26,6 @@
     color: var(--text-muted); border-radius: 14px; padding: 3px 10px;
     font-size: 0.72em; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s;
   }
-  .unshare-btn:hover { background: #f43f5e; color: #fff; border-color: #f43f5e; }
+  .unshare-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
   .empty-state { text-align: center; color: var(--text-muted); padding: 50px 0; font-size: 1.0em; }
   .empty-state .icon { font-size: 2.6rem; margin-bottom: 10px; }

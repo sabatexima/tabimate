@@ -124,7 +124,7 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   cursor: pointer;
   font-family: inherit;
 }
-.plan-map-editbar .pin-edit-btn.save { border-color: #4fa83a; color: #fff; background: #4fa83a; }
+.plan-map-editbar .pin-edit-btn.save { border-color: var(--primary-color); color: #fff; background: var(--primary-color); }
 .plan-map-editbar .pin-edit-btn.cancel { border-color: #d5cbb8; color: #8a817a; }
 .plan-map-editbar .pin-edit-hint { font-size: 11px; color: #8a817a; }
 .plan-map-editbar .pin-unplaced { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
@@ -141,9 +141,9 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
 }
 .leaflet-popup-content .pin-del {
   margin-top: 4px;
-  border: 1px solid #f43f5e;
+  border: 1px solid var(--danger);
   background: #fff;
-  color: #f43f5e;
+  color: var(--danger);
   border-radius: 10px;
   padding: 2px 12px;
   font-size: 12px;
@@ -170,9 +170,9 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   box-shadow: none; border: 1px solid #d9cfbe; font-size: 11px; padding: 2px 8px;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
-.leaflet-popup-content .pin-color.sel { box-shadow: 0 0 0 2px #4fa83a; }
+.leaflet-popup-content .pin-color.sel { box-shadow: 0 0 0 2px var(--primary-color); }
 .leaflet-popup-content .pin-form .pin-add {
-  border: none; background: #4fa83a; color: #fff; border-radius: 8px;
+  border: none; background: var(--primary-color); color: #fff; border-radius: 8px;
   padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
 }
 

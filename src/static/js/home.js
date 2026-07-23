@@ -163,8 +163,11 @@ const chatBox = document.getElementById('chat-box');
     if (!message) return;
 
     currentRequestId = generateId();
-    // リロードしても「生成中」を復元できるよう、進行中の request_id を控えておく
-    try { localStorage.setItem('tabimate_gen', currentRequestId); } catch (e) { /* 非対応環境は無視 */ }
+    // リロードしても「生成中」を復元できるよう request_id と質問文を控えておく
+    // （エラー/中断で結果が残らなかった場合、復元時に質問を入力欄へ戻すのに使う）
+    try {
+      localStorage.setItem('tabimate_gen', JSON.stringify({ id: currentRequestId, msg: message }));
+    } catch (e) { /* 非対応環境は無視 */ }
 
     messageInput.disabled = true;
     sendButton.style.display = 'none';
@@ -275,9 +278,13 @@ const chatBox = document.getElementById('chat-box');
   // リロード後、生成が続いていたら「作成中」表示を復元し、完了を待って結果を出す。
   // （SSEストリームには再接続できないため、状態をポーリングして完了を検知する）
   async function resumeIfGenerating() {
-    let rid = null;
-    try { rid = localStorage.getItem('tabimate_gen'); } catch (e) { return; }
-    if (!rid) return;
+    let saved = null;
+    try {
+      const raw = localStorage.getItem('tabimate_gen');
+      saved = raw ? JSON.parse(raw) : null;  // 旧形式(文字列)はparse失敗→復元しない
+    } catch (e) { saved = null; }
+    if (!saved || !saved.id) { try { localStorage.removeItem('tabimate_gen'); } catch (e) {} return; }
+    const rid = saved.id;
 
     const isActive = async () => {
       try {
@@ -286,13 +293,34 @@ const chatBox = document.getElementById('chat-box');
       } catch (e) { return null; }  // 判定不能
     };
 
-    const active = await isActive();
-    if (active === false) {
-      // 既に完了/中断済み → 最新の履歴を表示してマーカーを消す
+    // 生成が終わったあとの後片付け。結果が残らなかった（エラー/中断）ときは
+    // 質問文を入力欄に戻し、リロードしない時と同じ案内を出す。
+    const finishResume = async () => {
       try { localStorage.removeItem('tabimate_gen'); } catch (e) {}
-      loadMessages(true);
-      return;
-    }
+      currentRequestId = null;
+      messageInput.disabled = false;
+      sendButton.style.display = 'flex';
+      stopButton.style.display = 'none';
+      stopThinking();
+      let msgs = [];
+      try { msgs = await (await fetch('/get_messages')).json(); } catch (e) {}
+      await loadMessages(true);
+      const last = msgs[msgs.length - 1];
+      // 最後がユーザー発言＝AIの応答が残っていない＝エラーか中断で終わった
+      if ((!last || last.role === 'user') && saved.msg) {
+        restoreInput(saved.msg);
+        showSystemMessage(
+          '前回のプラン作成は最後まで終わりませんでした。\n'
+          + 'お手数ですが、下のボタンからもう一度お試しください🍀',
+          saved.msg
+        );
+      } else {
+        messageInput.focus();
+      }
+    };
+
+    const active = await isActive();
+    if (active === false) { await finishResume(); return; }  // 既に完了/中断/エラー
     if (active === null) return;  // 通信失敗時は次回のリロードに任せる
 
     // まだ生成中 → 作成中UIを復帰（停止ボタンも currentRequestId 経由で機能する）
@@ -306,17 +334,10 @@ const chatBox = document.getElementById('chat-box');
     const poll = setInterval(async () => {
       ticks += 1;
       const still = await isActive();
-      if (still === null) return;                 // 一時的な通信エラーは次回リトライ
-      if (still && ticks < 360) return;           // まだ生成中（上限15分で強制解除）
+      if (still === null) return;         // 一時的な通信エラーは次回リトライ
+      if (still && ticks < 360) return;   // まだ生成中（上限15分で強制解除）
       clearInterval(poll);
-      try { localStorage.removeItem('tabimate_gen'); } catch (e) {}
-      currentRequestId = null;
-      messageInput.disabled = false;
-      sendButton.style.display = 'flex';
-      stopButton.style.display = 'none';
-      stopThinking();
-      messageInput.focus();
-      loadMessages(true);
+      await finishResume();
     }, 2500);
   }
 

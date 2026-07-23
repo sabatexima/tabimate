@@ -119,6 +119,15 @@
     background: linear-gradient(180deg, #ffd759, #f5b301); color: #7a5600;
   }
 
+  /* 出発カウントダウン（四つ葉スタンプ風のやわらかい緑ラベル）*/
+  .cover-countdown {
+    align-self: flex-start;
+    background: linear-gradient(135deg, #eef7e6 0%, #e2f2d4 100%);
+    border: 1px solid #cfe6bb;
+    color: #4f8f46; font-weight: 700; font-size: 0.72em;
+    letter-spacing: 0.02em; border-radius: 999px; padding: 3px 12px;
+  }
+
   /* ===== 詳細ページ（1冊をひらいた状態）===== */
   .detail-wrap { max-width: 860px; margin: 0 auto; }
   .detail-wrap .back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }

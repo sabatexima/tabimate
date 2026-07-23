@@ -173,6 +173,15 @@ def saved_plans():
     return render_template("saved_plans.html")
 
 
+def _add_depart_iso(plan: dict) -> dict:
+    """出発カウントダウン用に、自由文字列の travel_date を ISO 日付へ正規化して付与する。
+    パースできない/日付未設定なら None（フロントは表示を出さない）。"""
+    from weather import parse_date
+    d = parse_date(plan.get("travel_date"))
+    plan["depart_iso"] = d.isoformat() if d else None
+    return plan
+
+
 @planner.route("/plan/<int:plan_id>")
 @login_required
 def plan_detail(plan_id):
@@ -184,6 +193,7 @@ def plan_detail(plan_id):
     plan.pop("google_user_id", None)
     if plan.get("created_at") is not None:
         plan["created_at"] = str(plan["created_at"])  # tojson 用に文字列へ
+    _add_depart_iso(plan)
     return render_template("plan_detail.html", plan=plan)
 
 
@@ -770,6 +780,8 @@ def get_my_plans():
     try:
         from db import get_travel_plans
         plans = get_travel_plans(session['user_id'])
+        for p in plans:
+            _add_depart_iso(p)
         return json.dumps({'status': 'OK', 'plans': plans}, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         logger.exception("プラン一覧取得失敗: %s", e)

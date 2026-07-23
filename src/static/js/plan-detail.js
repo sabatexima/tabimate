@@ -135,15 +135,36 @@ function heroHtml(plan) {
     plan.num_people != null ? `👥 ${esc(plan.num_people)}人` : '',
     cost,
   ].filter(Boolean).map((c) => `<span class="cover-chip">${c}</span>`).join('');
+  const countdown = countdownLabel(plan.depart_iso);
   return `
     <div class="plan-cover">
       <span class="cover-icon" aria-hidden="true">🗾</span>
       <span class="cover-main">
         <span class="cover-dest">${esc(plan.destination)}</span>
+        ${countdown ? `<span class="cover-countdown">${countdown}</span>` : ''}
         <span class="cover-chips">${chips}</span>
         ${saved ? `<span class="cover-meta">保存日 ${esc(saved)}</span>` : ''}
       </span>
     </div>`;
+}
+
+// 出発日(ISO)まであと何日か。過去は null。
+function daysUntilDepart(iso) {
+  if (!iso) return null;
+  const dep = new Date(iso + 'T00:00:00');
+  if (isNaN(dep)) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = Math.round((dep - today) / 86400000);
+  return d >= 0 ? d : null;
+}
+
+// 出発カウントダウンの絵本トーンなラベル（四つ葉スタンプ風）。過去は空文字。
+function countdownLabel(iso) {
+  const d = daysUntilDepart(iso);
+  if (d === null) return '';
+  if (d === 0) return '🍀 今日は出発の日！';
+  if (d === 1) return '🍀 明日は出発！';
+  return `🍀 旅まであと${d}日`;
 }
 
 // 詳細（天気・アコーディオン・宿・地図）

@@ -11,6 +11,25 @@ function fmt(n) {
 const container = document.getElementById('plans-container');
 
 // 表紙カード（絵本の背表紙＋タイトル＋ちいさなチップ）
+// 出発日(ISO)まであと何日か。過去は null（旅は終わっている）。
+function daysUntilDepart(iso) {
+  if (!iso) return null;
+  const dep = new Date(iso + 'T00:00:00');
+  if (isNaN(dep)) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = Math.round((dep - today) / 86400000);
+  return d >= 0 ? d : null;
+}
+
+// 出発カウントダウンの絵本トーンなラベル（四つ葉スタンプ風）。過去は空文字。
+function countdownLabel(iso) {
+  const d = daysUntilDepart(iso);
+  if (d === null) return '';
+  if (d === 0) return '🍀 今日は出発の日！';
+  if (d === 1) return '🍀 明日は出発！';
+  return `🍀 旅まであと${d}日`;
+}
+
 function coverCard(plan, opts = {}) {
   const shared = !!opts.shared;
   const item = document.createElement('div');
@@ -29,6 +48,7 @@ function coverCard(plan, opts = {}) {
     cost,
   ].filter(Boolean).map((c) => `<span class="cover-chip">${c}</span>`).join('');
   const rated = !shared && plan.rating;
+  const countdown = countdownLabel(plan.depart_iso);
 
   item.innerHTML = `
     <a class="plan-cover-card" href="${href}">
@@ -36,6 +56,7 @@ function coverCard(plan, opts = {}) {
       <span class="cover-icon" aria-hidden="true">🗾</span>
       <span class="cover-main">
         <span class="cover-dest">${esc(plan.destination)}${shared ? '<span class="cover-shared">🤝 共有</span>' : ''}</span>
+        ${countdown ? `<span class="cover-countdown">${countdown}</span>` : ''}
         <span class="cover-chips">${chips}</span>
         ${saved ? `<span class="cover-meta">保存日 ${esc(saved)}</span>` : ''}
       </span>

@@ -193,12 +193,17 @@ basis はユーザーには見せない内部メモなので、率直に書い�
 # ベストショット選出 ― 旅の写真から「飾りたい一枚」を選ぶ
 # ----------------------------------------------------------------------
 class _BestShot(BaseModel):
-    index: int = Field(description="選んだ写真の番号（0から始まる）")
+    index: int = Field(description="選んだ写真の番号（0から始まる整数）")
     reason: str = Field(description="その写真を選んだ理由（15〜35字のあたたかい一言）")
 
 
 class _BestShotsOutput(BaseModel):
-    best: list = Field(default_factory=list, description="ベストショット（最大3枚）")
+    # 型付きの list[_BestShot] にすること。素の list や関数内で動的定義した
+    # モデルだと構造化出力のスキーマが正しく伝わらず、選出が1枚に潰れる。
+    best: List[_BestShot] = Field(
+        default_factory=list,
+        description="ベストショットの配列。必ず複数枚（最大3枚）入れること",
+    )
 
 
 def select_best_photos(images: list, count: int = 3):
@@ -211,27 +216,26 @@ def select_best_photos(images: list, count: int = 3):
     n = len(images or [])
     if n == 0:
         return [], {"input_tokens": 0, "output_tokens": 0}
-
-    class _Item(BaseModel):
-        index: int = Field(description=f"選んだ写真の番号（0〜{n - 1}）")
-        reason: str = Field(description="選んだ理由（15〜35字のあたたかい一言）")
-
-    class _Out(BaseModel):
-        best: list[_Item] = Field(default_factory=list)
+    # 写真が少ないときは枚数に合わせて要求数を下げる（3枚しかないのに3枚選ばせない）
+    want = max(1, min(count, n - 1)) if n < count + 1 else count
 
     prompt = f"""あなたは旅の思い出を一緒に振り返るやさしい相棒「ちゃむ」です。
 以下は、ある旅で撮られた {n} 枚の写真です（0番から {n - 1} 番の順に並んでいます）。
-この中から「思い出として飾りたいベストショット」を最大 {count} 枚選んでください。
+この中から「思い出として飾りたいベストショット」を選んでください。
 
 # 選び方
+・**ちょうど {want} 枚**選ぶこと（1枚だけで終わらせない）。
 ・景色・表情・その場の空気が伝わる、心に残る一枚を選ぶ。
 ・似た写真が続くときは、いちばん良い一枚だけを選ぶ。
 ・番号は 0〜{n - 1} の範囲で、重複させないこと。
 ・それぞれに、選んだ理由を 15〜35字のあたたかい一言で添える
   （例:「光の入り方がやわらかくて、その場の静けさが伝わる一枚」）。
+
+# 出力
+best 配列に {want} 件（index と reason のペア）を入れて返すこと。
 """
     model_input = _build_input(prompt, images, tag="best_shots", max_images=n)
-    parsed, usage = _invoke(_Out, model_input, tag="best_shots")
+    parsed, usage = _invoke(_BestShotsOutput, model_input, tag="best_shots")
     picks, seen = [], set()
     if parsed and getattr(parsed, "best", None):
         for b in parsed.best:

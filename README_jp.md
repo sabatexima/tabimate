@@ -130,7 +130,7 @@ python3 app.py
 | `TAVILY_API_KEY` | ✓ | Tavily Web 検索 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | ✓ | DB 接続情報 |
-| `STADIA_API_KEY` | | 地図の水彩タイル（未設定時は標準OSMタイル） |
+| `STADIA_API_KEY` | | 地図の水彩タイル（未設定時は標準OSMタイル）。⚠️ タイル取得の仕様上ブラウザに露出するため、**Stadia側で必ずドメイン制限をかける**（無料枠のタダ乗り防止） |
 | `GOOGLE_MAPS_API_KEY` | | Google Placesでジオコーディング強化。未設定なら無料スタック（Nominatim＋地理院）のみ |
 | `DB_SSL` / `DB_SSL_CA` | △ | TLS接続（TiDB Cloud は `DB_SSL=true` 必須） |
 | `CLOUD_SQL_INSTANCE` | △ | 設定時は Cloud SQL Connector 経由 |
@@ -248,6 +248,10 @@ python tests/test_smoke.py   # プラン生成の通し（APIキー必要）
 - プランHTMLはユーザー文字列をエスケープ（XSS対策）、ローカル写真はパストラバーサル対策。
 - レート制限（チャット5回/60秒・外部API系は別枠）、アップロード制限（最大50枚・拡張子ホワイトリスト・サイズ上限）。
 - 全レスポンスに `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy`。`ProxyFix` で Cloud Run のforwardedヘッダを信頼。
+- **外部APIキーの制限**（サービス側の設定が前提）:
+  - `STADIA_API_KEY` &mdash; タイル取得のためブラウザに露出する。Stadia管理画面で**ドメイン（Allowed origins）制限**を必ず設定し、無料プランのまま運用すれば予期せぬ課金を避けられる。
+  - `GOOGLE_MAPS_API_KEY` &mdash; サーバーからのみ使用（`X-Goog-Api-Key` ヘッダ送信でURL/ログに残らない）。GCP側で**アプリケーション制限は「なし」または IP 制限**（リファラー制限はサーバー呼び出しを弾くため不可）、**API制限は Places API (New) のみ**に絞る。
+  - `GOOGLE_API_KEY`（Gemini）/ `TAVILY_API_KEY` &mdash; サーバー専用。フロントには一切渡さない。
 
 ### トラブルシューティング
 

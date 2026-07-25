@@ -132,7 +132,7 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 | `TAVILY_API_KEY` | ✓ | Tavily web search |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | ✓ | Database connection |
-| `STADIA_API_KEY` | | Watercolor map tiles (falls back to standard OSM tiles) |
+| `STADIA_API_KEY` | | Watercolor map tiles (falls back to standard OSM tiles). ⚠️ Exposed to the browser by design (tile requests), so **always set a domain restriction on the Stadia side** to prevent free-quota piggybacking |
 | `GOOGLE_MAPS_API_KEY` | | Google Places-powered geocoding. Unset = free stack (Nominatim + GSI) only |
 | `DB_SSL` / `DB_SSL_CA` | cond. | TLS connection (`DB_SSL=true` required for TiDB Cloud) |
 | `CLOUD_SQL_INSTANCE` | cond. | Connect via Cloud SQL Connector when set |
@@ -250,6 +250,10 @@ python tests/test_smoke.py   # E2E plan generation (needs API keys)
 - Plan HTML escapes user strings (XSS); local photo serving is path-traversal-guarded.
 - Rate limiting (chat 5/60s, external-API routes separate), upload limits (≤50 files, extension whitelist, size cap).
 - `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` on all responses. `ProxyFix` trusts Cloud Run forwarded headers.
+- **External API key restrictions** (configured on the provider side):
+  - `STADIA_API_KEY` &mdash; exposed to the browser for tile requests. Always set a **domain (allowed origins) restriction** in the Stadia dashboard; staying on the free plan avoids surprise billing.
+  - `GOOGLE_MAPS_API_KEY` &mdash; server-side only (sent via the `X-Goog-Api-Key` header, so it never lands in URLs or logs). In GCP, set **application restriction to none or IP** (referrer restrictions would block server calls) and **restrict the API to Places API (New)**.
+  - `GOOGLE_API_KEY` (Gemini) / `TAVILY_API_KEY` &mdash; server-side only; never passed to the frontend.
 
 ### Troubleshooting
 

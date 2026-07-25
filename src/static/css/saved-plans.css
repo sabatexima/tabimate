@@ -439,6 +439,13 @@
   .account-save:hover, .account-edit:hover { background: var(--primary-hover); }
   .account-edit { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); margin-left: auto; }
   .account-edit:hover { background: #f1f8ec; }
+  /* 修正モードの「やめる」（記録を消さずに元の表示へ戻る）*/
+  .account-cancel {
+    background: none; border: none; color: var(--text-muted);
+    font-family: inherit; font-size: 0.82em; cursor: pointer;
+    padding: 7px 10px; border-radius: 999px;
+  }
+  .account-cancel:hover { background: #f3f1e8; color: var(--text-main); }
   .account-hint { margin: 10px 0 0; font-size: 0.8em; color: var(--text-muted); }
   /* 見積もり→実際の比較（絵本のスタンプ帳ふう）*/
   .plan-account.rated { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }

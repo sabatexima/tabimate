@@ -62,6 +62,8 @@ function mountPacking(card, plan) {
   const makeBtn = box.querySelector('.packing-make');
   const remakeBtn = box.querySelector('.packing-remake');
   const make = async (btn) => {
+    const label = btn.textContent;  // 失敗時に元の表示へ戻す（作る/↻ で異なるため）
+    const fail = (msg) => { alert(msg); btn.disabled = false; btn.textContent = label; };
     btn.disabled = true; btn.textContent = '作っています…';
     try {
       const res = await fetch(`/api/packing_list/${plan.id}`, { method: 'POST' });
@@ -70,13 +72,13 @@ function mountPacking(card, plan) {
         plan.packing_list = d.items;
         try { localStorage.removeItem(packingKey(plan.id)); } catch (e) {}  // チェックはリセット
         rerender();
-      } else { alert(d.message || '持ちものリストを作れませんでした'); btn.disabled = false; btn.textContent = '持ちものリストを作る'; }
-    } catch (e) { alert('通信エラーが発生しました。もう一度お試しください。'); btn.disabled = false; btn.textContent = '持ちものリストを作る'; }
+      } else { fail(d.message || '持ちものリストを作れませんでした'); }
+    } catch (e) { fail('通信エラーが発生しました。もう一度お試しください。'); }
   };
   if (makeBtn) makeBtn.addEventListener('click', () => make(makeBtn));
   if (remakeBtn) remakeBtn.addEventListener('click', () => {
     if (!confirm('持ちものリストを作り直しますか？\nチェックはリセットされます。')) return;
-    remakeBtn.textContent = '…'; make(remakeBtn);
+    make(remakeBtn);
   });
   // 項目タップでチェックのオン/オフ（四つ葉が咲く）
   box.querySelectorAll('.pack-item').forEach((li) => {
@@ -92,24 +94,27 @@ function mountPacking(card, plan) {
 
 // 旅の会計（おこづかい帳）: 見積もりと実績を並べて差額を出す。見積もりが無い
 // プランには出さない。実績が入力済みなら比較表示、未入力なら記録フォーム。
-function accountingHtml(plan) {
+function accountingHtml(plan, editing = false) {
   const est = plan.total_per_person || plan.budget_limit || null;
   if (!est) return '';  // 費用の目安が無いプランでは会計を出さない
   const actual = plan.actual_total;
-  if (actual == null) {
+  // editing=true のときは、記録済みでも入力フォームを出す（元の値は保持したまま）
+  if (actual == null || editing) {
+    const cur = actual != null ? ` value="${esc(actual)}"` : '';
     return `
       <div class="plan-account" data-est="${est}">
         <span class="account-label">💰 旅の会計</span>
         <div class="account-row">
           <span class="account-est">見積もり ${fmt(est)}円/人</span>
           <span class="account-input-wrap">
-            <input type="number" class="account-input" inputmode="numeric" min="0"
+            <input type="number" class="account-input" inputmode="numeric" min="0"${cur}
                    placeholder="使った額" aria-label="実際に使った額（円/人）">
             <span class="account-yen">円/人</span>
           </span>
-          <button class="account-save" type="button">記録</button>
+          <button class="account-save" type="button">${actual != null ? '更新' : '記録'}</button>
+          ${actual != null ? '<button class="account-cancel" type="button">やめる</button>' : ''}
         </div>
-        <p class="account-hint">旅のあとに、実際にかかった費用を残しておけます🍀</p>
+        ${actual != null ? '' : '<p class="account-hint">旅のあとに、実際にかかった費用を残しておけます🍀</p>'}
       </div>`;
   }
   const diff = actual - est;
@@ -131,10 +136,16 @@ function accountingHtml(plan) {
 }
 
 // 会計フォーム/表示のイベントを配線。記録・修正で /save_actual_total を叩き再描画。
-function mountAccounting(card, plan) {
+function mountAccounting(card, plan, editing = false) {
   const box = card.querySelector('.plan-account');
   if (!box) return;
-  const save = async (amount) => {
+  // 表示モードを切り替えて描き直す（editing=true で入力フォーム）
+  const rerender = (nextEditing) => {
+    box.replaceWith(buildFromHtml(accountingHtml(plan, nextEditing)));
+    mountAccounting(card, plan, nextEditing);
+  };
+  const save = async (amount, btn) => {
+    btn.disabled = true;
     try {
       const res = await fetch(`/save_actual_total/${plan.id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -143,10 +154,12 @@ function mountAccounting(card, plan) {
       const d = await res.json();
       if (res.ok && d.status === 'OK') {
         plan.actual_total = d.actual_total;
-        box.replaceWith(buildFromHtml(accountingHtml(plan)));
-        mountAccounting(card, plan);
-      } else { alert(d.message || '記録に失敗しました'); }
+        rerender(false);
+        return;
+      }
+      alert(d.message || '記録に失敗しました');
     } catch (e) { alert('通信エラーが発生しました。もう一度お試しください。'); }
+    btn.disabled = false;  // 失敗時は入力内容を残したまま再操作できるようにする
   };
   const saveBtn = box.querySelector('.account-save');
   if (saveBtn) {
@@ -154,13 +167,16 @@ function mountAccounting(card, plan) {
     const submit = () => {
       const v = (input.value || '').trim();
       if (v === '') { input.focus(); return; }
-      save(parseInt(v, 10));
+      save(parseInt(v, 10), saveBtn);
     };
     saveBtn.addEventListener('click', submit);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   }
+  // 「修正」は記録を消さずに入力モードへ。「やめる」で元の記録表示に戻る。
   const editBtn = box.querySelector('.account-edit');
-  if (editBtn) editBtn.addEventListener('click', () => { plan.actual_total = null; box.replaceWith(buildFromHtml(accountingHtml(plan))); mountAccounting(card, plan); });
+  if (editBtn) editBtn.addEventListener('click', () => rerender(true));
+  const cancelBtn = box.querySelector('.account-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => rerender(false));
 }
 
 // HTML文字列 → 最初の要素ノード（差し替え用の小ヘルパ）

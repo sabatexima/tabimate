@@ -454,7 +454,7 @@ def generate_stickers(trip_id: int):
 @reflection.route("/trips/<int:trip_id>/best_shots", methods=["POST"])
 @login_required
 def generate_best_shots(trip_id: int):
-    """写真から、ちゃむが「飾りたいベストショット」を最大3枚選んで保存する。"""
+    """写真から、ちゃむが「飾りたいいちばんの一枚」を選んで保存する。"""
     _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     if len(photos) < 3:

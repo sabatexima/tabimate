@@ -191,11 +191,12 @@
 
   /* ちゃむのベストショット（金の額縁に飾った一枚）*/
   .bestshot-section { border-color: rgba(224,180,90,0.4); }
+  /* いちばんの一枚を大きく飾る（複数保存されている旧データは横並びで表示）*/
   .bestshot-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    display: flex; flex-wrap: wrap; justify-content: center;
     gap: 16px; margin: 4px 0 16px;
   }
-  .bestshot { margin: 0; }
+  .bestshot { margin: 0; flex: 0 1 320px; max-width: 100%; }
   .bestshot-frame {
     padding: 6px; border-radius: 8px;
     background: linear-gradient(135deg, #f6e5b0 0%, #e8c874 50%, #f2d98e 100%);

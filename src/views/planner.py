@@ -159,6 +159,17 @@ def home():
     return render_template("welcome.html", ideas=_seasonal_ideas())
 
 
+@planner.route("/api/ideas")
+def api_ideas():
+    """季節の「こんな旅はどう？」をJSONで返す（ネイティブアプリのホーム用）。
+
+    Web版のホームと同じ _seasonal_ideas() を使い、提案が二か所でずれないようにする。
+    ログイン不要（内容は誰にとっても同じ静的な提案のため）。
+    """
+    ideas = [{'emoji': e, 'label': l, 'prompt': p} for e, l, p in _seasonal_ideas()]
+    return json.dumps({'status': 'OK', 'ideas': ideas}, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+
+
 @planner.route("/chat")
 def chat():
     """旅行プラン作成チャット画面（旧ホーム）。"""
@@ -332,6 +343,20 @@ def get_messages():
     """ログイン中ユーザーのチャット履歴をJSONで返す（画面復元用）。"""
     from db import get_chat_messages
     return json.dumps(get_chat_messages(session['user_id'])), 200, {'Content-Type': 'application/json'}
+
+
+@planner.route('/api/chat_messages')
+@login_required
+def api_chat_messages():
+    """チャット履歴を、AIが提示したプランの構造化データ付きで返す（アプリ用）。
+
+    Web版の /get_messages は content のHTMLをそのまま描画するが、アプリは
+    プランをネイティブに組み立てるため plan キーを使う。
+    """
+    from db import get_chat_messages_with_plans
+    messages = get_chat_messages_with_plans(session['user_id'])
+    return json.dumps({'status': 'OK', 'messages': messages},
+                      ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
 
 
 @planner.route('/save_plan', methods=['POST'])

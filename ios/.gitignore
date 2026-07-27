@@ -1,0 +1,13 @@
+# XcodeGen が作るもの（project.yml から再生成できる）
+TabiMate.xcodeproj/
+TabiMate.xcworkspace/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.DS_Store
+
+# 依存
+.swiftpm/
+Packages/

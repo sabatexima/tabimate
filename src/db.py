@@ -492,6 +492,36 @@ def get_chat_messages(google_user_id: str) -> list:
     return [_row_to_dict(r) for r in rows]
 
 
+def get_chat_messages_with_plans(google_user_id: str) -> list:
+    """チャット履歴を、AIが提示したプランの構造化データ付きで返す（ネイティブアプリ用）。
+
+    Web版は content のHTMLに data-plan 属性で埋め込んだJSONを読むが、アプリは
+    HTMLを解釈しない。同じ内容を plan キーで素直に受け取れるようにする。
+    プランを伴わないメッセージの plan は None。
+    """
+    with _get_engine().connect() as conn:
+        conn.execute(text(_CREATE_CHAT_TABLE))
+        _ensure_chat_columns(conn)
+        rows = conn.execute(
+            text(
+                "SELECT role, content, request_id, plan_json FROM chat_messages "
+                "WHERE google_user_id = :uid ORDER BY created_at ASC"
+            ),
+            {"uid": google_user_id},
+        ).fetchall()
+
+    messages = []
+    for row in rows:
+        d = _row_to_dict(row)
+        raw = d.pop("plan_json", None)
+        try:
+            d["plan"] = json.loads(raw) if raw else None
+        except (ValueError, TypeError):
+            d["plan"] = None
+        messages.append(d)
+    return messages
+
+
 def get_last_plan(google_user_id: str) -> dict | None:
     """この会話で直近にAIが提示したプランの構造化データを返す（無ければ None）。
 

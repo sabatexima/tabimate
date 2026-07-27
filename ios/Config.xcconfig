@@ -1,0 +1,17 @@
+// アプリの接続先とGoogleサインインの設定。
+// ここだけ自分の値に書き換えれば動きます。
+//
+// 注意: xcconfig では "//" がコメント開始になるため、URL のスラッシュ2つは
+//       $() をはさんで書く（下の例のとおり）。これは Xcode の作法です。
+
+// サーバーの場所。本番の Cloud Run か、開発中のローカル Flask。
+//   本番   : https:/$()/tabimate-xxxxx.a.run.app
+//   ローカル: http:/$()/localhost:8080   （実機からは Mac の IP を使う）
+TABIMATE_BASE_URL = https:/$()/tabimate.example.com
+
+// Google Cloud コンソール →「APIとサービス」→「認証情報」で
+// iOS 用の OAuth クライアントIDを作り、その値を入れる。
+GOOGLE_IOS_CLIENT_ID = 000000000000-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+
+// 上のクライアントIDを逆順にしたもの（コンソールに表示される）。
+GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.000000000000-xxxxxxxxxxxxxxxxxxxxxxxx

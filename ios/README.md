@@ -174,6 +174,15 @@ xcodebuild test -scheme TabiMate -destination 'platform=iOS Simulator,name=iPhon
 
 Xcode なら **⌘U**。中身は「壊れると気づきにくいところ」に絞ってあります。
 
+**Mac が無くても回せます。** モデル・通信・地図の並び順は Foundation だけで
+書いてあるので、Linux の Swift で型検査とテストができます（CI でも回しています）。
+
+```bash
+scripts/check_ios_logic.sh   # 8ファイルを Swift 5/6 両モードで型検査 + 38テスト
+```
+
+SwiftUI 側（画面）は Apple の SDK が要るので、この方法では確かめられません。
+
 | ファイル | 見ているもの |
 |---|---|
 | `ModelDecodingTests` | サーバーのJSONをそのまま読めるか（キー名のずれは画面が空になる形で出る） |

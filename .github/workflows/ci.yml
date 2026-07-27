@@ -32,6 +32,16 @@ jobs:
         run: |
           for f in src/static/js/*.js; do node --check "$f"; done
 
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      - name: iOS ロジックの型検査とテスト
+        # SwiftUI 側は Apple の SDK が要るので回せないが、モデル・通信・地図の
+        # 並び順は Foundation だけなので Linux で本物のコンパイラに通せる
+        run: scripts/check_ios_logic.sh
+
       - name: Templates compile check
         env:
           GOOGLE_API_KEY: dummy

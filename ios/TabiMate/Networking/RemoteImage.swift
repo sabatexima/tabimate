@@ -23,12 +23,13 @@ struct RemoteImage<Placeholder: View>: View {
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
             } else if failed {
+                // 出せなかったことが分かるように。読み込み中の回転は止める
                 placeholder.overlay(
                     Image(systemName: "photo")
                         .foregroundStyle(Theme.Palette.textMuted.opacity(0.5))
                 )
             } else {
-                placeholder
+                placeholder.overlay(ProgressView().tint(Theme.Palette.primary))
             }
         }
         .task(id: urlString) { await load() }
@@ -49,11 +50,11 @@ struct RemoteImage<Placeholder: View>: View {
     }
 }
 
-extension RemoteImage where Placeholder == AnyView {
-    /// 既定の下地（読み込み中はクリーム色の面）。
+extension RemoteImage where Placeholder == Color {
+    /// 既定の下地（クリーム色の面）。回転や写真アイコンは body 側で重ねる。
     init(_ urlString: String?, contentMode: ContentMode = .fill) {
         self.init(urlString: urlString, contentMode: contentMode) {
-            AnyView(Theme.Palette.surface.overlay(ProgressView().tint(Theme.Palette.primary)))
+            Theme.Palette.surface
         }
     }
 }
@@ -78,7 +79,9 @@ actor ImageCache {
         if let cached = cache.object(forKey: urlString as NSString) { return cached }
         if let inFlight = loading[urlString] { return await inFlight.value }
 
-        let task = Task<UIImage?, Never> {
+        // detached にするのは、ここで作った Task がこのアクターに縛られると
+        // 写真の展開が1枚ずつ順番待ちになり、一覧の表示が目に見えて遅くなるため。
+        let task = Task<UIImage?, Never>.detached(priority: .userInitiated) {
             guard let request = Self.makeRequest(urlString) else { return nil }
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   let http = response as? HTTPURLResponse,

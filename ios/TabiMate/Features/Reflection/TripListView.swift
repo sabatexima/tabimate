@@ -24,6 +24,10 @@ struct TripListView: View {
                         ErrorNote(message: message) { Task { await model.load() } }
                             .padding(.horizontal, 20)
                     case .ready:
+                        if let message = model.actionError {
+                            ErrorNote(message: message) { model.actionError = nil }
+                                .padding(.horizontal, 20)
+                        }
                         if model.trips.isEmpty && model.sharedTrips.isEmpty {
                             EmptyStateView(message: "まだおもいでがありません。\n旅から帰ったら、写真をまとめてみてね。",
                                            actionTitle: "はじめての旅をつくる") { showingNewTrip = true }
@@ -107,9 +111,16 @@ struct TripListView: View {
                 Label(trip.isFavorite ? "お気に入りを外す" : "お気に入りにする",
                       systemImage: trip.isFavorite ? "heart.slash" : "heart")
             }
-            if !trip.isShared {
+            if trip.isOwner {
                 Button(role: .destructive) { tripToDelete = trip } label: {
                     Label("消す", systemImage: "trash")
+                }
+            } else if let grantId = trip.grantId {
+                // 人からもらった旅は消せない。自分の一覧から外すだけ
+                Button(role: .destructive) {
+                    Task { await model.leaveShared(trip, grantId: grantId) }
+                } label: {
+                    Label("一覧から外す", systemImage: "person.badge.minus")
                 }
             }
         }
@@ -197,10 +208,14 @@ final class TripListViewModel: ObservableObject {
     @Published private(set) var trips: [Trip] = []
     @Published private(set) var sharedTrips: [Trip] = []
     @Published private(set) var state: LoadState = .loading
+    /// 操作（作成・削除・共有解除）の失敗。読み込みの失敗と分けておかないと、
+    /// 消し損ねただけで一覧そのものが画面から消えてしまう。
+    @Published var actionError: String?
 
     enum LoadState { case loading, ready, failed(String) }
 
     func load() async {
+        actionError = nil
         do {
             let result = try await ReflectionService.trips()
             trips = result.mine
@@ -218,7 +233,7 @@ final class TripListViewModel: ObservableObject {
                                                        startDate: startDate, endDate: endDate)
             return true
         } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? "つくれませんでした。")
+            actionError = (error as? APIError)?.errorDescription ?? "つくれませんでした。"
             return false
         }
     }
@@ -230,7 +245,19 @@ final class TripListViewModel: ObservableObject {
             try await ReflectionService.deleteTrip(tripId: trip.id)
         } catch {
             trips = backup
-            state = .failed((error as? APIError)?.errorDescription ?? "消せませんでした。")
+            actionError = (error as? APIError)?.errorDescription ?? "消せませんでした。"
+        }
+    }
+
+    /// もらった旅を自分の一覧から外す（相手の元データは消えない）。
+    func leaveShared(_ trip: Trip, grantId: Int) async {
+        let backup = sharedTrips
+        sharedTrips.removeAll { $0.id == trip.id }
+        do {
+            try await ShareService.leaveShared(grantId: grantId)
+        } catch {
+            sharedTrips = backup
+            actionError = (error as? APIError)?.errorDescription ?? "外せませんでした。"
         }
     }
 

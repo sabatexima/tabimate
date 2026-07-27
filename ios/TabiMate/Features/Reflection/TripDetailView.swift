@@ -263,7 +263,8 @@ struct TripDetailView: View {
     }
 
     private func upload() async {
-        guard !picked.isEmpty else { return }
+        // 送っている最中にもう一度選ばれると、二重に走って進み具合が飛ぶ
+        guard !picked.isEmpty, !model.isUploading else { return }
         let items = picked
         picked = []
         await model.upload(items)

@@ -24,6 +24,10 @@ struct PlanListView: View {
                     } else if model.plans.isEmpty && model.sharedPlans.isEmpty {
                         EmptyStateView(message: "まだしおりがありません。\n「そうだん」でちゃむに話しかけてみてね。")
                     } else {
+                        if let message = model.actionError {
+                            ErrorNote(message: message) { model.actionError = nil }
+                                .padding(.horizontal, 20)
+                        }
                         board
                     }
                 }
@@ -142,10 +146,14 @@ final class PlanListViewModel: ObservableObject {
     @Published private(set) var plans: [TravelPlan] = []
     @Published private(set) var sharedPlans: [TravelPlan] = []
     @Published private(set) var isLoading = true
+    /// 読み込みの失敗（一覧を出せない）。
     @Published var errorMessage: String?
+    /// 操作の失敗。一覧は出せているので、消さずに添えるだけにする。
+    @Published var actionError: String?
 
     func load() async {
         errorMessage = nil
+        actionError = nil
         do {
             // 共有ぶんは取れなくても自分のしおりは見せる（付随情報のため）
             async let mine = PlanService.myPlans()
@@ -168,7 +176,7 @@ final class PlanListViewModel: ObservableObject {
             NotificationCenter.default.post(name: .plansChanged, object: nil)
         } catch {
             plans = backup
-            errorMessage = (error as? APIError)?.errorDescription
+            actionError = (error as? APIError)?.errorDescription
                 ?? "消せませんでした。もう一度ためしてね。"
         }
     }
@@ -181,7 +189,7 @@ final class PlanListViewModel: ObservableObject {
             try await PlanService.leaveShared(grantId: grantId)
         } catch {
             sharedPlans = backup
-            errorMessage = (error as? APIError)?.errorDescription
+            actionError = (error as? APIError)?.errorDescription
                 ?? "外せませんでした。もう一度ためしてね。"
         }
     }

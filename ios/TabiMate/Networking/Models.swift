@@ -32,6 +32,10 @@ struct TravelPlan: Codable, Identifiable, Hashable {
     /// 共有されたしおりのときだけ入る（view / edit）。
     var permission: String?
     var grantId: Int?
+    /// 地図の座標。取得済みなら一覧の応答に含まれてくるので、そのまま使える。
+    var spotCoords: [PlaceCoordinate]
+    var restaurantCoords: [PlaceCoordinate]
+    var accommodationCoords: [PlaceCoordinate]
 
     enum CodingKeys: String, CodingKey {
         case id, destination, duration, themes, spots, restaurants, accommodation
@@ -50,6 +54,9 @@ struct TravelPlan: Codable, Identifiable, Hashable {
         case createdAt = "created_at"
         case departIso = "depart_iso"
         case grantId = "grant_id"
+        case spotCoords = "spot_coords"
+        case restaurantCoords = "restaurant_coords"
+        case accommodationCoords = "accommodation_coords"
     }
 
     init(from decoder: Decoder) throws {
@@ -78,6 +85,16 @@ struct TravelPlan: Codable, Identifiable, Hashable {
         departIso           = try? c.decode(String.self, forKey: .departIso)
         permission          = try? c.decode(String.self, forKey: .permission)
         grantId             = try? c.decode(Int.self, forKey: .grantId)
+        spotCoords          = (try? c.decode([PlaceCoordinate].self, forKey: .spotCoords)) ?? []
+        restaurantCoords    = (try? c.decode([PlaceCoordinate].self, forKey: .restaurantCoords)) ?? []
+        accommodationCoords = (try? c.decode([PlaceCoordinate].self, forKey: .accommodationCoords)) ?? []
+    }
+
+    /// 一覧の応答に入っていた座標。空なら未取得（サーバーに取りに行く必要がある）。
+    var embeddedGeo: PlanGeo {
+        PlanGeo(spotCoords: spotCoords,
+                restaurantCoords: restaurantCoords,
+                accommodationCoords: accommodationCoords)
     }
 
     /// 共有されたしおりかどうか（自分のものには permission が付かない）。
@@ -150,6 +167,13 @@ struct PlanGeo: Codable {
         case spotCoords = "spot_coords"
         case restaurantCoords = "restaurant_coords"
         case accommodationCoords = "accommodation_coords"
+    }
+
+    init(spotCoords: [PlaceCoordinate] = [], restaurantCoords: [PlaceCoordinate] = [],
+         accommodationCoords: [PlaceCoordinate] = []) {
+        self.spotCoords = spotCoords
+        self.restaurantCoords = restaurantCoords
+        self.accommodationCoords = accommodationCoords
     }
 
     init(from decoder: Decoder) throws {

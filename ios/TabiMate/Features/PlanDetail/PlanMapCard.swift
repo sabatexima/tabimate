@@ -108,19 +108,31 @@ struct PlanMapCard: View {
     }
 
     private func load() async {
-        do {
-            let geo = try await PlanService.geo(planId: planId)
-            pins = PlanItinerary.pins(plan: plan, geo: geo)
-            guard !pins.isEmpty else {
+        // 座標は一覧の応答に入ってくる。取得済みならそれをそのまま使い、
+        // 余計な問い合わせをしない（人からもらったしおりは取りに行けないので、なおさら）。
+        var geo = plan.embeddedGeo
+        if geo.isEmpty {
+            guard plan.isOwner else {
                 state = .empty
                 return
             }
-            camera = .region(region(for: pins))
-            state = .ready
-        } catch {
-            state = .failed((error as? APIError)?.errorDescription
-                            ?? "地図を読み込めませんでした。")
+            do {
+                // 未取得のときだけサーバーに頼む（サーバー側がここで取得して覚える）
+                geo = try await PlanService.geo(planId: planId)
+            } catch {
+                state = .failed((error as? APIError)?.errorDescription
+                                ?? "地図を読み込めませんでした。")
+                return
+            }
         }
+
+        pins = PlanItinerary.pins(plan: plan, geo: geo)
+        guard !pins.isEmpty else {
+            state = .empty
+            return
+        }
+        camera = .region(region(for: pins))
+        state = .ready
     }
 
     /// すべてのピンが収まる範囲。1点だけのときは適度に寄る。

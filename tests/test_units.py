@@ -214,3 +214,44 @@ def test_geocode_one_negative_cache(monkeypatch):
     hit = geocoding.geocode_one("存在しない店", context="熱海")
     assert hit == {"lat": 35.1, "lng": 139.07}
     assert not geocoding._neg_cache
+
+
+# ----------------------------------------------------------------------
+# Tavily 検索結果の長さ制限（プロンプト肥大とトークン浪費を防ぐ）
+# ----------------------------------------------------------------------
+def test_web_search_truncates_long_results(monkeypatch):
+    os.environ.setdefault("GOOGLE_API_KEY", "dummy")
+    os.environ.setdefault("TAVILY_API_KEY", "dummy")
+    import chat.llm as L
+
+    class _FakeSearch:
+        def invoke(self, q):
+            # 長文8件・スコアはバラバラ（低スコアは閾値0.3で落ちる想定）
+            return [{"score": s, "content": "あ" * 3000}
+                    for s in [0.2, 0.9, 0.5, 0.95, 0.4, 0.7, 0.1, 0.6]]
+
+    monkeypatch.setattr(L, "_search", _FakeSearch())
+    out = L.web_search("テスト")
+    lines = out.split("\n")
+    # 1件ずつ切り詰め、全体でも上限内に収まる
+    assert all(len(x) <= L._SEARCH_SNIPPET_CHARS for x in lines)
+    assert len(out) <= L._SEARCH_QUERY_CHARS + L._SEARCH_SNIPPET_CHARS
+    # 24,000字がプロンプトに丸ごと入らないこと（肥大防止の主目的）
+    assert len(out) < 3000
+
+
+def test_web_search_handles_bad_shapes(monkeypatch):
+    import chat.llm as L
+
+    class _StrSearch:
+        def invoke(self, q):
+            return "  文字列で返ってくることがある  "
+
+    class _BoomSearch:
+        def invoke(self, q):
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr(L, "_search", _StrSearch())
+    assert L.web_search("q") == "文字列で返ってくることがある"
+    monkeypatch.setattr(L, "_search", _BoomSearch())
+    assert L.web_search("q") == ""  # 失敗time は空文字（生成は続行できる）

@@ -66,10 +66,18 @@ def estimate_cost(usage_by_model: dict):
 
 
 
+# 検索結果をプロンプトに載せる量の上限（1クエリあたり／1件あたりの文字数）。
+# 上限が無いと Tavily の本文がそのまま数万字入り、入力トークン代が膨らむうえ
+# 肝心の指示が埋もれる。スコア上位から詰めて、この長さで打ち切る。
+_SEARCH_SNIPPET_CHARS = int(os.getenv("SEARCH_SNIPPET_CHARS", "600"))
+_SEARCH_QUERY_CHARS = int(os.getenv("SEARCH_QUERY_CHARS", "2400"))
+
+
 def web_search(query: str, min_score: float = 0.3) -> str:
     """Tavily でウェブ検索し、スコアが min_score 以上の本文を改行連結して返す。
 
     エージェントが実在スポット選定の根拠にする参考テキスト。失敗時・該当なしは空文字。
+    結果はスコア降順に詰め、1件 _SEARCH_SNIPPET_CHARS 字・全体 _SEARCH_QUERY_CHARS 字で打ち切る。
     """
     log.debug("web_search start query=%s min_score=%s", query, min_score)
     try:
@@ -84,8 +92,20 @@ def web_search(query: str, min_score: float = 0.3) -> str:
         return ""
 
     filtered = [r for r in results if isinstance(r, dict) and r.get("score", 0) >= min_score]
-    log.debug("web_search result_count=%s for query=%s", len(filtered), query)
-    return "\n".join((r.get("content") or "").strip() for r in filtered if (r.get("content") or "").strip())
+    # スコアの高い順に採用し、1件ずつ短く切って全体の長さでも打ち切る
+    filtered.sort(key=lambda r: r.get("score", 0), reverse=True)
+    parts, total = [], 0
+    for r in filtered:
+        text = (r.get("content") or "").strip()
+        if not text:
+            continue
+        text = text[:_SEARCH_SNIPPET_CHARS]
+        if total + len(text) > _SEARCH_QUERY_CHARS:
+            break
+        parts.append(text)
+        total += len(text)
+    log.debug("web_search used=%s/%s chars=%s query=%s", len(parts), len(filtered), total, query)
+    return "\n".join(parts)
 
 
 def build_search_context(queries: list[str], min_score: float = 0.3) -> str:

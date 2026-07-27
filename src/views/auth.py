@@ -19,11 +19,10 @@ logger = get_logger("views.auth")
 
 
 def login_required(f):
-    """ログイン必須のビュー保護デコレータ（Webセッション / アプリのBearerトークン）。
+    """ログイン必須のビュー保護デコレータ。
 
-    ネイティブアプリからは Authorization: Bearer <token> で認証する。その場合
-    session['user_id'] を当該リクエストの間だけ埋め、既存ビューの実装
-    （session['user_id'] 参照）をそのまま動かす。
+    アプリの Bearer トークンは app.before_request（api_auth.authenticate_app_token）が
+    セッションへ読み替え済みなので、ここでは session を見るだけでよい。
     未認証時、アプリ側には 401 JSON を返す（ログイン画面へのリダイレクトは無意味なため）。
     """
     @wraps(f)
@@ -31,19 +30,8 @@ def login_required(f):
         if session.get('user_id'):
             return f(*args, **kwargs)
 
-        authz = request.headers.get('Authorization', '')
-        if authz.startswith('Bearer '):
-            from api_auth import verify_token
-            data = verify_token(authz[7:].strip())
-            if data:
-                # 以降のビューが session を見る前提なので、この要求内だけ詰める。
-                # modified を戻して Set-Cookie を抑止する（アプリにセッションCookieを
-                # 持たせない＝トークンだけが認証情報、という状態を保つ）。
-                session['user_id'] = data.get('sub')
-                session['user_email'] = data.get('email', '')
-                session['user_name'] = data.get('name', '')
-                session.modified = False
-                return f(*args, **kwargs)
+        # トークンを持ってきたのに通っていない＝期限切れか改ざん。作り直しを促す
+        if request.headers.get('Authorization', '').startswith('Bearer '):
             return json.dumps({'status': 'ERROR', 'message': '認証が無効です。再ログインしてください。'}), 401, {'Content-Type': 'application/json'}
 
         logger.debug("未ログインアクセス: %s", request.path)

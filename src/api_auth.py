@@ -10,6 +10,7 @@ Web版のセッション認証はそのまま残し、両方を受け付ける�
 import os
 import time
 
+from flask import request, session
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from chat.logger import get_logger
@@ -43,6 +44,33 @@ def verify_token(token: str) -> dict | None:
     except BadSignature:
         logger.info("アプリトークンの署名が不正")
     return None
+
+
+def authenticate_app_token():
+    """アプリの Bearer トークンを、この要求の間だけセッションに読み替える。
+
+    app.before_request に登録して使う。デコレータではなくここで行うのは、
+    共有まわり（views/sharing.py）のように login_required を通らず
+    session を直接見るエンドポイントも、アプリから同じように使えるようにするため。
+
+    セッションCookieは発行しない（modified を戻す）。アプリの認証情報は
+    あくまでトークンだけ、という状態を保つ。
+    """
+    if session.get("user_id"):
+        return  # ブラウザのセッションが既にある。触らない
+
+    authz = request.headers.get("Authorization", "")
+    if not authz.startswith("Bearer "):
+        return
+
+    data = verify_token(authz[7:].strip())
+    if not data:
+        return  # 無効なトークン。未ログインのまま各エンドポイントの判断に任せる
+
+    session["user_id"] = data.get("sub")
+    session["user_email"] = data.get("email", "")
+    session["user_name"] = data.get("name", "")
+    session.modified = False
 
 
 def verify_google_id_token(id_token_str: str) -> dict | None:

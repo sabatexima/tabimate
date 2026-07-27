@@ -50,12 +50,12 @@ struct TripDetailView: View {
                         Label(model.trip.isFavorite ? "お気に入りを外す" : "お気に入りにする",
                               systemImage: model.trip.isFavorite ? "heart.slash" : "heart")
                     }
-                    if model.trip.canEdit {
+                    if model.trip.isOwner {
                         Button { showingEditor = true } label: {
                             Label("名前・日にちを直す", systemImage: "pencil")
                         }
                     }
-                    if !model.trip.isShared {
+                    if model.trip.isOwner {
                         Button { showingShare = true } label: {
                             Label("共有する", systemImage: "person.badge.plus")
                         }
@@ -75,7 +75,8 @@ struct TripDetailView: View {
             ShareSheetView(resource: .trip, resourceId: model.trip.id, title: model.trip.title)
         }
         .sheet(item: $zoomed) { photo in
-            PhotoZoomView(photo: photo, canEdit: model.trip.canEdit) {
+            PhotoZoomView(photo: photo, canDelete: model.trip.canEditPhotos,
+                          canSetCover: model.trip.isOwner) {
                 await model.deletePhoto(photo)
             } onSetCover: {
                 await model.setCover(photo)
@@ -152,7 +153,7 @@ struct TripDetailView: View {
                         .font(.cardTitle)
                         .foregroundStyle(Theme.Palette.textMain)
                     Spacer()
-                    if model.trip.canEdit && !(model.detail?.photos.isEmpty ?? true) {
+                    if model.trip.canEditPhotos && !(model.detail?.photos.isEmpty ?? true) {
                         Button(model.isInterpreting ? "考えています…" : "作り直す") {
                             Task { await model.makeStickers() }
                         }
@@ -168,7 +169,7 @@ struct TripDetailView: View {
                          : "ちゃむに、この旅の言葉を書いてもらえます。")
                         .font(.body_)
                         .foregroundStyle(Theme.Palette.textMuted)
-                    if model.trip.canEdit && !(model.detail?.photos.isEmpty ?? true) {
+                    if model.trip.canEditPhotos && !(model.detail?.photos.isEmpty ?? true) {
                         Button(model.isInterpreting ? "考えています…" : "言葉を書いてもらう") {
                             Task { await model.makeStickers() }
                         }
@@ -202,7 +203,7 @@ struct TripDetailView: View {
                         .font(.cardTitle)
                         .foregroundStyle(Theme.Palette.textMain)
                     Spacer()
-                    if model.trip.canEdit {
+                    if model.trip.canEditPhotos {
                         PhotosPicker(selection: $picked, maxSelectionCount: 50,
                                      matching: .images, photoLibrary: .shared()) {
                             Text(model.isUploading ? "入れています…" : "写真を入れる")
@@ -239,7 +240,7 @@ struct TripDetailView: View {
                         }
                     }
 
-                    if photos.count >= 3 && model.trip.canEdit {
+                    if photos.count >= 3 && model.trip.isOwner {
                         Button(model.isInterpreting ? "選んでいます…" : "ちゃむに一枚選んでもらう") {
                             Task { await model.makeBestShot() }
                         }
@@ -264,7 +265,8 @@ struct TripDetailView: View {
 
 private struct PhotoZoomView: View {
     let photo: TripPhoto
-    let canEdit: Bool
+    let canDelete: Bool
+    let canSetCover: Bool
     let onDelete: () async -> Void
     let onSetCover: () async -> Void
 
@@ -290,18 +292,22 @@ private struct PhotoZoomView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("閉じる") { dismiss() }
                 }
-                if canEdit {
+                if canDelete || canSetCover {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
-                            Button {
-                                Task { await onSetCover(); dismiss() }
-                            } label: {
-                                Label("表紙にする", systemImage: "star")
+                            if canSetCover {
+                                Button {
+                                    Task { await onSetCover(); dismiss() }
+                                } label: {
+                                    Label("表紙にする", systemImage: "star")
+                                }
                             }
-                            Button(role: .destructive) {
-                                showingDeleteConfirm = true
-                            } label: {
-                                Label("この写真を消す", systemImage: "trash")
+                            if canDelete {
+                                Button(role: .destructive) {
+                                    showingDeleteConfirm = true
+                                } label: {
+                                    Label("この写真を消す", systemImage: "trash")
+                                }
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
@@ -363,36 +369,38 @@ final class TripDetailViewModel: ObservableObject {
             uploadProgress = 0
         }
 
-        // 先に端末から画像データを取り出す（取り出せなかったものは黙って飛ばす）
-        var images: [Data] = []
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self) {
-                images.append(data)
-            }
-        }
-        guard !images.isEmpty else {
-            errorMessage = "写真を読み込めませんでした。"
-            return
-        }
-
+        // 端末からの読み出しも一度に全部やらず、送るぶんだけ取り出す。
+        // 50枚ぶんのHEICを一度に抱えると数百MBになり、端末に落とされてしまう。
         var sent = 0
-        for batch in stride(from: 0, to: images.count, by: batchSize) {
-            let slice = Array(images[batch..<min(batch + batchSize, images.count)])
+        var failed = false
+        for start in stride(from: 0, to: items.count, by: batchSize) {
+            let chunk = Array(items[start..<min(start + batchSize, items.count)])
+            var images: [Data] = []
+            for item in chunk {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    images.append(data)   // 取り出せなかったものは黙って飛ばす
+                }
+            }
+            guard !images.isEmpty else { continue }
             do {
-                sent += try await ReflectionService.uploadPhotos(tripId: trip.id, images: slice)
-                uploadProgress = Double(sent) / Double(images.count)
+                sent += try await ReflectionService.uploadPhotos(tripId: trip.id, shared: trip.isShared, images: images)
+                uploadProgress = Double(min(start + chunk.count, items.count)) / Double(items.count)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription
                     ?? "写真を入れられませんでした。"
+                failed = true
                 break   // 途中まで入った分はそのまま残す（読み直せば見える）
             }
+        }
+        if sent == 0 && !failed {
+            errorMessage = "写真を読み込めませんでした。"
         }
         await load()
     }
 
     func deletePhoto(_ photo: TripPhoto) async {
         do {
-            try await ReflectionService.deletePhoto(tripId: trip.id, photoId: photo.id)
+            try await ReflectionService.deletePhoto(tripId: trip.id, shared: trip.isShared, photoId: photo.id)
             await load()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? "消せませんでした。"
@@ -414,7 +422,7 @@ final class TripDetailViewModel: ObservableObject {
         errorMessage = nil
         defer { isInterpreting = false }
         do {
-            try await ReflectionService.generateStickers(tripId: trip.id)
+            try await ReflectionService.generateStickers(tripId: trip.id, shared: trip.isShared)
             await load()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription

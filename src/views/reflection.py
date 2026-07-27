@@ -114,10 +114,26 @@ def api_trips():
 @reflection.route("/api/trips/<int:trip_id>")
 @login_required
 def api_trip_detail(trip_id: int):
-    """1つの旅の中身をJSONで返す（写真・付箋・ベストショット・足あと）。"""
-    data = _trip_detail_data(trip_id)
+    """1つの旅の中身をJSONで返す（写真・付箋・ベストショット・足あと）。
+
+    共有された旅も開けるようにする（一覧に出しておいて開けないのはおかしいため）。
+    その場合は権限を添えて、アプリ側が編集の可否を判断できるようにする。
+    """
+    if not _can_view_trip(trip_id):
+        abort(404)
+    # 所有者フィルタを通さずに取り、一覧カードと同じ形（写真枚数・表紙など）にそろえる
+    cards = repo.get_trip_cards([trip_id], viewer_id=_uid())
+    if not cards:
+        abort(404)
+    data = _trip_detail_data(trip_id, trip=cards[0])
+
+    trip = dict(data["trip"], photo_count=len(data["photos"]))
+    if not repo.get_trip(trip_id, _uid()):
+        import db_sharing
+        grant = db_sharing.get_grant_for_email("trip", trip_id, session.get("user_email"))
+        trip["permission"] = (grant or {}).get("permission", "view")
     return jsonify({
-        "trip": data["trip"],
+        "trip": trip,
         "photos": data["photos"],
         "stickers": data["stickers"],
         "best_shots": data["best_shots"],
@@ -199,9 +215,14 @@ def digest():
     )
 
 
-def _trip_detail_data(trip_id: int) -> dict:
-    """1つの旅の中身を集める（画面とアプリで共用）。"""
-    trip = _require_trip(trip_id)
+def _trip_detail_data(trip_id: int, trip: dict | None = None) -> dict:
+    """1つの旅の中身を集める（画面とアプリで共用）。
+
+    trip を渡さない場合は本人所有であることを要求する。共有された旅を見せるときは
+    呼び出し側で閲覧資格を確かめ、取得済みの trip を渡すこと。
+    """
+    if trip is None:
+        trip = _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     # 配信URLを付与（一覧はサムネイル、拡大は原寸。署名はキャッシュ＋並列でまとめて取得）
     paths = [p["storage_path"] for p in photos]

@@ -49,7 +49,13 @@ struct Trip: Codable, Identifiable, Hashable {
 
     /// 共有された旅かどうか（自分の旅には permission が付かない）。
     var isShared: Bool { permission != nil }
-    var canEdit: Bool { permission == nil || permission == "edit" }
+
+    /// 自分の旅か。名前・日にち・表紙・ベストショット・共有・削除は所有者だけができる
+    /// （サーバー側にこれらの共有相手向けの入口が無い）。
+    var isOwner: Bool { !isShared }
+
+    /// 写真の出し入れと付箋づくりができるか。共有相手でも編集権限があれば可能。
+    var canEditPhotos: Bool { !isShared || permission == "edit" }
 
     /// 「2026/08/14 〜 08/16」のような期間表示。
     var dateRange: String? {
@@ -209,6 +215,19 @@ struct ShareGrant: Codable, Identifiable, Hashable {
     var id: Int
     var email: String
     var permission: String
+
+    // サーバーは grantee_email という名前で返す（付与するときの入力は email）。
+    enum CodingKeys: String, CodingKey {
+        case id, permission
+        case email = "grantee_email"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id         = try c.decode(Int.self, forKey: .id)
+        email      = (try? c.decode(String.self, forKey: .email)) ?? ""
+        permission = (try? c.decode(String.self, forKey: .permission)) ?? "view"
+    }
 }
 
 struct ShareState: Codable {

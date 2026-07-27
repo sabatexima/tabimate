@@ -272,6 +272,8 @@ def _token_app():
     app.secret_key = "test-secret"
     app.config["TESTING"] = True
     app.register_blueprint(auth_bp)
+    # 本番と同じく、Bearer トークンの読み替えは before_request が担う
+    app.before_request(api_auth.authenticate_app_token)
 
     @app.get("/data")
     @login_required

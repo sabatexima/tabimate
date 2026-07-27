@@ -86,7 +86,7 @@ The rest is handled by **Chamu**, the mascot, who binds your itinerary, turns me
 
 |  |  |
 |---|---|
-| 🧠 **AI** | LangGraph · LangChain · Gemini 3.5 Flash / 3.1 Flash-Lite · Tavily Search |
+| 🧠 **AI** | LangGraph · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
 | ⚙️ **Backend** | Flask 3.1 · SQLAlchemy · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **Maps & Geo** | Leaflet · Stadia Maps (watercolor) · Google Places · OSM Nominatim · GSI |
 | ☁️ **Infra** | Google Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
@@ -139,6 +139,7 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 | `GCS_BUCKET` | cond. | Uses GCS when set, else local FS |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | Local dir · signed-URL TTL · signer SA |
 | `REDIS_URL` | | Share in-flight generation state via Redis |
+| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override the models used (defaults: `gemini-3.6-flash` / `gemini-3.1-flash-lite`). Lets you roll back a new model with a single line |
 | `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` etc. | | Sticker-generation image count/resize |
 
 ### Directory layout

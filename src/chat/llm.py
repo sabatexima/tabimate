@@ -8,19 +8,26 @@ from chat.logger import get_logger
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'))
 
+# モデルIDは環境変数で差し替え可能にする（新モデルが出たとき .env の1行で戻せる）。
+_MODEL_LITE = os.getenv("GEMINI_MODEL_LITE", "gemini-3.1-flash-lite")
+_MODEL_STRONG = os.getenv("GEMINI_MODEL_STRONG", "gemini-3.6-flash")
+
+# 候補出し・選定・会話抽出など回数の多い軽作業用。
+# 3.5-flash-lite は品質は上だが値上げ（入力+20%/出力+67%）のため、
+# 呼び出し回数が最多のここは既定で 3.1-flash-lite に据え置く。
 llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
+    model=_MODEL_LITE,
     temperature=0,
     max_tokens=None,
     timeout=120,
     max_retries=2,
 )
 
-# 推論・数値判断が重要なノード（審査=balancer、費用=cost_manager）用の上位モデル。
-# 大半は軽量な lite を使い、品質の効きどころだけ上位モデルに上げてコスト増を抑える。
-# gemini-3.5-flash は Flash 価格帯で Pro 近い性能（2026年時点の最新Flash）。
+# 推論・数値判断が重要なノード（タイムキーパー、費用=cost_manager、審査=balancer）用。
+# gemini-3.6-flash は 3.5-flash と同等の知能（AA Intelligence Index 50）ながら
+# 出力単価 -17%（$9.00→$7.50）かつ出力トークンも約17%減で、実質コスト減。
 llm_strong = ChatGoogleGenerativeAI(
-    model="gemini-3.5-flash",
+    model=_MODEL_STRONG,
     temperature=0,
     max_tokens=None,
     timeout=120,
@@ -33,7 +40,9 @@ log = get_logger("llm")
 # モデル別の概算料金（USD / 100万トークン, 入力, 出力）。未知モデルは lite 相当で概算。
 MODEL_PRICING_USD_PER_M = {
     "gemini-3.1-flash-lite": (0.25, 1.50),
+    "gemini-3.5-flash-lite": (0.30, 2.50),
     "gemini-3.5-flash": (1.50, 9.00),
+    "gemini-3.6-flash": (1.50, 7.50),
 }
 USD_TO_JPY = 150  # 概算用の固定レート
 

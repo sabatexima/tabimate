@@ -84,7 +84,7 @@
 
 |  |  |
 |---|---|
-| 🧠 **AI** | LangGraph · LangChain · Gemini 3.5 Flash / 3.1 Flash-Lite · Tavily Search |
+| 🧠 **AI** | LangGraph · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
 | ⚙️ **バックエンド** | Flask 3.1 · SQLAlchemy · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **地図・位置情報** | Leaflet · Stadia Maps（水彩タイル）· Google Places · OSM Nominatim · 国土地理院 |
 | ☁️ **インフラ** | Google Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
@@ -137,6 +137,7 @@ python3 app.py
 | `GCS_BUCKET` | △ | 設定時は GCS、未設定ならローカルFS |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | ローカル保存先・署名URL有効秒数・署名用SA |
 | `REDIS_URL` | | 生成中リクエスト状態を Redis で共有 |
+| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | 使用モデルの差し替え（既定: `gemini-3.6-flash` / `gemini-3.1-flash-lite`）。新モデルの不調時は1行で切り戻せる |
 | `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` 等 | | 付箋生成の画像枚数/縮小サイズ |
 
 ### ディレクトリ構成

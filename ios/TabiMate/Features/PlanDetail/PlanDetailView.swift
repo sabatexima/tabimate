@@ -3,6 +3,7 @@ import SwiftUI
 /// しおりの中身。カウントダウン・地図・スケジュール・費用・持ち物。
 struct PlanDetailView: View {
     @StateObject private var model: PlanDetailViewModel
+    @State private var showingShare = false
 
     init(plan: TravelPlan) {
         _model = StateObject(wrappedValue: PlanDetailViewModel(plan: plan))
@@ -46,6 +47,18 @@ struct PlanDetailView: View {
         .paperBackground()
         .navigationTitle(model.plan.destination)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showingShare = true } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("このしおりを共有する")
+            }
+        }
+        .sheet(isPresented: $showingShare) {
+            ShareSheetView(resource: .plan, resourceId: model.plan.id,
+                           title: model.plan.destination)
+        }
     }
 
     // MARK: - 表紙

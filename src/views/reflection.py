@@ -64,10 +64,12 @@ def _collect_images_for_stickers(photos: list, sample_n: int = 8) -> list:
 # ----------------------------------------------------------------------
 # 画面（UIの詳細はテンプレート側。ここでは入口のみ）
 # ----------------------------------------------------------------------
-@reflection.route("/")
-@login_required
-def index():
-    """旅の振り返り一覧（自分の旅＋共有された旅）を表示する。"""
+def _load_trip_cards() -> tuple[list, list]:
+    """一覧に出す（自分の旅, 共有された旅）を、表紙URL付きで返す。
+
+    画面（index）とアプリ向けJSON（api_trips）で同じものを見せるため、
+    取得の仕方をここ1か所に置く。
+    """
     trips = repo.get_trips(_uid())
 
     # 自分宛に共有された旅も同じ画面にまとめて表示する
@@ -90,13 +92,55 @@ def index():
         t["cover_url"] = cover_thumbs.get(cp) if cp else None
         t["cover_url_full"] = cover_fulls.get(cp) if cp else None
 
+    return trips, shared_trips
+
+
+@reflection.route("/")
+@login_required
+def index():
+    """旅の振り返り一覧（自分の旅＋共有された旅）を表示する。"""
+    trips, shared_trips = _load_trip_cards()
     return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 
 
-@reflection.route("/digest")
+@reflection.route("/api/trips")
 @login_required
-def digest():
-    """年間ダイジェスト：その年の旅・写真・付箋を絵本の1ページにまとめて見せる。"""
+def api_trips():
+    """振り返り一覧をJSONで返す（ネイティブアプリ用）。"""
+    trips, shared_trips = _load_trip_cards()
+    return jsonify({"trips": trips, "shared_trips": shared_trips})
+
+
+@reflection.route("/api/trips/<int:trip_id>")
+@login_required
+def api_trip_detail(trip_id: int):
+    """1つの旅の中身をJSONで返す（写真・付箋・ベストショット・足あと）。"""
+    data = _trip_detail_data(trip_id)
+    return jsonify({
+        "trip": data["trip"],
+        "photos": data["photos"],
+        "stickers": data["stickers"],
+        "best_shots": data["best_shots"],
+        "footprints": data["footprints"],
+    })
+
+
+@reflection.route("/api/digest")
+@login_required
+def api_digest():
+    """年間ダイジェストをJSONで返す（年の一覧つき）。"""
+    data = _digest_data(request.args.get("year") or "")
+    return jsonify({
+        "year": data["year"],
+        "years": data["years"],
+        "trips": data["trips"],
+        "photo_total": data["photo_total"],
+        "stickers": [s for s in data["stickers"]],
+    })
+
+
+def _digest_data(requested_year: str) -> dict:
+    """年間ダイジェストの材料を組み立てる（画面とアプリで共用）。"""
     from datetime import date
 
     all_trips = repo.get_trips(_uid())
@@ -106,7 +150,7 @@ def digest():
         return str(d)[:4]
 
     years = sorted({trip_year(t) for t in all_trips if trip_year(t)}, reverse=True)
-    year = request.args.get("year") or ""
+    year = requested_year
     if year not in years:
         year = years[0] if years else str(date.today().year)
 
@@ -132,20 +176,31 @@ def digest():
         months.setdefault(m, []).append(t)
     month_groups = [(m, months[m]) for m in sorted(months)]
 
-    photo_total = sum(t.get("photo_count") or 0 for t in trips)
-    stickers = [s for t in trips for s in (t.get("stickers_preview") or [])]
+    return {
+        "year": year,
+        "years": years,
+        "trips": trips,
+        "month_groups": month_groups,
+        "photo_total": sum(t.get("photo_count") or 0 for t in trips),
+        "stickers": [s for t in trips for s in (t.get("stickers_preview") or [])],
+    }
 
+
+@reflection.route("/digest")
+@login_required
+def digest():
+    """年間ダイジェスト：その年の旅・写真・付箋を絵本の1ページにまとめて見せる。"""
+    d = _digest_data(request.args.get("year") or "")
     return render_template(
         "reflection/digest.html",
-        year=year, years=years, trips=trips, month_groups=month_groups,
-        photo_total=photo_total, stickers=stickers,
+        year=d["year"], years=d["years"], trips=d["trips"],
+        month_groups=d["month_groups"], photo_total=d["photo_total"],
+        stickers=d["stickers"],
     )
 
 
-@reflection.route("/trips/<int:trip_id>")
-@login_required
-def trip_detail(trip_id: int):
-    """1つの旅の詳細（写真タイムライン・付箋など）を表示する。"""
+def _trip_detail_data(trip_id: int) -> dict:
+    """1つの旅の中身を集める（画面とアプリで共用）。"""
     trip = _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     # 配信URLを付与（一覧はサムネイル、拡大は原寸。署名はキャッシュ＋並列でまとめて取得）
@@ -203,11 +258,25 @@ def trip_detail(trip_id: int):
             planned = lp.get("spot_coords") or []
         else:
             linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化
+    return {
+        "trip": trip, "photos": photos, "stickers": stickers,
+        "footprints": footprints, "best_shots": best_shots,
+        "my_plans": my_plans, "linked_plan_id": linked_plan_id,
+        "planned_points": planned,
+    }
+
+
+@reflection.route("/trips/<int:trip_id>")
+@login_required
+def trip_detail(trip_id: int):
+    """1つの旅の詳細（写真タイムライン・付箋など）を表示する。"""
+    d = _trip_detail_data(trip_id)
     return render_template(
         "reflection/trip.html",
-        trip=trip, photos=photos, stickers=stickers, footprints=footprints,
-        my_plans=my_plans, linked_plan_id=linked_plan_id, planned_points=planned,
-        best_shots=best_shots,
+        trip=d["trip"], photos=d["photos"], stickers=d["stickers"],
+        footprints=d["footprints"], my_plans=d["my_plans"],
+        linked_plan_id=d["linked_plan_id"], planned_points=d["planned_points"],
+        best_shots=d["best_shots"],
     )
 
 

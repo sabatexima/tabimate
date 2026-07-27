@@ -9,20 +9,20 @@ struct PlanSectionList: View {
     var accommodation: [String] = []
     var budgetEstimate: [String] = []
 
-    private struct Section {
+    private struct Block {
         let icon: String
         let title: String
         let items: [String]
     }
 
     /// 中身のある区画だけを、決まった順で。
-    private var sections: [Section] {
+    private var sections: [Block] {
         [
-            Section(icon: "📅", title: "スケジュール", items: schedule),
-            Section(icon: "📸", title: "観光スポット", items: spots),
-            Section(icon: "🍽", title: "食事", items: restaurants),
-            Section(icon: "🏨", title: "宿泊", items: accommodation),
-            Section(icon: "💴", title: "費用の内訳", items: budgetEstimate),
+            Block(icon: "📅", title: "スケジュール", items: schedule),
+            Block(icon: "📸", title: "観光スポット", items: spots),
+            Block(icon: "🍽", title: "食事", items: restaurants),
+            Block(icon: "🏨", title: "宿泊", items: accommodation),
+            Block(icon: "💴", title: "費用の内訳", items: budgetEstimate),
         ].filter { !$0.items.isEmpty }
     }
 

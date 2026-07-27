@@ -63,8 +63,8 @@ struct PlanListView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
-                    Button("消す", systemImage: "trash", role: .destructive) {
-                        planToDelete = plan
+                    Button(role: .destructive) { planToDelete = plan } label: {
+                        Label("消す", systemImage: "trash")
                     }
                 }
             }

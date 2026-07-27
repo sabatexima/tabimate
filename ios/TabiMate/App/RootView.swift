@@ -33,11 +33,11 @@ private struct LaunchView: View {
     }
 }
 
-/// 3つの入り口。ホーム（ちゃむのあいさつ）・相談・保存プラン。
+/// 4つの入り口。ホーム・相談・保存プラン・おもいで。
 struct MainTabView: View {
     @State private var selection = Tab.home
 
-    enum Tab: Hashable { case home, chat, plans }
+    enum Tab: Hashable { case home, chat, plans, memories }
 
     var body: some View {
         TabView(selection: $selection) {
@@ -53,6 +53,10 @@ struct MainTabView: View {
             PlanListView()
                 .tabItem { Label("保存プラン", systemImage: "book.closed") }
                 .tag(Tab.plans)
+
+            TripListView()
+                .tabItem { Label("おもいで", systemImage: "photo.on.rectangle.angled") }
+                .tag(Tab.memories)
         }
     }
 }

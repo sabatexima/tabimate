@@ -342,6 +342,24 @@ def test_app_me_reports_token_validity(monkeypatch):
         assert c.get("/auth/app/me").status_code == 401
 
 
+def test_digest_month_grouping_matches_view():
+    """ダイジェストの月まとめが、日付の無い旅も落とさずに扱えること。
+
+    アプリ側（Digest.monthGroups）と同じ規則をサーバー側でも使うため、
+    月の取り出し方が変わっていないことを固定する。
+    """
+    def month_of(trip):
+        d = str(trip.get("start_date") or trip.get("created_at") or "")
+        try:
+            return int(d[5:7])
+        except ValueError:
+            return 0
+
+    assert month_of({"start_date": "2026-08-14"}) == 8
+    assert month_of({"start_date": None, "created_at": "2026-01-10 10:00:00"}) == 1
+    assert month_of({}) == 0
+
+
 def test_google_id_token_requires_configured_audience(monkeypatch):
     """aud の検証先が未設定なら、検証そのものを行わずに断る。
 

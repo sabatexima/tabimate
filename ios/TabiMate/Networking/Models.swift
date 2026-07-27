@@ -87,7 +87,7 @@ extension TravelPlan {
     /// 出発までの残り日数。過去・日付不明なら nil。
     var daysUntilDeparture: Int? {
         guard let iso = departIso,
-              let date = ISO8601DateFormatter.plainDate.date(from: iso) else { return nil }
+              let date = DateFormatter.plainDate.date(from: iso) else { return nil }
         let cal = Calendar.current
         let days = cal.dateComponents([.day],
                                       from: cal.startOfDay(for: Date()),
@@ -107,8 +107,9 @@ extension TravelPlan {
     }
 }
 
-extension ISO8601DateFormatter {
+extension DateFormatter {
     /// "2026-08-14" のような日付だけの文字列を読むための整形器。
+    /// 端末のタイムゾーンで解釈する（「あと何日」は生活時間で数えたいので）。
     static let plainDate: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)

@@ -71,11 +71,12 @@ enum ChatService {
                     let (bytes, response) = try await URLSession.shared.bytes(for: req)
                     guard let http = response as? HTTPURLResponse else { throw APIError.server(nil) }
                     guard (200..<300).contains(http.statusCode) else {
-                        // エラー時は SSE ではなく普通の JSON が返る
+                        // エラー時は SSE ではなく普通の JSON が返る。
+                        // check は 2xx 以外で必ず throw するので、ここから先へは進まない
                         var data = Data()
                         for try await byte in bytes { data.append(byte) }
                         try APIClient.check(http, data: data)
-                        return
+                        throw APIError.server(nil)
                     }
 
                     for try await line in bytes.lines {

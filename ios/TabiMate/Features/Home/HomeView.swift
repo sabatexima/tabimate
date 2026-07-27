@@ -50,6 +50,9 @@ struct HomeView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .task { await model.load() }
             .refreshable { await model.load() }
+            .onReceive(NotificationCenter.default.publisher(for: .plansChanged)) { _ in
+                Task { await model.load() }
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 /// サインイン状態をアプリ全体で共有する。
 ///
@@ -25,6 +26,7 @@ final class AuthStore: ObservableObject {
     var isSignedIn: Bool { user != nil }
 
     private static let account = "app-token"
+    private static let cachedUserKey = "tabimate.cachedUser"
 
     private init() {
         // 前回のトークンを Keychain から復帰させ、どのスレッドからも読める箱に入れる
@@ -33,21 +35,39 @@ final class AuthStore: ObservableObject {
 
     // MARK: - 起動時
 
-    /// 保存済みトークンがまだ有効かをサーバーに確かめる。
-    /// 期限切れ（30日）ならサインアウト扱いにして、ログイン画面へ戻す。
+    /// 前回のサインインを引き継ぐ。
+    ///
+    /// 先に手元の記録で画面を出し、そのあとサーバーにトークンの有効性を確かめる。
+    /// こうしないと、圏外で開いただけでサインイン画面に逆戻りしてしまう。
+    /// 期限切れ（30日）と分かったときだけサインアウト扱いにする。
     func restoreSession() async {
         defer { isRestoring = false }
         guard TokenBox.current != nil else { return }
+
+        user = cachedUser          // まず手元の記録で入れる
         do {
             let me = try await APIClient.shared.get("auth/app/me", as: MeResponse.self)
             user = me.user
+            cacheUser(me.user)
         } catch APIError.unauthorized {
-            clearToken()
+            clearToken()           // トークンが無効。ここだけがサインアウトの条件
         } catch {
-            // 通信できないだけなら、トークンは消さずに保持したまま起動する
-            // （オフラインで開いただけでサインアウトさせられるのは理不尽なので）
-            user = nil
+            // 通信できないだけ。手元の記録のまま使い続ける
         }
+    }
+
+    // MARK: - 手元の記録
+
+    private var cachedUser: AppUser? {
+        guard let data = UserDefaults.standard.data(forKey: Self.cachedUserKey) else { return nil }
+        return try? JSONDecoder().decode(AppUser.self, from: data)
+    }
+
+    private func cacheUser(_ user: AppUser?) {
+        guard let user, let data = try? JSONEncoder().encode(user) else {
+            return UserDefaults.standard.removeObject(forKey: Self.cachedUserKey)
+        }
+        UserDefaults.standard.set(data, forKey: Self.cachedUserKey)
     }
 
     // MARK: - サインイン
@@ -81,6 +101,7 @@ final class AuthStore: ObservableObject {
         TokenBox.current = res.token
         Keychain.set(res.token, for: Self.account)
         user = res.user
+        cacheUser(res.user)
     }
 
     // MARK: - サインアウト
@@ -96,6 +117,7 @@ final class AuthStore: ObservableObject {
     func clearToken() {
         TokenBox.current = nil
         Keychain.remove(Self.account)
+        cacheUser(nil)
         user = nil
     }
 

@@ -27,11 +27,17 @@ final class ChatViewModel: ObservableObject {
         defer { isLoading = false }
         await reloadMessages()
         await resumeIfGenerating()
-        // ホームのチップから文章が渡されていたら入力欄に入れておく
-        if let pending = ChatDraft.shared.pending {
-            draft = pending
-            ChatDraft.shared.pending = nil
-        }
+    }
+
+    /// ホームのチップから渡された文章を入力欄に入れる。
+    ///
+    /// タブは一度表示されると作り直されない（＝load は初回しか走らない）ので、
+    /// 画面が出るたびに呼ぶ。書きかけの文章があるときは邪魔しない。
+    func consumePendingDraft() {
+        guard let pending = ChatDraft.shared.pending else { return }
+        ChatDraft.shared.pending = nil
+        guard draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draft = pending
     }
 
     private func reloadMessages() async {
@@ -78,6 +84,10 @@ final class ChatViewModel: ObservableObject {
                 }
                 // ストリームが結末を告げずに切れた場合（回線断など）も状態を戻す
                 await self.finishIfStillGenerating()
+            } catch is CancellationError {
+                // 自分で「やめる」を押したとき。後始末は abort() 側がやるので何も出さない
+            } catch APIError.cancelled {
+                // 同上（URLSession 側から取り消しが返ってきた場合）
             } catch {
                 let message = (error as? APIError)?.errorDescription
                     ?? "うまく送れませんでした。もう一度ためしてね。"
@@ -154,18 +164,13 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// 画面を離れるときに、走らせっぱなしの通信を止める。
-    func stopBackgroundWork() {
-        streamTask?.cancel()
-        pollTask?.cancel()
-    }
-
     // MARK: - 保存とリセット
 
     /// プランを保存する。保存できたら true（失敗したらボタンを押せる状態に戻す）。
     func save(plan: DraftPlan) async -> Bool {
         do {
             _ = try await ChatService.save(plan: plan)
+            NotificationCenter.default.post(name: .plansChanged, object: nil)
             return true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription

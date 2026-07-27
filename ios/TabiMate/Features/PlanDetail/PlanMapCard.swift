@@ -111,7 +111,10 @@ struct PlanMapCard: View {
         do {
             let geo = try await PlanService.geo(planId: planId)
             pins = PlanItinerary.pins(plan: plan, geo: geo)
-            guard !pins.isEmpty else { return state = .empty }
+            guard !pins.isEmpty else {
+                state = .empty
+                return
+            }
             camera = .region(region(for: pins))
             state = .ready
         } catch {

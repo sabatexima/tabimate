@@ -30,6 +30,12 @@ struct PlanDetailView: View {
                             isWorking: model.isMakingPackingList,
                             onGenerate: { await model.makePackingList() })
 
+                RatingCard(rating: model.plan.rating ?? 0,
+                           comment: model.plan.ratingComment ?? "",
+                           onSave: { rating, comment in
+                               await model.rate(rating: rating, comment: comment)
+                           })
+
                 if let error = model.errorMessage {
                     ErrorNote(message: error)
                 }
@@ -274,6 +280,69 @@ private struct PackingCard: View {
     }
 }
 
+// MARK: - 旅の感想
+
+/// 帰ってきたあとの★とひとこと。次のプランの好みの参考にも使われる。
+private struct RatingCard: View {
+    let rating: Int
+    let comment: String
+    let onSave: (Int, String) async -> Void
+
+    @State private var draftRating = 0
+    @State private var draftComment = ""
+    @State private var isSaving = false
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("🌟 旅の感想")
+                    .font(.cardTitle)
+                    .foregroundStyle(Theme.Palette.textMain)
+
+                HStack(spacing: 6) {
+                    ForEach(1...5, id: \.self) { star in
+                        Button {
+                            draftRating = star
+                        } label: {
+                            Image(systemName: star <= draftRating ? "star.fill" : "star")
+                                .font(.system(size: 24))
+                                .foregroundStyle(star <= draftRating
+                                                 ? Theme.Palette.kicker : Theme.Palette.border)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("星\(star)つ")
+                    }
+                }
+
+                TextField("よかったこと、次に活かしたいこと", text: $draftComment, axis: .vertical)
+                    .font(.body_)
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 10)
+                    .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(Theme.Palette.borderInput, lineWidth: 1))
+
+                Button(isSaving ? "残しています…" : "感想を残す") {
+                    Task {
+                        isSaving = true
+                        await onSave(draftRating, draftComment)
+                        isSaving = false
+                    }
+                }
+                .buttonStyle(CloverButtonStyle())
+                // ★未選択では送れない（サーバーが1〜5しか受け付けないため）
+                .disabled(draftRating == 0 || isSaving)
+            }
+        }
+        .onAppear {
+            // 既に残した感想があれば、それを初期値にする（上書きで消えないように）
+            draftRating = rating
+            draftComment = comment
+        }
+    }
+}
+
 // MARK: - 状態
 
 @MainActor
@@ -292,6 +361,7 @@ final class PlanDetailViewModel: ObservableObject {
         defer { isMakingPackingList = false }
         do {
             plan.packingList = try await PlanService.generatePackingList(planId: plan.id)
+            NotificationCenter.default.post(name: .plansChanged, object: nil)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription
                 ?? "持ち物リストを作れませんでした。もう一度ためしてね。"
@@ -304,10 +374,27 @@ final class PlanDetailViewModel: ObservableObject {
         do {
             try await PlanService.saveActualTotal(planId: plan.id, amount: amount)
             errorMessage = nil
+            // 一覧が古いままだと、開き直したときに前の値に戻って見える
+            NotificationCenter.default.post(name: .plansChanged, object: nil)
         } catch {
             plan.actualTotal = backup
             errorMessage = (error as? APIError)?.errorDescription
                 ?? "記録できませんでした。もう一度ためしてね。"
+        }
+    }
+
+    func rate(rating: Int, comment: String) async {
+        let backup = (plan.rating, plan.ratingComment)
+        plan.rating = rating
+        plan.ratingComment = comment
+        do {
+            try await PlanService.rate(planId: plan.id, rating: rating, comment: comment)
+            errorMessage = nil
+            NotificationCenter.default.post(name: .plansChanged, object: nil)
+        } catch {
+            (plan.rating, plan.ratingComment) = backup
+            errorMessage = (error as? APIError)?.errorDescription
+                ?? "感想を残せませんでした。もう一度ためしてね。"
         }
     }
 }

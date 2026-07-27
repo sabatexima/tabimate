@@ -21,9 +21,12 @@ actor APIClient {
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
-        // プラン生成は数分かかることがあるので、全体のタイムアウトは長めに取る
-        config.timeoutIntervalForResource = 600
-        config.waitsForConnectivity = true
+        // 持ち物リストの生成や初回のジオコーディングは十数秒かかるので少し長めに。
+        // 数分かかるプラン生成だけは別扱いで、ChatService が個別に延ばしている。
+        config.timeoutIntervalForResource = 120
+        // 圏外のときは待たずに失敗させる。待たせると「ネットにつながらないみたい」を
+        // 出せず、いつまでも回り続けるだけになる
+        config.waitsForConnectivity = false
         session = URLSession(configuration: config)
     }
 
@@ -106,24 +109,24 @@ actor APIClient {
             throw APIError.offline
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.server(nil) }
-        do {
-            try APIClient.check(http, data: data)
-        } catch APIError.unauthorized {
-            // トークンが切れていた。持っていても無駄なので捨て、ログイン画面に戻す
-            await MainActor.run { AuthStore.shared.clearToken() }
-            throw APIError.unauthorized
-        }
+        try APIClient.check(http, data: data)
         return (data, http)
     }
 
     /// ステータスコードを見て、必要なら APIError に変換する。
+    ///
+    /// 401 の後始末（トークン破棄→サインイン画面へ）もここで行う。通常のAPIも
+    /// チャットのSSEも必ずこの関数を通るので、片方だけ取り残されることがない。
     nonisolated static func check(_ http: HTTPURLResponse, data: Data) throws {
         guard !(200..<300).contains(http.statusCode) else { return }
         // サーバーは {"status":"ERROR","message":"..."} を返すので、その言葉をそのまま使う
         let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?
             .flatMap { $0["message"] as? String }
         switch http.statusCode {
-        case 401: throw APIError.unauthorized
+        case 401:
+            // トークンが切れていた。持っていても無駄なので捨て、ログイン画面に戻す
+            Task { @MainActor in AuthStore.shared.clearToken() }
+            throw APIError.unauthorized
         case 429: throw APIError.rateLimited(message)
         case 404: throw APIError.notFound
         default:  throw APIError.server(message)

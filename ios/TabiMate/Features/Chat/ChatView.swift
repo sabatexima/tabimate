@@ -31,6 +31,7 @@ struct ChatView: View {
                 Button("やめる", role: .cancel) {}
             }
             .task { await model.load() }
+            .onAppear { model.consumePendingDraft() }
         }
     }
 

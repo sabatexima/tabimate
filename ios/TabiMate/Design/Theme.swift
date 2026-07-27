@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// たびメイトの世界観をひとまとめにした定義。
 /// Web版 (static/css/layout.css) の CSS 変数と同じ値を使い、

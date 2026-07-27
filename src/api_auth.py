@@ -10,7 +10,6 @@ Web版のセッション認証はそのまま残し、両方を受け付ける�
 import os
 import time
 
-from flask import request, session
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from chat.logger import get_logger
@@ -51,12 +50,19 @@ def verify_google_id_token(id_token_str: str) -> dict | None:
 
     メール未検証のアカウントは共有機能の前提が崩れるため拒否する（Web版と同じ方針）。
     """
+    # 宛先(aud)が誰なのかを必ず確かめる。google-auth は audience=None だと aud の検査を
+    # まるごと省くため、未設定のまま呼ぶと「別のアプリ向けに発行されたIDトークン」まで
+    # 通ってしまう（他人が作ったアプリで victim にサインインさせ、そのトークンで
+    # なりすませる）。設定が無いときは検証せず断る。
+    audience = os.getenv("GOOGLE_IOS_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID")
+    if not audience:
+        logger.error("GOOGLE_IOS_CLIENT_ID / GOOGLE_CLIENT_ID が未設定のためアプリログインを拒否")
+        return None
+
     try:
         from google.auth.transport import requests as ga_requests
         from google.oauth2 import id_token as google_id_token
 
-        # iOS用クライアントIDがあればそれを、無ければWeb用を許可する
-        audience = os.getenv("GOOGLE_IOS_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID")
         info = google_id_token.verify_oauth2_token(
             id_token_str, ga_requests.Request(), audience
         )
@@ -71,14 +77,3 @@ def verify_google_id_token(id_token_str: str) -> dict | None:
     except Exception:
         logger.exception("GoogleIDトークンの検証に失敗")
         return None
-
-
-def current_user_id() -> str | None:
-    """リクエストの認証主体を返す（Bearerトークン優先、無ければWebセッション）。"""
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        data = verify_token(auth[7:].strip())
-        if data:
-            return data.get("sub")
-        return None
-    return session.get("user_id")

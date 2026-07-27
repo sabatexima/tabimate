@@ -342,6 +342,27 @@ def test_app_me_reports_token_validity(monkeypatch):
         assert c.get("/auth/app/me").status_code == 401
 
 
+def test_google_id_token_requires_configured_audience(monkeypatch):
+    """aud の検証先が未設定なら、検証そのものを行わずに断る。
+
+    google-auth は audience=None だと aud の検査を省くため、未設定のまま呼ぶと
+    他アプリ向けのIDトークンでもなりすませてしまう。
+    """
+    monkeypatch.delenv("GOOGLE_IOS_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+
+    called = False
+
+    def _boom(*args, **kwargs):
+        nonlocal called
+        called = True
+        return {"sub": "attacker", "email": "a@example.com", "email_verified": True}
+
+    monkeypatch.setattr("google.oauth2.id_token.verify_oauth2_token", _boom)
+    assert api_auth.verify_google_id_token("any-token") is None
+    assert not called, "検証先が無いのにGoogleへ問い合わせてはいけない"
+
+
 def test_app_signin_rejects_missing_and_invalid_id_token(monkeypatch):
     app = _token_app()
     with app.test_client() as c:

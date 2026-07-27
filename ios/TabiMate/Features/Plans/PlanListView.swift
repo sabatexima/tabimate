@@ -35,6 +35,9 @@ struct PlanListView: View {
             .navigationDestination(for: TravelPlan.self) { PlanDetailView(plan: $0) }
             .task { await model.load() }
             .refreshable { await model.load() }
+            .onReceive(NotificationCenter.default.publisher(for: .plansChanged)) { _ in
+                Task { await model.load() }
+            }
             .confirmationDialog("このしおりを消す？",
                                 isPresented: Binding(get: { planToDelete != nil },
                                                      set: { if !$0 { planToDelete = nil } }),
@@ -134,6 +137,7 @@ final class PlanListViewModel: ObservableObject {
         plans.removeAll { $0.id == plan.id }
         do {
             try await PlanService.delete(planId: plan.id)
+            NotificationCenter.default.post(name: .plansChanged, object: nil)
         } catch {
             plans = backup
             errorMessage = (error as? APIError)?.errorDescription

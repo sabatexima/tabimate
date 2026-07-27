@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 画面をまたいで使う部品たち。Web版の見出し・カード・付箋と同じ様式にそろえる。
 

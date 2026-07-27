@@ -1,5 +1,12 @@
 import Foundation
 
+extension Notification.Name {
+    /// しおりが増えた・減ったときの合図。
+    /// タブは一度表示されると作り直されないので、これが無いと
+    /// 「相談で保存したのに一覧に出てこない」ように見えてしまう。
+    static let plansChanged = Notification.Name("tabimate.plansChanged")
+}
+
 /// 保存プランまわりのAPI。Web版と同じエンドポイントをそのまま使う。
 enum PlanService {
 

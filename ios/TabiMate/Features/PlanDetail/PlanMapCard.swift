@@ -107,6 +107,7 @@ struct PlanMapCard: View {
         }
     }
 
+    @MainActor
     private func load() async {
         // 座標は一覧の応答に入ってくる。取得済みならそれをそのまま使い、
         // 余計な問い合わせをしない（人からもらったしおりは取りに行けないので、なおさら）。
@@ -136,17 +137,22 @@ struct PlanMapCard: View {
     }
 
     /// すべてのピンが収まる範囲。1点だけのときは適度に寄る。
+    /// ピンが無いときは日本全体（呼び出し側で弾いているが、落ちないようにしておく）。
     private func region(for pins: [PlanPin]) -> MKCoordinateRegion {
         let lats = pins.map(\.lat), lngs = pins.map(\.lng)
-        let center = CLLocationCoordinate2D(
-            latitude: (lats.min()! + lats.max()!) / 2,
-            longitude: (lngs.min()! + lngs.max()!) / 2
+        guard let minLat = lats.min(), let maxLat = lats.max(),
+              let minLng = lngs.min(), let maxLng = lngs.max() else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.2, longitude: 138.3),
+                span: MKCoordinateSpan(latitudeDelta: 12, longitudeDelta: 12)
+            )
+        }
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2,
+                                           longitude: (minLng + maxLng) / 2),
+            span: MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.4, 0.02),
+                                   longitudeDelta: max((maxLng - minLng) * 1.4, 0.02))
         )
-        let span = MKCoordinateSpan(
-            latitudeDelta: max((lats.max()! - lats.min()!) * 1.4, 0.02),
-            longitudeDelta: max((lngs.max()! - lngs.min()!) * 1.4, 0.02)
-        )
-        return MKCoordinateRegion(center: center, span: span)
     }
 }
 

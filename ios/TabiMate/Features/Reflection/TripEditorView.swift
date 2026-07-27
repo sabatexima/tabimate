@@ -86,6 +86,7 @@ struct TripEditorView: View {
         }
     }
 
+    @MainActor
     private func save() async {
         isSaving = true
         errorMessage = nil

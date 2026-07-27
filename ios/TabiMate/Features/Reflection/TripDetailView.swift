@@ -262,6 +262,7 @@ struct TripDetailView: View {
         }
     }
 
+    @MainActor
     private func upload() async {
         // 送っている最中にもう一度選ばれると、二重に走って進み具合が飛ぶ
         guard !picked.isEmpty, !model.isUploading else { return }

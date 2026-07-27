@@ -25,7 +25,7 @@ struct TripListView: View {
                             .padding(.horizontal, 20)
                     case .ready:
                         if let message = model.actionError {
-                            ErrorNote(message: message) { model.actionError = nil }
+                            ErrorNote(message: message, retryTitle: "とじる") { model.actionError = nil }
                                 .padding(.horizontal, 20)
                         }
                         if model.trips.isEmpty && model.sharedTrips.isEmpty {

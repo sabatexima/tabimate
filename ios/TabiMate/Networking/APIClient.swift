@@ -40,14 +40,14 @@ actor APIClient {
         body: Data? = nil,
         contentType: String? = nil
     ) -> URLRequest {
-        var comps = URLComponents(
-            url: baseURL.appendingPathComponent(path),
-            resolvingAgainstBaseURL: false
-        )!
+        // 接続先の設定（Info.plist の TabiMateBaseURL）を書き間違えていても、
+        // 落とさずに素の URL で進む。通信が失敗すれば普通のエラーとして見える
+        let base = baseURL.appendingPathComponent(path)
+        var comps = URLComponents(url: base, resolvingAgainstBaseURL: false)
         if !query.isEmpty {
-            comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+            comps?.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
-        var req = URLRequest(url: comps.url!)
+        var req = URLRequest(url: comps?.url ?? base)
         req.httpMethod = method
         req.httpBody = body
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -129,8 +129,8 @@ actor APIClient {
     nonisolated static func check(_ http: HTTPURLResponse, data: Data) throws {
         guard !(200..<300).contains(http.statusCode) else { return }
         // サーバーは {"status":"ERROR","message":"..."} を返すので、その言葉をそのまま使う
-        let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?
-            .flatMap { $0["message"] as? String }
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let message = object?["message"] as? String
         switch http.statusCode {
         case 401:
             // トークンが切れていた。持っていても無駄なので捨て、ログイン画面に戻す

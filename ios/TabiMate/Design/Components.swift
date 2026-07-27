@@ -278,6 +278,8 @@ struct LoadingClover: View {
 /// エラーの見せ方も世界観の一部。責めない言葉で、やり直せる導線を必ず添える。
 struct ErrorNote: View {
     let message: String
+    /// ボタンの文言。やり直しではなく単に閉じるときは「とじる」などに変える。
+    var retryTitle: String = "もういちど"
     var retry: (() -> Void)? = nil
 
     var body: some View {
@@ -288,7 +290,7 @@ struct ErrorNote: View {
                     .lineSpacing(5)
                     .foregroundStyle(Theme.Sticky.pink.ink)
                 if let retry {
-                    Button("もういちど", action: retry)
+                    Button(retryTitle, action: retry)
                         .buttonStyle(QuietButtonStyle(tint: Theme.Sticky.pink.ink))
                 }
             }

@@ -69,6 +69,7 @@ struct SignInView: View {
         .paperBackground()
     }
 
+    @MainActor
     private func signIn() async {
         #if canImport(GoogleSignIn)
         guard let root = UIApplication.shared.topViewController else { return }

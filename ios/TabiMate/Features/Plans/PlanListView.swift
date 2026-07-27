@@ -25,7 +25,7 @@ struct PlanListView: View {
                         EmptyStateView(message: "まだしおりがありません。\n「そうだん」でちゃむに話しかけてみてね。")
                     } else {
                         if let message = model.actionError {
-                            ErrorNote(message: message) { model.actionError = nil }
+                            ErrorNote(message: message, retryTitle: "とじる") { model.actionError = nil }
                                 .padding(.horizontal, 20)
                         }
                         board

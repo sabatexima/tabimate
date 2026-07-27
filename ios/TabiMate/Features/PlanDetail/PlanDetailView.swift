@@ -22,20 +22,24 @@ struct PlanDetailView: View {
 
                 sections
 
-                LedgerCard(plan: model.plan, onSave: { amount in
-                    await model.saveActualTotal(amount)
-                })
+                // 記録・持ち物・感想はサーバー側が本人しか受け付けないので、
+                // もらったしおりでは出さない（押しても失敗するだけのため）
+                if model.plan.isOwner {
+                    LedgerCard(plan: model.plan, onSave: { amount in
+                        await model.saveActualTotal(amount)
+                    })
 
-                PackingCard(planId: model.plan.id,
-                            items: model.plan.packingList,
-                            isWorking: model.isMakingPackingList,
-                            onGenerate: { await model.makePackingList() })
+                    PackingCard(planId: model.plan.id,
+                                items: model.plan.packingList,
+                                isWorking: model.isMakingPackingList,
+                                onGenerate: { await model.makePackingList() })
 
-                RatingCard(rating: model.plan.rating ?? 0,
-                           comment: model.plan.ratingComment ?? "",
-                           onSave: { rating, comment in
-                               await model.rate(rating: rating, comment: comment)
-                           })
+                    RatingCard(rating: model.plan.rating ?? 0,
+                               comment: model.plan.ratingComment ?? "",
+                               onSave: { rating, comment in
+                                   await model.rate(rating: rating, comment: comment)
+                               })
+                }
 
                 if let error = model.errorMessage {
                     ErrorNote(message: error)
@@ -48,11 +52,13 @@ struct PlanDetailView: View {
         .navigationTitle(model.plan.destination)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showingShare = true } label: {
-                    Image(systemName: "square.and.arrow.up")
+            if model.plan.isOwner {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingShare = true } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("このしおりを共有する")
                 }
-                .accessibilityLabel("このしおりを共有する")
             }
         }
         .sheet(isPresented: $showingShare) {

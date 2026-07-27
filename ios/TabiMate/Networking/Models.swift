@@ -29,10 +29,13 @@ struct TravelPlan: Codable, Identifiable, Hashable {
     var createdAt: String?
     /// 出発日を ISO 8601 に正規化したもの。サーバーが付ける（パース不能なら nil）。
     var departIso: String?
+    /// 共有されたしおりのときだけ入る（view / edit）。
+    var permission: String?
+    var grantId: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, destination, duration, themes, spots, restaurants, accommodation
-        case schedule, rating
+        case schedule, rating, permission
         case travelDate = "travel_date"
         case numPeople = "num_people"
         case budgetLimit = "budget_limit"
@@ -46,6 +49,7 @@ struct TravelPlan: Codable, Identifiable, Hashable {
         case ratingComment = "rating_comment"
         case createdAt = "created_at"
         case departIso = "depart_iso"
+        case grantId = "grant_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -72,7 +76,14 @@ struct TravelPlan: Codable, Identifiable, Hashable {
         ratingComment       = try? c.decode(String.self, forKey: .ratingComment)
         createdAt           = try? c.decode(String.self, forKey: .createdAt)
         departIso           = try? c.decode(String.self, forKey: .departIso)
+        permission          = try? c.decode(String.self, forKey: .permission)
+        grantId             = try? c.decode(Int.self, forKey: .grantId)
     }
+
+    /// 共有されたしおりかどうか（自分のものには permission が付かない）。
+    var isShared: Bool { permission != nil }
+    /// 記録や感想を残せるのは自分のしおりだけ（サーバー側も本人しか受け付けない）。
+    var isOwner: Bool { !isShared }
 }
 
 extension TravelPlan {

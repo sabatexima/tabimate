@@ -21,7 +21,7 @@ struct PlanListView: View {
                     } else if let error = model.errorMessage {
                         ErrorNote(message: error) { Task { await model.load() } }
                             .padding(.horizontal, 20)
-                    } else if model.plans.isEmpty {
+                    } else if model.plans.isEmpty && model.sharedPlans.isEmpty {
                         EmptyStateView(message: "まだしおりがありません。\n「そうだん」でちゃむに話しかけてみてね。")
                     } else {
                         board
@@ -56,21 +56,44 @@ struct PlanListView: View {
     }
 
     private var board: some View {
-        VStack(spacing: 26) {
+        VStack(alignment: .leading, spacing: 26) {
             ForEach(Array(model.plans.enumerated()), id: \.element.id) { index, plan in
-                NavigationLink(value: plan) {
-                    PlanStickyCard(plan: plan, style: Theme.Sticky.forIndex(index))
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button(role: .destructive) { planToDelete = plan } label: {
-                        Label("消す", systemImage: "trash")
-                    }
+                planRow(plan, index: index)
+            }
+
+            if !model.sharedPlans.isEmpty {
+                Text("共有してもらったしおり")
+                    .font(Theme.Font_.rounded(13, weight: .bold))
+                    .foregroundStyle(Theme.Palette.textMuted)
+                    .padding(.top, 8)
+                ForEach(Array(model.sharedPlans.enumerated()), id: \.element.id) { index, plan in
+                    planRow(plan, index: index + model.plans.count)
                 }
             }
         }
         .padding(.horizontal, 24)
         .padding(.top, 6)
+    }
+
+    private func planRow(_ plan: TravelPlan, index: Int) -> some View {
+        NavigationLink(value: plan) {
+            PlanStickyCard(plan: plan, style: Theme.Sticky.forIndex(index))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if plan.isOwner {
+                Button(role: .destructive) { planToDelete = plan } label: {
+                    Label("消す", systemImage: "trash")
+                }
+            } else if let grantId = plan.grantId {
+                // 人からもらったしおりは消せない。自分の一覧から外すだけ
+                Button(role: .destructive) {
+                    Task { await model.leaveShared(plan, grantId: grantId) }
+                } label: {
+                    Label("一覧から外す", systemImage: "person.badge.minus")
+                }
+            }
+        }
     }
 }
 
@@ -117,13 +140,18 @@ struct PlanStickyCard: View {
 @MainActor
 final class PlanListViewModel: ObservableObject {
     @Published private(set) var plans: [TravelPlan] = []
+    @Published private(set) var sharedPlans: [TravelPlan] = []
     @Published private(set) var isLoading = true
     @Published var errorMessage: String?
 
     func load() async {
         errorMessage = nil
         do {
-            plans = try await PlanService.myPlans()
+            // 共有ぶんは取れなくても自分のしおりは見せる（付随情報のため）
+            async let mine = PlanService.myPlans()
+            async let shared = try? PlanService.sharedPlans()
+            plans = try await mine
+            sharedPlans = await shared ?? []
         } catch {
             errorMessage = (error as? APIError)?.errorDescription
                 ?? "しおりを読み込めませんでした。"
@@ -142,6 +170,19 @@ final class PlanListViewModel: ObservableObject {
             plans = backup
             errorMessage = (error as? APIError)?.errorDescription
                 ?? "消せませんでした。もう一度ためしてね。"
+        }
+    }
+
+    /// もらったしおりを自分の一覧から外す（相手の元データは消えない）。
+    func leaveShared(_ plan: TravelPlan, grantId: Int) async {
+        let backup = sharedPlans
+        sharedPlans.removeAll { $0.id == plan.id }
+        do {
+            try await PlanService.leaveShared(grantId: grantId)
+        } catch {
+            sharedPlans = backup
+            errorMessage = (error as? APIError)?.errorDescription
+                ?? "外せませんでした。もう一度ためしてね。"
         }
     }
 }

@@ -185,6 +185,15 @@ struct TripDetailView: View {
                                     .lineSpacing(5)
                                     .foregroundStyle(Theme.Sticky.forIndex(index).ink)
                             }
+                            .contextMenu {
+                                if model.trip.canEditPhotos {
+                                    Button(role: .destructive) {
+                                        Task { await model.deleteSticker(sticker) }
+                                    } label: {
+                                        Label("この付箋をはがす", systemImage: "trash")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 4)
@@ -427,6 +436,16 @@ final class TripDetailViewModel: ObservableObject {
         } catch {
             errorMessage = (error as? APIError)?.errorDescription
                 ?? "言葉を書けませんでした。もう一度ためしてね。"
+        }
+    }
+
+    func deleteSticker(_ sticker: Sticker) async {
+        do {
+            try await ReflectionService.deleteSticker(tripId: trip.id, shared: trip.isShared,
+                                                      stickerId: sticker.id)
+            await load()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? "はがせませんでした。"
         }
     }
 

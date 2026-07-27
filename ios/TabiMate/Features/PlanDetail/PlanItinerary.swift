@@ -136,16 +136,24 @@ enum PlanItinerary {
             .joined()
     }
 
-    /// 同じ座標のピンが重なって1本に見えるのを防ぐ（1件ごとに約20m 北東へずらす）。
+    /// 同じ座標のピンが重なって1本に見えるのを防ぐ（1段ごとに約20m 北東へずらす）。
+    ///
+    /// 「重なっている数」でずらすだけだと、3件目が2件目と同じ位置に落ちる。
+    /// 空いている場所が見つかるまで押しやる。
     private static func spreadOverlaps(_ pins: inout [PlanPin]) {
         var placed: [(lat: Double, lng: Double)] = []
         for index in pins.indices {
-            let bump = placed.filter {
-                abs(pins[index].lat - $0.lat) < 0.00015 && abs(pins[index].lng - $0.lng) < 0.00015
-            }.count
+            var bump = 0
+            while bump < placed.count + 1,
+                  placed.contains(where: {
+                      abs(pins[index].lat + 0.00013 * Double(bump) - $0.lat) < 0.00015
+                          && abs(pins[index].lng + 0.00022 * Double(bump) - $0.lng) < 0.00015
+                  }) {
+                bump += 1
+            }
             if bump > 0 {
-                pins[index].lng += 0.00022 * Double(bump)
                 pins[index].lat += 0.00013 * Double(bump)
+                pins[index].lng += 0.00022 * Double(bump)
             }
             placed.append((pins[index].lat, pins[index].lng))
         }

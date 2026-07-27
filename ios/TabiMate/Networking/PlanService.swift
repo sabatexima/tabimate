@@ -16,6 +16,16 @@ enum PlanService {
         try await APIClient.shared.get("get_my_plans", as: PlansResponse.self).plans
     }
 
+    /// 自分あてに共有されたしおり。
+    static func sharedPlans() async throws -> [TravelPlan] {
+        try await APIClient.shared.get("get_shared_plans", as: PlansResponse.self).plans
+    }
+
+    /// 共有された側が、自分の一覧から外す。
+    static func leaveShared(grantId: Int) async throws {
+        try await ShareService.leaveShared(grantId: grantId)
+    }
+
     /// プランを消す。
     static func delete(planId: Int) async throws {
         let req = APIClient.request("delete_plan/\(planId)", method: "DELETE")

@@ -165,6 +165,24 @@ ios/TabiMate/
     └── Settings/   アカウントとサインアウト
 ```
 
+### テスト
+
+```bash
+cd ios && xcodegen generate
+xcodebuild test -scheme TabiMate -destination 'platform=iOS Simulator,name=iPhone 16'
+```
+
+Xcode なら **⌘U**。中身は「壊れると気づきにくいところ」に絞ってあります。
+
+| ファイル | 見ているもの |
+|---|---|
+| `ModelDecodingTests` | サーバーのJSONをそのまま読めるか（キー名のずれは画面が空になる形で出る） |
+| `ImageKindTests` | 写真の種類を中身から見分けられるか（間違えるとWeb版で開けない写真になる） |
+| `RequestBuildingTests` | 送信内容の組み立て（`+` `&` `=` が化けないか）と認証ヘッダ |
+| `PlanItineraryTests` | 地図のピンの並び順・通し番号・重なりのずらし |
+
+サーバー側は `pytest tests/` で、アプリ向けAPIの認可と整形を `tests/test_app_api.py` が見ています。
+
 ### 写真の出しかた
 
 写真のURLは保存先で形が変わります。

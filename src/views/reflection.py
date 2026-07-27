@@ -125,7 +125,8 @@ def api_trip_detail(trip_id: int):
     cards = repo.get_trip_cards([trip_id], viewer_id=_uid())
     if not cards:
         abort(404)
-    data = _trip_detail_data(trip_id, trip=cards[0])
+    # 重ね合わせはアプリの画面に無いので、その材料集め（プラン一覧・座標取得）は省く
+    data = _trip_detail_data(trip_id, trip=cards[0], include_plan_link=False)
 
     trip = dict(data["trip"], photo_count=len(data["photos"]))
     if not repo.get_trip(trip_id, _uid()):
@@ -215,11 +216,13 @@ def digest():
     )
 
 
-def _trip_detail_data(trip_id: int, trip: dict | None = None) -> dict:
+def _trip_detail_data(trip_id: int, trip: dict | None = None,
+                      include_plan_link: bool = True) -> dict:
     """1つの旅の中身を集める（画面とアプリで共用）。
 
     trip を渡さない場合は本人所有であることを要求する。共有された旅を見せるときは
     呼び出し側で閲覧資格を確かめ、取得済みの trip を渡すこと。
+    include_plan_link=False で「プランとの重ね合わせ」の材料集めを省く。
     """
     if trip is None:
         trip = _require_trip(trip_id)
@@ -265,20 +268,23 @@ def _trip_detail_data(trip_id: int, trip: dict | None = None) -> dict:
 
     # 実績↔プランの重ね合わせ：紐付け用に自分のプラン一覧と、紐付け済みプランの
     # 観光スポット座標（計画地点）を渡す。
-    from db import get_travel_plans, get_travel_plan_by_id
-    my_plans = [{"id": p["id"], "destination": p.get("destination") or "（無題）"}
-                for p in get_travel_plans(_uid())]
+    # この処理はプラン一覧の取得に加え、未取得なら座標の取得（外部API）まで行うため、
+    # 重ね合わせを使わない呼び出し（アプリ向けJSON）では丸ごと省く。
+    my_plans, planned = [], []
     linked_plan_id = trip.get("linked_plan_id")
-    planned = []
-    if linked_plan_id:
-        lp = get_travel_plan_by_id(linked_plan_id)
-        if lp and lp.get("google_user_id") == _uid():
-            # 旧プランで座標未取得でも重ね合わせが出るよう、ここで取得・キャッシュ
-            from geocoding import ensure_plan_coords
-            ensure_plan_coords(lp)
-            planned = lp.get("spot_coords") or []
-        else:
-            linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化
+    if include_plan_link:
+        from db import get_travel_plans, get_travel_plan_by_id
+        my_plans = [{"id": p["id"], "destination": p.get("destination") or "（無題）"}
+                    for p in get_travel_plans(_uid())]
+        if linked_plan_id:
+            lp = get_travel_plan_by_id(linked_plan_id)
+            if lp and lp.get("google_user_id") == _uid():
+                # 旧プランで座標未取得でも重ね合わせが出るよう、ここで取得・キャッシュ
+                from geocoding import ensure_plan_coords
+                ensure_plan_coords(lp)
+                planned = lp.get("spot_coords") or []
+            else:
+                linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化
     return {
         "trip": trip, "photos": photos, "stickers": stickers,
         "footprints": footprints, "best_shots": best_shots,

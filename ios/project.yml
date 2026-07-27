@@ -62,3 +62,25 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.tabimate.ios
         TARGETED_DEVICE_FAMILY: "1"
+
+  TabiMateTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TabiMateTests
+    dependencies:
+      - target: TabiMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.tabimate.ios.tests
+
+schemes:
+  TabiMate:
+    build:
+      targets:
+        TabiMate: all
+        TabiMateTests: [test]
+    test:
+      targets: [TabiMateTests]
+    run:
+      config: Debug

@@ -4,8 +4,9 @@ import SwiftUI
 struct TripEditorView: View {
     /// 直すときだけ渡す。nil なら新規作成。
     var trip: Trip? = nil
-    /// 保存できたら true を返す。
-    let onSave: (String, String?, String?) async -> Bool
+    /// 保存できたら nil、できなければ理由の文言を返す。
+    /// シートの裏側にエラーを出しても見えないので、ここで受け取って自分で見せる。
+    let onSave: (String, String?, String?) async -> String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
@@ -13,6 +14,7 @@ struct TripEditorView: View {
     @State private var startDate = Date()
     @State private var endDate = Date()
     @State private var isSaving = false
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -22,6 +24,10 @@ struct TripEditorView: View {
                                 ? "どんな旅だった？\n名前をつけてあげてね。"
                                 : "名前や日にちを直せるよ。")
                         .padding(.bottom, 2)
+
+                    if let errorMessage {
+                        ErrorNote(message: errorMessage)
+                    }
 
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
@@ -82,12 +88,13 @@ struct TripEditorView: View {
 
     private func save() async {
         isSaving = true
+        errorMessage = nil
         let name = title.trimmingCharacters(in: .whitespaces)
         // 日にちを外したときは空文字を送って記録を消す
         let start = hasDates ? DateFormatter.plainDate.string(from: startDate) : ""
         let end = hasDates ? DateFormatter.plainDate.string(from: endDate) : ""
-        let ok = await onSave(name, start, end)
+        errorMessage = await onSave(name, start, end)
         isSaving = false
-        if ok { dismiss() }
+        if errorMessage == nil { dismiss() }
     }
 }

@@ -465,15 +465,15 @@ final class TripDetailViewModel: ObservableObject {
 
     // MARK: - 旅そのもの
 
-    func rename(title: String, startDate: String?, endDate: String?) async -> Bool {
+    /// 名前と日にちを直す。できなければ理由の文言を返す（エディタのシート内で見せる）。
+    func rename(title: String, startDate: String?, endDate: String?) async -> String? {
         do {
             try await ReflectionService.updateTrip(tripId: trip.id, title: title,
                                                    startDate: startDate, endDate: endDate)
             await load()
-            return true
+            return nil
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? "直せませんでした。"
-            return false
+            return (error as? APIError)?.errorDescription ?? "直せませんでした。"
         }
     }
 

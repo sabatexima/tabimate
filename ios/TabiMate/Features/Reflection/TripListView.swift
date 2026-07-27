@@ -227,14 +227,14 @@ final class TripListViewModel: ObservableObject {
         }
     }
 
-    func create(title: String, startDate: String?, endDate: String?) async -> Bool {
+    /// 旅をつくる。できなければ理由の文言を返す（エディタのシート内で見せる）。
+    func create(title: String, startDate: String?, endDate: String?) async -> String? {
         do {
             _ = try await ReflectionService.createTrip(title: title,
                                                        startDate: startDate, endDate: endDate)
-            return true
+            return nil
         } catch {
-            actionError = (error as? APIError)?.errorDescription ?? "つくれませんでした。"
-            return false
+            return (error as? APIError)?.errorDescription ?? "つくれませんでした。"
         }
     }
 

@@ -16,6 +16,11 @@ final class ChatViewModel: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var currentRequestId: String?
+    /// 自分で「やめる」を押した最中かどうか。
+    ///
+    /// AsyncThrowingStream は取り消されると例外ではなく「正常終了」で返るため、
+    /// これが無いと中断が「通信が途切れた」と区別できず、余計なエラーが出る。
+    private var isAborting = false
 
     /// 進行中の生成を覚えておく場所。
     private static let pendingKey = "tabimate.pendingRequestId"
@@ -89,9 +94,13 @@ final class ChatViewModel: ObservableObject {
             } catch APIError.cancelled {
                 // 同上（URLSession 側から取り消しが返ってきた場合）
             } catch {
+                guard !self.isAborting else { return }
+                // ここに来るのは「サーバーが受け取れなかった」とき（混雑・圏外など）。
+                // 履歴を読み直すと打った文章まで消えてしまうので、入力欄に戻す
                 let message = (error as? APIError)?.errorDescription
                     ?? "うまく送れませんでした。もう一度ためしてね。"
                 await self.finish(reload: true, error: message)
+                self.restoreDraft(text)
             }
         }
     }
@@ -99,14 +108,22 @@ final class ChatViewModel: ObservableObject {
     /// 生成をやめる。サーバー側でもそのやりとりが消される。
     func abort() async {
         guard let requestId = currentRequestId else { return }
+        isAborting = true
         streamTask?.cancel()
         pollTask?.cancel()
         try? await ChatService.abort(requestId: requestId)
         await finish(reload: true)
     }
 
+    /// 送れなかった文章を入力欄に戻す（書き直しの手間をかけさせない）。
+    private func restoreDraft(_ text: String) {
+        guard draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draft = text
+    }
+
     private func finish(reload: Bool, error: String? = nil) async {
         isGenerating = false
+        isAborting = false
         currentRequestId = nil
         UserDefaults.standard.removeObject(forKey: Self.pendingKey)
         if reload { await reloadMessages() }
@@ -115,8 +132,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// ストリームが黙って終わったときの後始末。
+    /// 「やめる」で終わった場合は abort() が片付けるので、ここでは何もしない。
     private func finishIfStillGenerating() async {
-        guard isGenerating else { return }
+        guard isGenerating, !isAborting else { return }
         await finish(reload: true,
                      error: "通信が途切れちゃったみたい。結果は履歴で確かめてね。")
     }

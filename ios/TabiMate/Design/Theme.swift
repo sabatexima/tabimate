@@ -32,17 +32,24 @@ enum Theme {
         static let danger       = Color(hex: 0xE05A4A)
         static let dangerHover  = Color(hex: 0xCF4636)
 
+        // グラデーションは計算プロパティにしておく（静的な値として持つと
+        // Swift 6 の並行性チェックに引っかかる可能性があるため）。
+
         /// クリーム→淡い若葉色。全画面共通の背景。
-        static let background = LinearGradient(
-            colors: [Color(hex: 0xFDFAF2), Color(hex: 0xF4F6E9), Color(hex: 0xEDF3DE)],
-            startPoint: .top, endPoint: .bottom
-        )
+        static var background: LinearGradient {
+            LinearGradient(
+                colors: [Color(hex: 0xFDFAF2), Color(hex: 0xF4F6E9), Color(hex: 0xEDF3DE)],
+                startPoint: .top, endPoint: .bottom
+            )
+        }
 
         /// プランヘッダーの葉色グラデ。
-        static let headerGradient = LinearGradient(
-            colors: [Color(hex: 0x4A9D3A), Color(hex: 0x6FB152)],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
+        static var headerGradient: LinearGradient {
+            LinearGradient(
+                colors: [Color(hex: 0x4A9D3A), Color(hex: 0x6FB152)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+        }
     }
 
     // MARK: - 付箋
@@ -106,13 +113,20 @@ enum Theme {
         static let paper: CGFloat = 3
     }
 
-    enum Shadow {
-        static let card   = (color: Color(red: 0.47, green: 0.43, blue: 0.35, opacity: 0.08),
-                             radius: CGFloat(10), y: CGFloat(4))
-        static let soft   = (color: Color(red: 0.47, green: 0.43, blue: 0.35, opacity: 0.06),
-                             radius: CGFloat(5), y: CGFloat(2))
-        static let sticky = (color: Color(red: 0.47, green: 0.39, blue: 0.16, opacity: 0.14),
-                             radius: CGFloat(12), y: CGFloat(8))
+    struct Shadow {
+        let color: Color
+        let radius: CGFloat
+        let y: CGFloat
+
+        static var card: Shadow {
+            Shadow(color: Color(red: 0.47, green: 0.43, blue: 0.35, opacity: 0.08), radius: 10, y: 4)
+        }
+        static var soft: Shadow {
+            Shadow(color: Color(red: 0.47, green: 0.43, blue: 0.35, opacity: 0.06), radius: 5, y: 2)
+        }
+        static var sticky: Shadow {
+            Shadow(color: Color(red: 0.47, green: 0.39, blue: 0.16, opacity: 0.14), radius: 12, y: 8)
+        }
     }
 
     // MARK: - 文字

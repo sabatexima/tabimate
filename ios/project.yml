@@ -16,7 +16,11 @@ configs:
 
 settings:
   base:
-    SWIFT_VERSION: "5.9"
+    # 言語モード。指定できるのは 4.0 / 4.2 / 5.0 / 6.0 だけ（"5.9" のような
+    # コンパイラのバージョンを書くとビルドが通らない）。
+    # コードは Swift 6 の厳格な並行性チェックも通るように書いてあるので、
+    # "6.0" に上げても構わない。
+    SWIFT_VERSION: "5.0"
     DEVELOPMENT_LANGUAGE: ja
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 

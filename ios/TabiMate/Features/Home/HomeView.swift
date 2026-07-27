@@ -90,9 +90,14 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             PageHeader(kicker: "Where to", title: "こんな旅は", accent: "どう？")
 
-            if model.ideas.isEmpty {
+            switch model.state {
+            case .loading:
                 LoadingClover().frame(maxWidth: .infinity)
-            } else {
+            case .failed:
+                ErrorNote(message: "旅のアイデアを読み込めませんでした。") {
+                    Task { await model.load() }
+                }
+            case .ready:
                 FlowLayout(spacing: 10) {
                     ForEach(Array(model.ideas.enumerated()), id: \.element) { index, idea in
                         Button {
@@ -120,18 +125,28 @@ struct HomeView: View {
 
 @MainActor
 final class HomeViewModel: ObservableObject {
-    @Published var ideas: [TravelIdea] = []
-    @Published var nextTrip: TravelPlan?
+    @Published private(set) var ideas: [TravelIdea] = []
+    @Published private(set) var nextTrip: TravelPlan?
+    /// 「読み込み中」と「取れなかった」を必ず区別する。
+    /// 同じ空っぽの状態にすると、失敗しても四つ葉が回り続けてしまう。
+    @Published private(set) var state: LoadState = .loading
+
+    enum LoadState { case loading, ready, failed }
 
     func load() async {
+        state = .loading
         async let ideasTask = try? APIClient.shared.get("api/ideas", as: IdeasResponse.self)
         async let plansTask = try? PlanService.myPlans()
 
-        ideas = (await ideasTask)?.ideas ?? []
+        let loadedIdeas = await ideasTask
+        let loadedPlans = await plansTask
+
+        ideas = loadedIdeas?.ideas ?? []
         // 出発日が近い順にひとつだけ。過ぎた旅は daysUntilDeparture が nil になる
-        nextTrip = (await plansTask)?
+        nextTrip = loadedPlans?
             .filter { $0.daysUntilDeparture != nil }
             .min { ($0.daysUntilDeparture ?? .max) < ($1.daysUntilDeparture ?? .max) }
+        state = loadedIdeas == nil ? .failed : .ready
     }
 
     struct IdeasResponse: Codable {

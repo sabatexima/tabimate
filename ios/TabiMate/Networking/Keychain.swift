@@ -54,7 +54,9 @@ enum Keychain {
 /// 値そのものはここ（アクター非依存・ロック付き）に持たせる。
 enum TokenBox {
     private static let lock = NSLock()
-    private static var value: String?
+    // 出入りは必ず下のロックを通すので、コンパイラの並行性チェックからは外す
+    // （Swift 6 では静的な var はこの指定が無いとエラーになる）。
+    nonisolated(unsafe) private static var value: String?
 
     static var current: String? {
         get { lock.withLock { value } }

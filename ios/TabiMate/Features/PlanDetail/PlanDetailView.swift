@@ -95,14 +95,11 @@ struct PlanDetailView: View {
 
     private var sections: some View {
         Card(padding: 0) {
-            VStack(spacing: 0) {
-                PlanSection(icon: "📅", title: "スケジュール",
-                            items: model.plan.schedule, initiallyOpen: true)
-                PlanSection(icon: "📸", title: "観光スポット", items: model.plan.spots)
-                PlanSection(icon: "🍽", title: "食事", items: model.plan.restaurants)
-                PlanSection(icon: "🏨", title: "宿泊", items: model.plan.accommodation)
-                PlanSection(icon: "💴", title: "費用の内訳", items: model.plan.budgetEstimate)
-            }
+            PlanSectionList(schedule: model.plan.schedule,
+                            spots: model.plan.spots,
+                            restaurants: model.plan.restaurants,
+                            accommodation: model.plan.accommodation,
+                            budgetEstimate: model.plan.budgetEstimate)
         }
     }
 }
@@ -183,7 +180,9 @@ private struct LedgerCard: View {
                 Button(isSaving ? "記録しています…" : "記録する") {
                     Task {
                         isSaving = true
-                        await onSave(Int(input))   // 空や数字でなければ記録を消す
+                        // 「24,000」「24000円」のような書き方も受け取れるよう数字だけ拾う。
+                        // 空欄なら nil ＝ 記録を消す
+                        await onSave(Int(input.filter(\.isNumber)))
                         isSaving = false
                         isEditing = false
                     }

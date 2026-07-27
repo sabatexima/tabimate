@@ -69,13 +69,11 @@ struct PlanProposalCard: View {
     // MARK: - 中身
 
     private var sections: some View {
-        VStack(spacing: 0) {
-            PlanSection(icon: "📅", title: "スケジュール", items: plan.schedule ?? [], initiallyOpen: true)
-            PlanSection(icon: "📸", title: "観光スポット", items: plan.spots ?? [])
-            PlanSection(icon: "🍽", title: "食事", items: plan.restaurants ?? [])
-            PlanSection(icon: "🏨", title: "宿泊", items: plan.accommodation ?? [])
-            PlanSection(icon: "💴", title: "費用の内訳", items: plan.budgetEstimate ?? [])
-        }
+        PlanSectionList(schedule: plan.schedule ?? [],
+                        spots: plan.spots ?? [],
+                        restaurants: plan.restaurants ?? [],
+                        accommodation: plan.accommodation ?? [],
+                        budgetEstimate: plan.budgetEstimate ?? [])
     }
 
     private func review(_ text: String) -> some View {
@@ -139,62 +137,6 @@ struct PlanProposalCard: View {
         }
         .padding(16)
     }
-}
-
-/// 折りたたみの1ブロック。Web版の <details> と同じく、既定は閉じておく。
-struct PlanSection: View {
-    let icon: String
-    let title: String
-    let items: [String]
-    var initiallyOpen: Bool = false
-
-    @State private var isOpen: Bool?
-
-    var body: some View {
-        if !items.isEmpty {
-            VStack(spacing: 0) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { isOpen = !open }
-                } label: {
-                    HStack {
-                        Text("\(icon) \(title)")
-                            .font(Theme.Font_.rounded(14, weight: .bold))
-                            .foregroundStyle(Theme.Palette.textMain)
-                        Spacer()
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.Palette.textMuted)
-                            .rotationEffect(.degrees(open ? 0 : -90))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 13)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                if open {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("・").foregroundStyle(Theme.Palette.primary)
-                                Text(item)
-                                    .font(.body_)
-                                    .lineSpacing(4)
-                                    .foregroundStyle(Theme.Palette.textMain)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
-                }
-
-                Rectangle().fill(Theme.Palette.border).frame(height: 1)
-            }
-        }
-    }
-
-    private var open: Bool { isOpen ?? initiallyOpen }
 }
 
 extension Int {

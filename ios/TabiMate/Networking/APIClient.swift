@@ -61,10 +61,19 @@ actor APIClient {
     }
 
     /// フォーム形式（application/x-www-form-urlencoded）の本文を作る。
+    ///
+    /// URLComponents に任せると & = + を素通しするため、「ホテル&リゾートに行きたい」
+    /// のようなメッセージが途中で切れたり、+ が空白に化けたりする。
+    /// RFC 3986 の非予約文字以外はすべて自前で%エンコードする。
     nonisolated static func formBody(_ fields: [String: String]) -> Data {
-        var comps = URLComponents()
-        comps.queryItems = fields.map { URLQueryItem(name: $0.key, value: $0.value) }
-        return (comps.percentEncodedQuery ?? "").data(using: .utf8) ?? Data()
+        var unreserved = CharacterSet.alphanumerics
+        unreserved.insert(charactersIn: "-._~")
+        func escape(_ s: String) -> String {
+            s.addingPercentEncoding(withAllowedCharacters: unreserved) ?? ""
+        }
+        let body = fields.map { "\(escape($0.key))=\(escape($0.value))" }
+            .joined(separator: "&")
+        return Data(body.utf8)
     }
 
     // MARK: - 送受信

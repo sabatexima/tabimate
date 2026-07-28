@@ -65,6 +65,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.tabimate.ios
         TARGETED_DEVICE_FAMILY: "1"
+        # 自分たちのコードだけ厳しくする（依存ライブラリには波及させない）。
+        # 並行性の取り違えは、動かしてみるまで気づけない種類の不具合になるため。
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
 
   TabiMateTests:
     type: bundle.unit-test
@@ -76,6 +80,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.tabimate.ios.tests
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
 
 schemes:
   TabiMate:

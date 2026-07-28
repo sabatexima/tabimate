@@ -43,11 +43,27 @@ jobs:
       - name: ビルドとテスト
         working-directory: ios
         run: |
+          set -o pipefail
           xcodebuild test \
             -project TabiMate.xcodeproj \
             -scheme TabiMate \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: 警告の一覧
+        # ログが数万行になるので、警告だけ抜き出して読めるようにしておく。
+        # 失敗したときも見たいので always
+        if: always()
+        run: |
+          LOG="$RUNNER_TEMP/xcodebuild.log"
+          [ -f "$LOG" ] || { echo "ログなし"; exit 0; }
+          # AppIntents の告知は xcodebuild が必ず出すもので、こちらの問題ではない
+          FOUND=$(grep -E "warning:" "$LOG" | grep -v "AppIntents.framework" | sort -u || true)
+          if [ -z "$FOUND" ]; then
+            echo "自分たちのコードからの警告はありません"
+          else
+            echo "$FOUND"
+          fi
 
   test:
     runs-on: ubuntu-latest

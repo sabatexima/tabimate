@@ -83,13 +83,28 @@ targets:
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
 
+  # 実際にシミュレータで起動して、最初の画面が出るところまで見る。
+  # ビルドが通っても起動で落ちることはあるので、そこだけ押さえる。
+  TabiMateUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: TabiMateUITests
+    dependencies:
+      - target: TabiMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.tabimate.ios.uitests
+        SWIFT_VERSION: "6.0"
+
 schemes:
   TabiMate:
     build:
       targets:
         TabiMate: all
         TabiMateTests: [test]
+        TabiMateUITests: [test]
     test:
-      targets: [TabiMateTests]
+      targets: [TabiMateTests, TabiMateUITests]
     run:
       config: Debug

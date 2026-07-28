@@ -5,6 +5,9 @@ import XCTest
 /// ビルドが通ってもここで落ちることはある（Info.plist の不足、起動直後の
 /// クラッシュ、画面が何も出ないなど）。単体テストでは分からない部分なので、
 /// 実際にシミュレータで起動して最初の画面が出ることだけ確かめる。
+/// XCUIApplication まわりは MainActor に閉じているので、クラスごとそちらに寄せる
+/// （付けないと「nonisolated な文脈から MainActor の API を呼んでいる」と警告になる）。
+@MainActor
 final class LaunchTests: XCTestCase {
 
     override func setUp() {

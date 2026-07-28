@@ -7,6 +7,48 @@ on:
   pull_request:
 
 jobs:
+  # iOSアプリを実際にビルドしてテストする。
+  # 署名は要らない（シミュレータ向けビルドのため）ので、
+  # Apple Developer Program に入っていなくても通る。
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: XcodeGen を入れる
+        run: brew install xcodegen
+
+      - name: Xcode プロジェクトを生成
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: 使えるシミュレータを選ぶ
+        id: sim
+        # ランナーのイメージが変わっても壊れないよう、実在する端末から拾う
+        run: |
+          DEVICE=$(xcrun simctl list devices available --json | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          for runtime in sorted(devices, reverse=True):
+              if 'iOS' not in runtime:
+                  continue
+              for d in devices[runtime]:
+                  if 'iPhone' in d['name']:
+                      print(d['name'])
+                      raise SystemExit
+          ")
+          echo "選択: $DEVICE"
+          echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
+
+      - name: ビルドとテスト
+        working-directory: ios
+        run: |
+          xcodebuild test \
+            -project TabiMate.xcodeproj \
+            -scheme TabiMate \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" \
+            CODE_SIGNING_ALLOWED=NO
+
   test:
     runs-on: ubuntu-latest
     steps:

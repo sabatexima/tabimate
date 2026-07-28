@@ -35,6 +35,9 @@ targets:
     platform: iOS
     sources:
       - path: TabiMate
+        # 置き場の説明書きはアプリに同梱しない
+        excludes:
+          - "Resources/README.md"
     dependencies:
       - package: GoogleSignIn
         product: GoogleSignIn

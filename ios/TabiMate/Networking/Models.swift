@@ -138,10 +138,7 @@ extension TravelPlan {
 extension DateFormatter {
     /// "2026-08-14" のような日付だけの文字列を読むための整形器。
     /// 端末のタイムゾーンで解釈する（「あと何日」は生活時間で数えたいので）。
-    ///
-    /// DateFormatter は Sendable ではないため Swift 6 では静的に持てないが、
-    /// 設定後は読むだけ（DateFormatter の読み取りはスレッド安全）なので除外する。
-    nonisolated(unsafe) static let plainDate: DateFormatter = {
+    static let plainDate: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")

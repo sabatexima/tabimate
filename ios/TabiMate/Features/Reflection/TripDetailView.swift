@@ -207,6 +207,10 @@ struct TripDetailView: View {
     private var photosCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
+                // PhotosPicker のラベルは @Sendable なクロージャなので、その中から
+                // ViewModel（@MainActor）を読むと警告になる。値をここで確定させる
+                let pickerTitle = model.isUploading ? "入れています…" : "写真を入れる"
+
                 HStack {
                     Text("📷 写真")
                         .font(.cardTitle)
@@ -215,7 +219,7 @@ struct TripDetailView: View {
                     if model.trip.canEditPhotos {
                         PhotosPicker(selection: $picked, maxSelectionCount: 50,
                                      matching: .images, photoLibrary: .shared()) {
-                            Text(model.isUploading ? "入れています…" : "写真を入れる")
+                            Text(pickerTitle)
                         }
                         .buttonStyle(QuietButtonStyle(tint: Theme.Palette.primaryDark))
                         .disabled(model.isUploading)

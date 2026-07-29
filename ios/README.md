@@ -190,7 +190,26 @@ SwiftUI 側（画面）は Apple の SDK が要るので、この方法では確
 | `RequestBuildingTests` | 送信内容の組み立て（`+` `&` `=` が化けないか）と認証ヘッダ |
 | `PlanItineraryTests` | 地図のピンの並び順・通し番号・重なりのずらし |
 
-サーバー側は `pytest tests/` で、アプリ向けAPIの認可と整形を `tests/test_app_api.py` が見ています。
+サーバー側は `pytest tests/` で、アプリ向けAPIの認可と整形を `tests/test_app_api.py` が、
+アプリが叩くURLがサーバーに実在するかを `tests/test_ios_routes.py` が見ています。
+
+#### 画面を実際に開いて回るテスト（UIテスト）
+
+`TabiMateUITests/ScreenTourTests` は、シミュレータで**サインイン後の画面をすべて開きます**。
+SwiftUI は「ビルドは通るのに、動かすと何も出ない／落ちる」ことがあるので、そこは
+実際に描画させないと分かりません。
+
+サインインには Google の認証が要るため、そのままでは最初の画面から先へ進めません。
+そこで起動引数 `-uiTesting` を付けたときだけ、
+
+- ダミーのトークンを入れてサインイン済みに見せかける
+- 通信を横取りして、決め打ちのJSONを返す（**サーバーは要りません**）
+
+ようにしてあります。仕込みは `TabiMate/Support/UITestSupport.swift` で、
+まるごと `#if DEBUG` の中なので配布ビルドには入りません。
+
+応答の中身を変えたいとき（空っぽの一覧、エラー、写真ゼロの旅など）は
+`StubResponses` を書き換えます。
 
 ### 写真の出しかた
 

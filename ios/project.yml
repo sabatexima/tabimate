@@ -69,6 +69,14 @@ targets:
         # 並行性の取り違えは、動かしてみるまで気づけない種類の不具合になるため。
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
+      configs:
+        # UIテスト用の仕込み（Support/UITestSupport.swift）は #if DEBUG の中にある。
+        # ここを明示しておかないと、既定値まかせになって「テストは動くのに
+        # 通信がスタブに向かない」という分かりにくい失敗になる
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
 
   TabiMateTests:
     type: bundle.unit-test

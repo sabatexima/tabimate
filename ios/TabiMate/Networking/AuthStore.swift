@@ -29,6 +29,15 @@ final class AuthStore: ObservableObject {
     private static let cachedUserKey = "tabimate.cachedUser"
 
     private init() {
+        #if DEBUG
+        // UIテストは Google のサインインを通れないので、ここだけ差し替える。
+        // （@StateObject の既定値は遅延評価なので、この init は
+        //   TabiMateApp.init の UITestSupport.activate より後に走る）
+        if UITestSupport.isEnabled {
+            TokenBox.current = UITestSupport.token
+            return
+        }
+        #endif
         // 前回のトークンを Keychain から復帰させ、どのスレッドからも読める箱に入れる
         TokenBox.current = Keychain.get(Self.account)
     }

@@ -27,6 +27,15 @@ actor APIClient {
         // 圏外のときは待たずに失敗させる。待たせると「ネットにつながらないみたい」を
         // 出せず、いつまでも回り続けるだけになる
         config.waitsForConnectivity = false
+        #if DEBUG
+        // UIテストのときだけ、決め打ちの応答に差し替える。
+        // URLProtocol.registerClass は URLSession.shared にしか効かないので、
+        // 自前のセッションはここで明示的に入れる（入れ忘れると通信が本物に出ていき、
+        // サインイン後の画面がすべて「読み込めませんでした」になる）
+        if UITestSupport.isEnabled {
+            config.protocolClasses = [StubURLProtocol.self] + (config.protocolClasses ?? [])
+        }
+        #endif
         session = URLSession(configuration: config)
     }
 

@@ -8,6 +8,13 @@ import GoogleSignIn
 struct TabiMateApp: App {
     @StateObject private var auth = AuthStore.shared
 
+    init() {
+        #if DEBUG
+        // 起動引数に -uiTesting があるときだけ働く。配布ビルドには入らない
+        UITestSupport.activate()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

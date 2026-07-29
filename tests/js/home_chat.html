@@ -148,6 +148,14 @@
     } catch (e) { /* 同上 */ }
   }
 
+  // 10 は控え（localStorage）が失われている場合。履歴の最後がこちらの発言なら、
+  // まだ返事待ちだと分かるので、そこから復元できること
+  if (CASE === '10') {
+    state.messages = [{ role: 'user', content: '車', request_id: 'r9' }];
+    state.genState = 'pending';
+    try { localStorage.removeItem('tabimate_gen'); } catch (e) { /* noop */ }
+  }
+
   // 7 は「復元中に、こんな旅はどう？から来た」場合。生成が二重に走らないこと
   if (CASE === '7') {
     state.messages = [{ role: 'user', content: '熱海に行きたい' }];
@@ -267,6 +275,17 @@
         document.getElementById('message-input').value);
       check('「考えています」を消すこと',
         document.getElementById('typing').style.display === 'none');
+    }
+
+    if (CASE === '10') {
+      await wait(400);
+      const typing = document.getElementById('typing');
+      check('控えが無くても「考えています」が出ること',
+        typing.style.display === 'flex', typing.style.display);
+      check('その回の request_id で問い合わせること',
+        calls.includes('GET /generation_status'), calls.join(' / '));
+      check('入力欄が塞がれていること',
+        document.getElementById('message-input').disabled === true);
     }
 
     document.getElementById('result').textContent =

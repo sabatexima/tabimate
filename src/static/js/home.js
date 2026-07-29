@@ -222,10 +222,14 @@ const chatBox = document.getElementById('chat-box');
     return wrapper;
   }
 
+  // 直近に読み込んだ履歴。生成中かどうかの判断にも使う（下の resumeIfGenerating）
+  let lastMessages = [];
+
   async function loadMessages(forceScroll = false) {
     try {
       const response = await fetch('/get_messages');
       const messages = await response.json();
+      lastMessages = Array.isArray(messages) ? messages : [];
       const currentMsgCount = chatBox.querySelectorAll('.message-wrapper:not(.greeting)').length;
       if (!forceScroll && messages.length === currentMsgCount) return;
 
@@ -372,6 +376,20 @@ const chatBox = document.getElementById('chat-box');
       const raw = localStorage.getItem('tabimate_gen');
       saved = raw ? JSON.parse(raw) : null;  // 旧形式(文字列)はparse失敗→復元しない
     } catch (e) { saved = null; }
+
+    // 控えが無くても、履歴の最後がこちらの発言なら、その回はまだ返事待ち。
+    //
+    // localStorage は思ったより簡単に失われる。別のタブや別の端末で開いた、
+    // プライベートモード、履歴の削除、それに以前は誤判定のあと自分で消していた。
+    // 控えだけに頼ると「サーバーは作っているのに、画面は何も言わない」状態になり、
+    // 一度そうなるとリロードしても戻ってこない。履歴から拾えるようにしておく。
+    if (!saved || !saved.id) {
+      const last = lastMessages[lastMessages.length - 1];
+      if (last && last.role === 'user' && last.request_id) {
+        saved = { id: last.request_id, msg: last.content };
+      }
+    }
+
     if (!saved || !saved.id) { try { localStorage.removeItem('tabimate_gen'); } catch (e) {} return; }
     const rid = saved.id;
 

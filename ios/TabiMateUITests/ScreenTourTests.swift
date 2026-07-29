@@ -14,23 +14,24 @@ final class ScreenTourTests: XCTestCase {
 
     private var app: XCUIApplication!
 
-    override func setUp() {
-        super.setUp()
+    /// 立ち上げは各テストの先頭で行う。
+    ///
+    /// setUp / tearDown は nonisolated（XCTestCase 側がそう決めている）なので、
+    /// そこで XCUIApplication を触ると「MainActor の値を外から操作している」と
+    /// 警告になる。テストの本体はクラスごと MainActor なので、ここでやれば済む。
+    private func launch() {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["-uiTesting"]
         app.launch()
     }
 
-    override func tearDown() {
-        app = nil
-        super.tearDown()
-    }
-
     // MARK: - ひとまわり
 
     /// 4つのタブと、そこから開ける画面をすべて通る。
     func testWalksThroughEveryScreen() {
+        launch()
+
         // --- ホーム -------------------------------------------------
         expect(text: "こんな旅は", where: "ホーム")
         expect(text: "温泉でほっこり", where: "ホームの季節のアイデア")
@@ -109,6 +110,7 @@ final class ScreenTourTests: XCTestCase {
     /// SSE は URLSession.shared を通るので、スタブが効かない環境では
     /// エラーの札が出る。どちらでも「落ちない」ことだけは必ず確かめる。
     func testSendingAMessageDoesNotCrash() {
+        launch()
         tapTab("そうだん")
         // 複数行に伸びる TextField（axis: .vertical）は textView として出るが、
         // OS のバージョンによっては textField のままのこともある
@@ -128,6 +130,7 @@ final class ScreenTourTests: XCTestCase {
 
     /// 保存プランを引っぱって読み直しても崩れないこと。
     func testPullToRefreshKeepsTheListAlive() {
+        launch()
         tapTab("保存プラン")
         expect(text: "熱海でのんびり", where: "保存プラン")
 

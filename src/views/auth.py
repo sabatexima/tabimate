@@ -6,6 +6,7 @@ login_required デコレータでログイン必須エンドポイントを保�
 クライアントシークレット等は環境変数から読み込む（直書きしない）。
 """
 
+import json
 import os
 from functools import wraps
 from flask import Blueprint, redirect, url_for, session, request, flash
@@ -18,13 +19,35 @@ logger = get_logger("views.auth")
 
 
 def login_required(f):
-    """未ログインなら login へリダイレクトするビュー保護デコレータ。"""
+    """ログイン必須のビュー保護デコレータ。
+
+    アプリの Bearer トークンは app.before_request（api_auth.authenticate_app_token）が
+    セッションへ読み替え済みなので、ここでは session を見るだけでよい。
+    未認証時、アプリ側には 401 JSON を返す（ログイン画面へのリダイレクトは無意味なため）。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('user_id'):
-            logger.debug("未ログインアクセス: %s", request.path)
-            return redirect(url_for('auth.login'))
-        return f(*args, **kwargs)
+        if session.get('user_id'):
+            return f(*args, **kwargs)
+
+        # トークンを持ってきたのに通っていない＝期限切れか改ざん。作り直しを促す
+        if request.headers.get('Authorization', '').startswith('Bearer '):
+            return json.dumps({'status': 'ERROR', 'message': '認証が無効です。再ログインしてください。'}), 401, {'Content-Type': 'application/json'}
+
+        logger.debug("未ログインアクセス: %s", request.path)
+        # APIクライアント（JSONを期待する要求）にはリダイレクトではなく401を返す。
+        # 判定の主役は Accept ヘッダ: ブラウザの画面遷移は必ず text/html を含み、
+        # fetch/XHR やアプリは既定で */* を送るため、これで確実に切り分けられる。
+        accept = request.headers.get('Accept', '')
+        wants_json = (
+            'text/html' not in accept
+            or request.path.startswith('/api/')
+            or request.is_json
+            or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        )
+        if wants_json:
+            return json.dumps({'status': 'ERROR', 'message': 'ログインが必要です'}), 401, {'Content-Type': 'application/json'}
+        return redirect(url_for('auth.login'))
     return decorated
 
 
@@ -81,3 +104,44 @@ def logout():
     session.clear()
     logger.info("ログアウト: email=%s", user_email)
     return redirect(url_for('planner.home'))
+
+
+@auth.route('/app/signin', methods=['POST'])
+def app_signin():
+    """iOSアプリ用サインイン。GoogleのIDトークンを検証してアプリ用トークンを返す。
+
+    リクエスト: {"id_token": "<GoogleサインインのIDトークン>"}
+    レスポンス: {"status":"OK","token":"...","user":{"email":...,"name":...}}
+    """
+    from api_auth import issue_token, verify_google_id_token
+
+    data = request.get_json(silent=True) or {}
+    id_token_str = (data.get('id_token') or '').strip()
+    if not id_token_str:
+        return json.dumps({'status': 'ERROR', 'message': 'id_token が必要です'}), 400, {'Content-Type': 'application/json'}
+
+    user = verify_google_id_token(id_token_str)
+    if not user:
+        return json.dumps({'status': 'ERROR', 'message': 'サインインに失敗しました'}), 401, {'Content-Type': 'application/json'}
+
+    token = issue_token(user['sub'], user['email'], user['name'])
+    logger.info("アプリサインイン: email=%s", user['email'])
+    return json.dumps({
+        'status': 'OK', 'token': token,
+        'user': {'email': user['email'], 'name': user['name']},
+    }, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+
+
+@auth.route('/app/me', methods=['GET'])
+def app_me():
+    """アプリ用トークンの有効性確認（起動時の自動ログイン判定に使う）。"""
+    from api_auth import verify_token
+
+    authz = request.headers.get('Authorization', '')
+    data = verify_token(authz[7:].strip()) if authz.startswith('Bearer ') else None
+    if not data:
+        return json.dumps({'status': 'ERROR', 'message': '認証が無効です'}), 401, {'Content-Type': 'application/json'}
+    return json.dumps({
+        'status': 'OK',
+        'user': {'email': data.get('email', ''), 'name': data.get('name', '')},
+    }, ensure_ascii=False), 200, {'Content-Type': 'application/json'}

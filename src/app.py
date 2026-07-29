@@ -115,6 +115,12 @@ app.register_blueprint(reflection)
 app.register_blueprint(share)
 init_oauth(app)
 
+# ネイティブアプリの Bearer トークンを、全エンドポイント共通でセッションに読み替える。
+# 共有まわりのように login_required を通らず session を直接見る処理も、
+# これでアプリから同じように使える（Web版の挙動は変わらない）。
+from api_auth import authenticate_app_token  # noqa: E402
+app.before_request(authenticate_app_token)
+
 
 def _parse_date(value):
     """文字列(YYYY-MM-DD)/date/datetime を date に正規化する。失敗時は None。"""

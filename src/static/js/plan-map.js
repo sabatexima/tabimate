@@ -402,12 +402,15 @@
   function spreadOverlaps(points, fixed) {
     const seen = (fixed || []).slice();
     points.forEach((p) => {
+      // 「重なっている数」だけずらすと、3件目が2件目と同じ位置に落ちてしまう。
+      // 空いている場所が見つかるまで、1段（約20m 北東）ずつ押しやる。
       let bump = 0;
-      seen.forEach((q) => {
-        if (Math.abs(p.lat - q.lat) < 0.00015 && Math.abs(p.lng - q.lng) < 0.00015) bump++;
-      });
+      const overlaps = () => seen.some((q) =>
+        Math.abs(p.lat + 0.00013 * bump - q.lat) < 0.00015 &&
+        Math.abs(p.lng + 0.00022 * bump - q.lng) < 0.00015);
+      while (bump <= seen.length && overlaps()) bump++;
       if (bump > 0) {
-        p.lng += 0.00022 * bump;  // 1件重なるごとに約20m 北東へ
+        p.lng += 0.00022 * bump;
         p.lat += 0.00013 * bump;
       }
       seen.push(p);

@@ -7,6 +7,64 @@ on:
   pull_request:
 
 jobs:
+  # iOSアプリを実際にビルドしてテストする。
+  # 署名は要らない（シミュレータ向けビルドのため）ので、
+  # Apple Developer Program に入っていなくても通る。
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: XcodeGen を入れる
+        run: brew install xcodegen
+
+      - name: Xcode プロジェクトを生成
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: 使えるシミュレータを選ぶ
+        id: sim
+        # ランナーのイメージが変わっても壊れないよう、実在する端末から拾う
+        run: |
+          DEVICE=$(xcrun simctl list devices available --json | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          for runtime in sorted(devices, reverse=True):
+              if 'iOS' not in runtime:
+                  continue
+              for d in devices[runtime]:
+                  if 'iPhone' in d['name']:
+                      print(d['name'])
+                      raise SystemExit
+          ")
+          echo "選択: $DEVICE"
+          echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
+
+      - name: ビルドとテスト
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project TabiMate.xcodeproj \
+            -scheme TabiMate \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: 警告の一覧
+        # ログが数万行になるので、警告だけ抜き出して読めるようにしておく。
+        # 失敗したときも見たいので always
+        if: always()
+        run: |
+          LOG="$RUNNER_TEMP/xcodebuild.log"
+          [ -f "$LOG" ] || { echo "ログなし"; exit 0; }
+          # AppIntents の告知は xcodebuild が必ず出すもので、こちらの問題ではない
+          FOUND=$(grep -E "warning:" "$LOG" | grep -v "AppIntents.framework" | sort -u || true)
+          if [ -z "$FOUND" ]; then
+            echo "自分たちのコードからの警告はありません"
+          else
+            echo "$FOUND"
+          fi
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -31,6 +89,16 @@ jobs:
       - name: JS syntax check
         run: |
           for f in src/static/js/*.js; do node --check "$f"; done
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      - name: iOS ロジックの型検査とテスト
+        # SwiftUI 側は Apple の SDK が要るので回せないが、モデル・通信・地図の
+        # 並び順は Foundation だけなので Linux で本物のコンパイラに通せる
+        run: scripts/check_ios_logic.sh
 
       - name: Templates compile check
         env:

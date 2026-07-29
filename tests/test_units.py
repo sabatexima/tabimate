@@ -254,4 +254,139 @@ def test_web_search_handles_bad_shapes(monkeypatch):
     monkeypatch.setattr(L, "_search", _StrSearch())
     assert L.web_search("q") == "文字列で返ってくることがある"
     monkeypatch.setattr(L, "_search", _BoomSearch())
-    assert L.web_search("q") == ""  # 失敗time は空文字（生成は続行できる）
+    assert L.web_search("q") == ""  # 失敗時は空文字（生成は続行できる）
+
+
+# ----------------------------------------------------------------------
+# アプリ（iOS）向けトークン認証
+# ----------------------------------------------------------------------
+import api_auth  # noqa: E402
+from flask import Flask, jsonify, session  # noqa: E402
+
+from views.auth import auth as auth_bp, login_required  # noqa: E402
+
+
+def _token_app():
+    """auth Blueprint と login_required だけを載せた検証用の最小アプリ。"""
+    app = Flask(__name__)
+    app.secret_key = "test-secret"
+    app.config["TESTING"] = True
+    app.register_blueprint(auth_bp)
+    # 本番と同じく、Bearer トークンの読み替えは before_request が担う
+    app.before_request(api_auth.authenticate_app_token)
+
+    @app.get("/data")
+    @login_required
+    def data():
+        return jsonify(user=session["user_id"])
+
+    @app.get("/page")
+    @login_required
+    def page():
+        return "<html></html>"
+
+    return app
+
+
+def test_app_token_roundtrip_and_tamper(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
+    token = api_auth.issue_token("u-1", "a@example.com", "てく")
+    assert api_auth.verify_token(token)["sub"] == "u-1"
+    assert api_auth.verify_token(token[:-2] + "xx") is None
+    # 鍵が変われば既存トークンは失効する
+    monkeypatch.setenv("SECRET_KEY", "another-secret")
+    assert api_auth.verify_token(token) is None
+
+
+def test_app_token_expires(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
+    token = api_auth.issue_token("u-1", "a@example.com", "てく")
+    monkeypatch.setattr(api_auth, "TOKEN_MAX_AGE_SEC", -1)
+    assert api_auth.verify_token(token) is None
+
+
+def test_login_required_accepts_bearer_without_setting_cookie(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
+    token = api_auth.issue_token("u-1", "a@example.com", "てく")
+    with _token_app().test_client() as c:
+        r = c.get("/data", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200 and r.get_json()["user"] == "u-1"
+    # アプリの認証情報はトークンだけ。セッションCookieは発行しない
+    assert "Set-Cookie" not in r.headers
+
+
+def test_login_required_returns_401_json_for_api_clients():
+    app = _token_app()
+    with app.test_client() as c:              # fetch/アプリ相当（Accept: */*）
+        r = c.get("/data")
+    assert r.status_code == 401
+    assert r.headers["Content-Type"] == "application/json"
+
+    with app.test_client() as c:              # 壊れたトークンも401
+        r = c.get("/data", headers={"Authorization": "Bearer garbage"})
+    assert r.status_code == 401
+
+
+def test_login_required_still_redirects_browser_navigation():
+    with _token_app().test_client() as c:
+        r = c.get("/page", headers={"Accept": "text/html,application/xhtml+xml"})
+    assert r.status_code == 302 and "/auth/login" in r.headers["Location"]
+
+
+def test_app_me_reports_token_validity(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
+    token = api_auth.issue_token("u-1", "a@example.com", "てく")
+    app = _token_app()
+    with app.test_client() as c:
+        r = c.get("/auth/app/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200 and r.get_json()["user"]["name"] == "てく"
+    with app.test_client() as c:
+        assert c.get("/auth/app/me").status_code == 401
+
+
+def test_digest_month_grouping_matches_view():
+    """ダイジェストの月まとめが、日付の無い旅も落とさずに扱えること。
+
+    アプリ側（Digest.monthGroups）と同じ規則をサーバー側でも使うため、
+    月の取り出し方が変わっていないことを固定する。
+    """
+    def month_of(trip):
+        d = str(trip.get("start_date") or trip.get("created_at") or "")
+        try:
+            return int(d[5:7])
+        except ValueError:
+            return 0
+
+    assert month_of({"start_date": "2026-08-14"}) == 8
+    assert month_of({"start_date": None, "created_at": "2026-01-10 10:00:00"}) == 1
+    assert month_of({}) == 0
+
+
+def test_google_id_token_requires_configured_audience(monkeypatch):
+    """aud の検証先が未設定なら、検証そのものを行わずに断る。
+
+    google-auth は audience=None だと aud の検査を省くため、未設定のまま呼ぶと
+    他アプリ向けのIDトークンでもなりすませてしまう。
+    """
+    monkeypatch.delenv("GOOGLE_IOS_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+
+    called = False
+
+    def _boom(*args, **kwargs):
+        nonlocal called
+        called = True
+        return {"sub": "attacker", "email": "a@example.com", "email_verified": True}
+
+    monkeypatch.setattr("google.oauth2.id_token.verify_oauth2_token", _boom)
+    assert api_auth.verify_google_id_token("any-token") is None
+    assert not called, "検証先が無いのにGoogleへ問い合わせてはいけない"
+
+
+def test_app_signin_rejects_missing_and_invalid_id_token(monkeypatch):
+    app = _token_app()
+    with app.test_client() as c:
+        assert c.post("/auth/app/signin", json={}).status_code == 400
+    monkeypatch.setattr(api_auth, "verify_google_id_token", lambda _t: None)
+    with app.test_client() as c:
+        assert c.post("/auth/app/signin", json={"id_token": "bad"}).status_code == 401

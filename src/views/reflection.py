@@ -64,10 +64,12 @@ def _collect_images_for_stickers(photos: list, sample_n: int = 8) -> list:
 # ----------------------------------------------------------------------
 # 画面（UIの詳細はテンプレート側。ここでは入口のみ）
 # ----------------------------------------------------------------------
-@reflection.route("/")
-@login_required
-def index():
-    """旅の振り返り一覧（自分の旅＋共有された旅）を表示する。"""
+def _load_trip_cards() -> tuple[list, list]:
+    """一覧に出す（自分の旅, 共有された旅）を、表紙URL付きで返す。
+
+    画面（index）とアプリ向けJSON（api_trips）で同じものを見せるため、
+    取得の仕方をここ1か所に置く。
+    """
     trips = repo.get_trips(_uid())
 
     # 自分宛に共有された旅も同じ画面にまとめて表示する
@@ -90,13 +92,72 @@ def index():
         t["cover_url"] = cover_thumbs.get(cp) if cp else None
         t["cover_url_full"] = cover_fulls.get(cp) if cp else None
 
+    return trips, shared_trips
+
+
+@reflection.route("/")
+@login_required
+def index():
+    """旅の振り返り一覧（自分の旅＋共有された旅）を表示する。"""
+    trips, shared_trips = _load_trip_cards()
     return render_template("reflection/index.html", trips=trips, shared_trips=shared_trips)
 
 
-@reflection.route("/digest")
+@reflection.route("/api/trips")
 @login_required
-def digest():
-    """年間ダイジェスト：その年の旅・写真・付箋を絵本の1ページにまとめて見せる。"""
+def api_trips():
+    """振り返り一覧をJSONで返す（ネイティブアプリ用）。"""
+    trips, shared_trips = _load_trip_cards()
+    return jsonify({"trips": trips, "shared_trips": shared_trips})
+
+
+@reflection.route("/api/trips/<int:trip_id>")
+@login_required
+def api_trip_detail(trip_id: int):
+    """1つの旅の中身をJSONで返す（写真・付箋・ベストショット・足あと）。
+
+    共有された旅も開けるようにする（一覧に出しておいて開けないのはおかしいため）。
+    その場合は権限を添えて、アプリ側が編集の可否を判断できるようにする。
+    """
+    if not _can_view_trip(trip_id):
+        abort(404)
+    # 所有者フィルタを通さずに取り、一覧カードと同じ形（写真枚数・表紙など）にそろえる
+    cards = repo.get_trip_cards([trip_id], viewer_id=_uid())
+    if not cards:
+        abort(404)
+    # 重ね合わせはアプリの画面に無いので、その材料集め（プラン一覧・座標取得）は省く
+    data = _trip_detail_data(trip_id, trip=cards[0], include_plan_link=False)
+
+    trip = dict(data["trip"], photo_count=len(data["photos"]))
+    if not repo.get_trip(trip_id, _uid()):
+        import db_sharing
+        grant = db_sharing.get_grant_for_email("trip", trip_id, session.get("user_email"))
+        trip["permission"] = (grant or {}).get("permission", "view")
+    return jsonify({
+        "trip": trip,
+        "photos": data["photos"],
+        "stickers": data["stickers"],
+        "best_shots": data["best_shots"],
+        "footprints": data["footprints"],
+    })
+
+
+@reflection.route("/api/digest")
+@login_required
+def api_digest():
+    """年間ダイジェストをJSONで返す（年の一覧つき）。"""
+    data = _digest_data(request.args.get("year") or "")
+    return jsonify({
+        "year": data["year"],
+        "years": data["years"],
+        "trips": data["trips"],
+        "photo_total": data["photo_total"],
+        "stickers": [s for s in data["stickers"]],
+    })
+
+
+def _digest_data(requested_year: str) -> dict:
+    """年間ダイジェストの材料を組み立てる（画面とアプリで共用）。"""
     from datetime import date
 
     all_trips = repo.get_trips(_uid())
@@ -106,7 +167,7 @@ def digest():
         return str(d)[:4]
 
     years = sorted({trip_year(t) for t in all_trips if trip_year(t)}, reverse=True)
-    year = request.args.get("year") or ""
+    year = requested_year
     if year not in years:
         year = years[0] if years else str(date.today().year)
 
@@ -132,21 +193,39 @@ def digest():
         months.setdefault(m, []).append(t)
     month_groups = [(m, months[m]) for m in sorted(months)]
 
-    photo_total = sum(t.get("photo_count") or 0 for t in trips)
-    stickers = [s for t in trips for s in (t.get("stickers_preview") or [])]
+    return {
+        "year": year,
+        "years": years,
+        "trips": trips,
+        "month_groups": month_groups,
+        "photo_total": sum(t.get("photo_count") or 0 for t in trips),
+        "stickers": [s for t in trips for s in (t.get("stickers_preview") or [])],
+    }
 
+
+@reflection.route("/digest")
+@login_required
+def digest():
+    """年間ダイジェスト：その年の旅・写真・付箋を絵本の1ページにまとめて見せる。"""
+    d = _digest_data(request.args.get("year") or "")
     return render_template(
         "reflection/digest.html",
-        year=year, years=years, trips=trips, month_groups=month_groups,
-        photo_total=photo_total, stickers=stickers,
+        year=d["year"], years=d["years"], trips=d["trips"],
+        month_groups=d["month_groups"], photo_total=d["photo_total"],
+        stickers=d["stickers"],
     )
 
 
-@reflection.route("/trips/<int:trip_id>")
-@login_required
-def trip_detail(trip_id: int):
-    """1つの旅の詳細（写真タイムライン・付箋など）を表示する。"""
-    trip = _require_trip(trip_id)
+def _trip_detail_data(trip_id: int, trip: dict | None = None,
+                      include_plan_link: bool = True) -> dict:
+    """1つの旅の中身を集める（画面とアプリで共用）。
+
+    trip を渡さない場合は本人所有であることを要求する。共有された旅を見せるときは
+    呼び出し側で閲覧資格を確かめ、取得済みの trip を渡すこと。
+    include_plan_link=False で「プランとの重ね合わせ」の材料集めを省く。
+    """
+    if trip is None:
+        trip = _require_trip(trip_id)
     photos = repo.get_photos(trip_id)
     # 配信URLを付与（一覧はサムネイル、拡大は原寸。署名はキャッシュ＋並列でまとめて取得）
     paths = [p["storage_path"] for p in photos]
@@ -189,25 +268,42 @@ def trip_detail(trip_id: int):
 
     # 実績↔プランの重ね合わせ：紐付け用に自分のプラン一覧と、紐付け済みプランの
     # 観光スポット座標（計画地点）を渡す。
-    from db import get_travel_plans, get_travel_plan_by_id
-    my_plans = [{"id": p["id"], "destination": p.get("destination") or "（無題）"}
-                for p in get_travel_plans(_uid())]
+    # この処理はプラン一覧の取得に加え、未取得なら座標の取得（外部API）まで行うため、
+    # 重ね合わせを使わない呼び出し（アプリ向けJSON）では丸ごと省く。
+    my_plans, planned = [], []
     linked_plan_id = trip.get("linked_plan_id")
-    planned = []
-    if linked_plan_id:
-        lp = get_travel_plan_by_id(linked_plan_id)
-        if lp and lp.get("google_user_id") == _uid():
-            # 旧プランで座標未取得でも重ね合わせが出るよう、ここで取得・キャッシュ
-            from geocoding import ensure_plan_coords
-            ensure_plan_coords(lp)
-            planned = lp.get("spot_coords") or []
-        else:
-            linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化
+    if include_plan_link:
+        from db import get_travel_plans, get_travel_plan_by_id
+        my_plans = [{"id": p["id"], "destination": p.get("destination") or "（無題）"}
+                    for p in get_travel_plans(_uid())]
+        if linked_plan_id:
+            lp = get_travel_plan_by_id(linked_plan_id)
+            if lp and lp.get("google_user_id") == _uid():
+                # 旧プランで座標未取得でも重ね合わせが出るよう、ここで取得・キャッシュ
+                from geocoding import ensure_plan_coords
+                ensure_plan_coords(lp)
+                planned = lp.get("spot_coords") or []
+            else:
+                linked_plan_id = None  # 紐付け先が消えている/他人のものなら無効化
+    return {
+        "trip": trip, "photos": photos, "stickers": stickers,
+        "footprints": footprints, "best_shots": best_shots,
+        "my_plans": my_plans, "linked_plan_id": linked_plan_id,
+        "planned_points": planned,
+    }
+
+
+@reflection.route("/trips/<int:trip_id>")
+@login_required
+def trip_detail(trip_id: int):
+    """1つの旅の詳細（写真タイムライン・付箋など）を表示する。"""
+    d = _trip_detail_data(trip_id)
     return render_template(
         "reflection/trip.html",
-        trip=trip, photos=photos, stickers=stickers, footprints=footprints,
-        my_plans=my_plans, linked_plan_id=linked_plan_id, planned_points=planned,
-        best_shots=best_shots,
+        trip=d["trip"], photos=d["photos"], stickers=d["stickers"],
+        footprints=d["footprints"], my_plans=d["my_plans"],
+        linked_plan_id=d["linked_plan_id"], planned_points=d["planned_points"],
+        best_shots=d["best_shots"],
     )
 
 

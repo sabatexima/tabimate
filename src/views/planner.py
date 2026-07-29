@@ -317,14 +317,18 @@ def abort_request():
 @planner.route('/generation_status', methods=['GET'])
 @login_required
 def generation_status():
-    """指定 request_id の生成がまだ続いているかを返す（リロード後の状態復元用）。
+    """指定 request_id の生成がどうなったかを返す（リロード後の状態復元用）。
 
-    active_requests から外れるのは save_chat_message の後（finally）なので、
-    active=false は「結果がDBに確定済み（完了 or 中断）」を意味する。
+    判断の主役は state（DBに残っている行から決まる）。active はこのインスタンスの
+    記憶なので、複数インスタンスで動いていると、別のインスタンスが動かしている
+    生成を見落として「終わった」と答えてしまう。参考として返すだけにする。
     """
+    from db import chat_request_state
     request_id = request.args.get('request_id', '')
     active = bool(request_id) and request_id in active_requests
-    return json.dumps({'active': active}), 200, {'Content-Type': 'application/json'}
+    state = chat_request_state(session['user_id'], request_id)
+    return json.dumps({'active': active, 'state': state}), 200, \
+        {'Content-Type': 'application/json'}
 
 
 @planner.route('/reset_chat', methods=['POST'])

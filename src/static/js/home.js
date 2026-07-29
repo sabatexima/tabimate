@@ -375,13 +375,23 @@ const chatBox = document.getElementById('chat-box');
     if (!saved || !saved.id) { try { localStorage.removeItem('tabimate_gen'); } catch (e) {} return; }
     const rid = saved.id;
 
-    const isActive = async () => {
+    // 生成がどうなったかを尋ねる。
+    //   'pending' まだ作っている最中
+    //   'done'    返答が保存された（成功して終わった）
+    //   'gone'    失敗か中断（その回の行はまとめて消えている）
+    //   null      通信できなかった。決めつけずに次回へ回す
+    //
+    // 判断はサーバーの state（DBの行）に任せる。active はインスタンスごとの
+    // 記憶なので、複数インスタンスで動いていると当てにならない。
+    const askState = async () => {
       try {
         const r = await fetch('/generation_status?request_id=' + encodeURIComponent(rid));
         // 401（セッション切れ）や 5xx を「もう終わった」と読み違えないこと。
         // 誤ると、まだ作っている最中なのに失敗の案内を出してしまう
         if (!r.ok) return null;
-        return (await r.json()).active === true;
+        const s = await r.json();
+        if (s.state === 'pending' || s.state === 'done' || s.state === 'gone') return s.state;
+        return s.active === true ? 'pending' : 'gone';  // 古い形の応答への保険
       } catch (e) { return null; }  // 判定不能
     };
 
@@ -406,9 +416,9 @@ const chatBox = document.getElementById('chat-box');
       }
     };
 
-    const active = await isActive();
-    if (active === false) { await finishResume(); return; }  // 既に完了/中断/エラー
-    if (active === null) return;  // 通信失敗時は次回のリロードに任せる
+    const state = await askState();
+    if (state === null) return;                              // 次回のリロードに任せる
+    if (state !== 'pending') { await finishResume(); return; }  // 既に完了/中断/エラー
 
     // まだ生成中 → 作成中UIを復帰（停止ボタンも currentRequestId 経由で機能する）
     currentRequestId = rid;
@@ -420,9 +430,9 @@ const chatBox = document.getElementById('chat-box');
     let ticks = 0;
     const poll = setInterval(async () => {
       ticks += 1;
-      const still = await isActive();
-      if (still === null) return;         // 一時的な通信エラーは次回リトライ
-      if (still && ticks < 360) return;   // まだ生成中（上限15分で強制解除）
+      const still = await askState();
+      if (still === null) return;                      // 一時的な通信エラーは次回リトライ
+      if (still === 'pending' && ticks < 360) return;   // まだ生成中（上限15分で強制解除）
       clearInterval(poll);
       await finishResume();
     }, 2500);

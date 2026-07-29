@@ -66,7 +66,8 @@
     if (path === '/generation_status') {
       // セッション切れ（401）を模す。「終わった」と読み違えないことを見る
       if (state.statusFails) return json({ status: 'ERROR' }, false);
-      return json({ active: state.statusActive === true });
+      // active はこのインスタンスの記憶。別のインスタンスが動かしていると false になる
+      return json({ active: false, state: state.genState || 'gone' });
     }
     if (path === '/abort_request') return json({ status: 'OK' });
     if (path === '/send_message') {
@@ -128,11 +129,30 @@
   }
   if (CASE === '6') state.statusFails = true;
 
+  // 8 は報告のあった症状そのもの。リロードしたとき、生成を動かしているのが
+  // 別のインスタンスでも「考えています」が出続けること
+  if (CASE === '8') {
+    state.messages = [{ role: 'user', content: '車' }];
+    state.genState = 'pending';
+    try {
+      localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '車' }));
+    } catch (e) { /* 使えない環境では 8 は意味を成さない */ }
+  }
+
+  // 9 は生成が失敗して行ごと消えた場合。案内を出して入力を戻すこと
+  if (CASE === '9') {
+    state.messages = [{ role: 'user', content: '車' }];
+    state.genState = 'gone';
+    try {
+      localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '車' }));
+    } catch (e) { /* 同上 */ }
+  }
+
   // 7 は「復元中に、こんな旅はどう？から来た」場合。生成が二重に走らないこと
   if (CASE === '7') {
     state.messages = [{ role: 'user', content: '熱海に行きたい' }];
     state.messagesDelay = 40;
-    state.statusActive = true;
+    state.genState = 'pending';
     try {
       localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '熱海に行きたい' }));
     } catch (e) { /* 使えない環境では 7 は意味を成さない */ }
@@ -224,6 +244,29 @@
       check('前の生成を止めること', abort !== -1, calls.join(' / '));
       check('新しい相談を送ること', send !== -1);
       check('止めてから送ること', abort !== -1 && send !== -1 && abort < send);
+    }
+
+    if (CASE === '8') {
+      await wait(400);
+      const typing = document.getElementById('typing');
+      check('「考えています」が出ていること', typing.style.display === 'flex', typing.style.display);
+      check('停止ボタンが出ていること',
+        document.getElementById('stop-button').style.display === 'flex');
+      check('入力欄が塞がれていること',
+        document.getElementById('message-input').disabled === true);
+      check('失敗の案内を出さないこと',
+        !document.getElementById('chat-box').textContent.includes('終わりませんでした'));
+    }
+
+    if (CASE === '9') {
+      await wait(400);
+      const text = document.getElementById('chat-box').textContent;
+      check('失敗を伝えること', text.includes('終わりませんでした'), text.slice(0, 60));
+      check('入力欄に文を戻すこと',
+        document.getElementById('message-input').value === '車',
+        document.getElementById('message-input').value);
+      check('「考えています」を消すこと',
+        document.getElementById('typing').style.display === 'none');
     }
 
     document.getElementById('result').textContent =

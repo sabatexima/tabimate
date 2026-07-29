@@ -72,10 +72,12 @@ declare -a NAMES=(
   [5]="リロード直後、履歴が二重に描かれない"
   [6]="生成中か確かめられないとき、決めつけない"
   [7]="復元中に新しい相談が来ても、生成が二重に走らない"
+  [8]="別インスタンスが生成中でも「考えています」が出る"
+  [9]="生成が失われたら、案内を出して文を戻す"
 )
 
 failed=0
-for case in 1 2 3 4 5 6 7; do
+for case in 1 2 3 4 5 6 7 8 9; do
   url="http://127.0.0.1:$PORT/tests/js/home_chat.html?case=$case"
   case "$case" in 4|7) url="$url&q=%E6%B8%A9%E6%B3%89" ;; esac
   out=$("$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \

@@ -583,6 +583,38 @@ def delete_chat_messages_by_request(google_user_id: str, request_id: str) -> Non
         )
 
 
+def chat_request_state(google_user_id: str, request_id: str) -> str:
+    """その request_id の生成がどうなったかを、保存されている行から判断する。
+
+    生成中かどうかは views/planner.py の active_requests でも見ているが、あれは
+    プロセス内のメモリなので、Cloud Run のように複数インスタンスで動くと、
+    別のインスタンスが動かしている生成を「もう終わった」と誤って答えてしまう
+    （リロードした人に、まだ作っている最中なのに失敗の案内が出る）。
+    行の有無なら、どのインスタンスから見ても同じ答えになる。
+
+    生成が失敗・中断したときは delete_chat_messages_by_request でその
+    request_id の行がまとめて消えるので、3つの状態を取り違えずに見分けられる。
+
+      'done'    AIの返答が保存されている（成功して終わった）
+      'pending' ユーザーの発言だけある（まだ作っている最中）
+      'gone'    行が1つも無い（失敗か中断。後片付けで消えている）
+    """
+    if not request_id:
+        return "gone"
+    with _get_engine().connect() as conn:
+        conn.execute(text(_CREATE_CHAT_TABLE))
+        rows = conn.execute(
+            text(
+                "SELECT role FROM chat_messages "
+                "WHERE google_user_id = :uid AND request_id = :rid"
+            ),
+            {"uid": google_user_id, "rid": request_id},
+        ).fetchall()
+    if not rows:
+        return "gone"
+    return "done" if any(r[0] == "ai" for r in rows) else "pending"
+
+
 def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = None) -> int:
     """プラン状態を travel_plans に保存し、新規行の id を返す。"""
     with _get_engine().begin() as conn:

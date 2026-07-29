@@ -69,8 +69,7 @@ const chatBox = document.getElementById('chat-box');
       btn.addEventListener('click', () => {
         btn.disabled = true;
         messageInput.value = retryMessage;
-        if (messageForm.requestSubmit) messageForm.requestSubmit();
-        else messageForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        submitForm();
       });
       el.appendChild(btn);
     }
@@ -81,6 +80,102 @@ const chatBox = document.getElementById('chat-box');
   // 失敗時に入力内容を送信欄へ戻す（そのまま再送信できるようにする）
   function restoreInput(message) {
     if (!messageInput.value) messageInput.value = message;
+  }
+
+  function submitForm() {
+    if (messageForm.requestSubmit) messageForm.requestSubmit();
+    else messageForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  }
+
+  // 生成まわりの状態を初期に戻す。入力欄・ボタン・控えを一箇所でまとめて戻すことで、
+  // 「送信が終わったのに入力欄が押せないまま」のような取り残しを防ぐ。
+  function resetGenerationState() {
+    currentRequestId = null;
+    abortController = null;
+    messageInput.disabled = false;
+    sendButton.style.display = 'flex';
+    stopButton.style.display = 'none';
+    stopThinking();
+    try { localStorage.removeItem('tabimate_gen'); } catch (e) { /* 非対応環境は無視 */ }
+  }
+
+  // 走っている生成を止める。サーバーに知らせてから、こちらの受信も打ち切る。
+  async function abortCurrentGeneration() {
+    if (!currentRequestId) return;
+    try {
+      await fetch('/abort_request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `request_id=${encodeURIComponent(currentRequestId)}`,
+      });
+    } catch (e) { /* 通知できなくても、こちら側は止める */ }
+    if (abortController) {
+      try { abortController.abort(); } catch (e) { /* noop */ }
+    }
+  }
+
+  // 確認を出すかどうかはサーバーの履歴で決める。
+  // 画面はまだ描き終えていないことがあるので、DOM の件数はあてにならない。
+  async function hasStoredMessages() {
+    try {
+      const res = await fetch('/get_messages');
+      if (!res.ok) return false;
+      const msgs = await res.json();
+      return Array.isArray(msgs) && msgs.length > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 「新しいチャット」の一連の動作。?q= から来たときも同じ道を通す。
+  //
+  // 生成中に押されることがあるので、まず止めてから消す。止めずに履歴だけ消すと、
+  // 走っている生成があとから返事だけを書き込み、質問の無い会話ができてしまう。
+  // リセットに失敗したときは画面を消さない。消すと、サーバーには残っているのに
+  // 消えたように見えて、次に開いたとき履歴が戻ってきて驚くことになる。
+  async function startNewChat() {
+    const generating = currentRequestId !== null;
+    if (generating || await hasStoredMessages()) {
+      const question = generating
+        ? '作成中のプランを取りやめて、新しい相談を始めますか？'
+        : 'チャット履歴をリセットして新しい会話を始めますか？';
+      if (!confirm(question)) return false;
+    }
+
+    await abortCurrentGeneration();
+
+    let reset = false;
+    try {
+      reset = (await fetch('/reset_chat', { method: 'POST' })).ok;
+    } catch (e) {
+      reset = false;
+    }
+
+    resetGenerationState();
+    if (!reset) {
+      showSystemMessage(
+        '履歴をリセットできませんでした。\n\n'
+        + '通信を確かめて、もう一度お試しください🍀'
+      );
+      return false;
+    }
+
+    chatBox.innerHTML = '';
+    renderGreeting();
+    messageInput.value = '';
+    messageInput.focus();
+    return true;
+  }
+
+  // ホームの「こんな旅はどう？」から ?q= で来たときの受け口。
+  // 新しい相談として始めたいので、履歴をリセットしてからその文を送る。
+  async function consumeQueryPrompt() {
+    const q = new URLSearchParams(location.search).get('q');
+    if (!q) return;
+    history.replaceState(null, '', location.pathname);  // 再読込での二重送信を防ぐ
+    if (!await startNewChat()) return;                  // 断られたら何もしない
+    messageInput.value = q;
+    submitForm();
   }
 
   function generateId() {
@@ -264,14 +359,8 @@ const chatBox = document.getElementById('chat-box');
         restoreInput(message);
       }
     } finally {
-      messageInput.disabled = false;
-      sendButton.style.display = 'flex';
-      stopButton.style.display = 'none';
-      stopThinking();
+      resetGenerationState();
       messageInput.focus();
-      abortController = null;
-      currentRequestId = null;
-      try { localStorage.removeItem('tabimate_gen'); } catch (e) { /* 非対応環境は無視 */ }
     }
   });
 
@@ -286,22 +375,30 @@ const chatBox = document.getElementById('chat-box');
     if (!saved || !saved.id) { try { localStorage.removeItem('tabimate_gen'); } catch (e) {} return; }
     const rid = saved.id;
 
-    const isActive = async () => {
+    // 生成がどうなったかを尋ねる。
+    //   'pending' まだ作っている最中
+    //   'done'    返答が保存された（成功して終わった）
+    //   'gone'    失敗か中断（その回の行はまとめて消えている）
+    //   null      通信できなかった。決めつけずに次回へ回す
+    //
+    // 判断はサーバーの state（DBの行）に任せる。active はインスタンスごとの
+    // 記憶なので、複数インスタンスで動いていると当てにならない。
+    const askState = async () => {
       try {
         const r = await fetch('/generation_status?request_id=' + encodeURIComponent(rid));
-        return (await r.json()).active === true;
+        // 401（セッション切れ）や 5xx を「もう終わった」と読み違えないこと。
+        // 誤ると、まだ作っている最中なのに失敗の案内を出してしまう
+        if (!r.ok) return null;
+        const s = await r.json();
+        if (s.state === 'pending' || s.state === 'done' || s.state === 'gone') return s.state;
+        return s.active === true ? 'pending' : 'gone';  // 古い形の応答への保険
       } catch (e) { return null; }  // 判定不能
     };
 
     // 生成が終わったあとの後片付け。結果が残らなかった（エラー/中断）ときは
     // 質問文を入力欄に戻し、リロードしない時と同じ案内を出す。
     const finishResume = async () => {
-      try { localStorage.removeItem('tabimate_gen'); } catch (e) {}
-      currentRequestId = null;
-      messageInput.disabled = false;
-      sendButton.style.display = 'flex';
-      stopButton.style.display = 'none';
-      stopThinking();
+      resetGenerationState();
       let msgs = [];
       try { msgs = await (await fetch('/get_messages')).json(); } catch (e) {}
       await loadMessages(true);
@@ -319,9 +416,9 @@ const chatBox = document.getElementById('chat-box');
       }
     };
 
-    const active = await isActive();
-    if (active === false) { await finishResume(); return; }  // 既に完了/中断/エラー
-    if (active === null) return;  // 通信失敗時は次回のリロードに任せる
+    const state = await askState();
+    if (state === null) return;                              // 次回のリロードに任せる
+    if (state !== 'pending') { await finishResume(); return; }  // 既に完了/中断/エラー
 
     // まだ生成中 → 作成中UIを復帰（停止ボタンも currentRequestId 経由で機能する）
     currentRequestId = rid;
@@ -333,9 +430,9 @@ const chatBox = document.getElementById('chat-box');
     let ticks = 0;
     const poll = setInterval(async () => {
       ticks += 1;
-      const still = await isActive();
-      if (still === null) return;         // 一時的な通信エラーは次回リトライ
-      if (still && ticks < 360) return;   // まだ生成中（上限15分で強制解除）
+      const still = await askState();
+      if (still === null) return;                      // 一時的な通信エラーは次回リトライ
+      if (still === 'pending' && ticks < 360) return;   // まだ生成中（上限15分で強制解除）
       clearInterval(poll);
       await finishResume();
     }, 2500);
@@ -374,13 +471,22 @@ const chatBox = document.getElementById('chat-box');
     }
   });
 
-  document.getElementById('new-chat-btn').addEventListener('click', async () => {
-    if (!confirm('チャット履歴をリセットして新しい会話を始めますか？')) return;
-    await fetch('/reset_chat', { method: 'POST' });
-    chatBox.innerHTML = '';
-    renderGreeting();
+  const newChatBtn = document.getElementById('new-chat-btn');
+  newChatBtn.addEventListener('click', async () => {
+    // 押している間は塞ぐ（連打すると reset と abort が入り乱れる）
+    newChatBtn.disabled = true;
+    try {
+      await startNewChat();
+    } finally {
+      newChatBtn.disabled = false;
+    }
   });
 
+  // 起動時の並び順は大事。履歴を描き終える前に復元処理を走らせると、
+  // どちらも chatBox を作り直すので二重に描かれたり消えたりする。
   renderGreeting();
-  loadMessages();
-  resumeIfGenerating();
+  (async () => {
+    await loadMessages();
+    await resumeIfGenerating();
+    await consumeQueryPrompt();
+  })();

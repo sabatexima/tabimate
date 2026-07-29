@@ -16,15 +16,31 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # ブラウザを探す
 # ----------------------------------------------------------------------
 CHROME=""
-for c in "$CHROME_PATH" /opt/pw-browsers/chromium-*/chrome-linux/chrome \
-         google-chrome chromium chromium-browser \
-         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; do
-  [ -z "${c:-}" ] && continue
+# CHROME_PATH は未設定でも動くこと（:- を外すと set -u で即死し、しかも
+# エラーが見えないまま「検査していないのに終わった」状態になる）
+CANDIDATES=(
+  "${CHROME_PATH:-}"
+  /opt/pw-browsers/chromium-*/chrome-linux/chrome
+  google-chrome
+  google-chrome-stable
+  chromium
+  chromium-browser
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+)
+for c in "${CANDIDATES[@]}"; do
+  [ -n "$c" ] || continue
   if [ -x "$c" ]; then CHROME="$c"; break; fi
-  if command -v "$c" >/dev/null 2>&1; then CHROME="$(command -v "$c")"; break; fi
-done 2>/dev/null || true
+  found="$(command -v "$c" 2>/dev/null || true)"
+  if [ -n "$found" ]; then CHROME="$found"; break; fi
+done
 
 if [ -z "$CHROME" ]; then
+  # 手元では飛ばしてよいが、CI で黙って飛ばすと「ずっと緑なのに何も見ていない」
+  # という一番たちの悪い状態になる。CI では止める
+  if [ -n "${CI:-}" ]; then
+    echo "ERROR: Chrome / Chromium が見つかりません（CI では必須です）" >&2
+    exit 1
+  fi
   echo "▸ Chrome / Chromium が見つからないので、この検査は飛ばします"
   exit 0
 fi

@@ -90,6 +90,12 @@ jobs:
         run: |
           for f in src/static/js/*.js; do node --check "$f"; done
 
+      - name: チャット画面の JS を本物のブラウザで動かす
+        # 構文検査では見つからない壊れ方（実行時に何も起きない）を押さえる。
+        # 実際「こんな旅はどう？」のチップは、名前の衝突でスクリプトごと
+        # 死んでいて無反応だった
+        run: scripts/check_home_js.sh
+
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
         with:

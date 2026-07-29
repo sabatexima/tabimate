@@ -82,7 +82,7 @@ final class ScreenTourTests: XCTestCase {
         tapButton("やめる")
 
         // 旅の中身
-        tapText("熱海でのんびり")
+        tapText("夏の海、熱海")
         expect(text: "MEMORIES", where: "旅の中身")
         expect(text: "🌟 ちゃむが選んだ一枚", where: "ちゃむが選んだ一枚")
         expect(text: "🍀 ことばの付箋", where: "ことばの付箋")
@@ -110,10 +110,13 @@ final class ScreenTourTests: XCTestCase {
     /// エラーの札が出る。どちらでも「落ちない」ことだけは必ず確かめる。
     func testSendingAMessageDoesNotCrash() {
         tapTab("そうだん")
-        let field = app.textViews.firstMatch.exists
-            ? app.textViews.firstMatch
-            : app.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "相談の入力欄が見つからない")
+        // 複数行に伸びる TextField（axis: .vertical）は textView として出るが、
+        // OS のバージョンによっては textField のままのこともある
+        var field = app.textViews.firstMatch
+        if !field.waitForExistence(timeout: 15) {
+            field = app.textFields.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 10), "相談の入力欄が見つからない")
+        }
         field.tap()
         field.typeText("熱海に行きたい")
 
@@ -128,8 +131,10 @@ final class ScreenTourTests: XCTestCase {
         tapTab("保存プラン")
         expect(text: "熱海でのんびり", where: "保存プラン")
 
-        let card = app.staticTexts["熱海でのんびり"].firstMatch
-        card.swipeDown(velocity: .slow)
+        // 引っぱる場所は保存プランにしかない文言で選ぶ（他のタブと取り違えないため）
+        let header = app.staticTexts["保存した"].firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 15), "保存プランの見出しが出てこない")
+        header.swipeDown(velocity: .slow)
 
         expect(text: "熱海でのんびり", where: "引っぱって読み直したあとの保存プラン")
         XCTAssertEqual(app.state, .runningForeground)

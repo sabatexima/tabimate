@@ -176,8 +176,11 @@ enum StubResponses {
      "accommodation_coords":[{"name":"ホテル熱海","lat":35.098,"lng":139.075}]}
     """
 
+    /// 旅の名前はしおりの行き先とわざと変えてある。
+    /// 同じにすると、UIテストが「保存プランの付箋」と「おもいでのポラロイド」の
+    /// どちらを押したのか区別できなくなる。
     private static let trip = """
-    {"id":1,"title":"熱海でのんびり","start_date":"2026-08-14","end_date":"2026-08-15",
+    {"id":1,"title":"夏の海、熱海","start_date":"2026-08-14","end_date":"2026-08-15",
      "is_favorite":1,"photo_count":2,"cover_url":"/reflection/photo/t.jpg",
      "stickers_preview":["海がきれいだった"],"created_at":"2026-08-16"}
     """

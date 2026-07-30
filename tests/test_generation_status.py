@@ -131,3 +131,86 @@ def test_empty_request_id_is_gone():
     import db
 
     assert db.chat_request_state(USER, "") == "gone"
+
+
+# ---------------------------------------------------------------------------
+# ページに「まだ返事待ちの生成」を載せて返す部分
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def page(monkeypatch):
+    """チャット画面を開けるテストクライアント。履歴と状態はテスト側で決める。"""
+    import app as app_mod
+    import db
+    import views.planner as P
+
+    app_mod.app.config["TESTING"] = True
+    box = {"messages": [], "state": "gone"}
+    monkeypatch.setattr(db, "get_chat_messages", lambda uid: box["messages"])
+    monkeypatch.setattr(db, "chat_request_state", lambda uid, rid: box["state"])
+    monkeypatch.setattr(P, "active_requests", set())
+
+    with app_mod.app.test_client() as c:
+        with c.session_transaction() as s:
+            s["user_id"] = USER
+            s["user_email"] = "u@example.com"
+        yield c, box
+
+
+def _chat_html(client):
+    res = client.get("/chat")
+    assert res.status_code == 200
+    return res.get_data(as_text=True)
+
+
+def test_page_carries_the_pending_generation(page):
+    """返事待ちなら、その情報がページに載っていること。
+
+    これがあるので、画面側は端末に控えを持たなくてよい。
+    """
+    c, box = page
+    box["messages"] = [{"role": "user", "content": "車", "request_id": "r9"}]
+    box["state"] = "pending"
+
+    html = _chat_html(c)
+    assert 'data-pending-request="r9"' in html
+    assert 'data-pending-message="車"' in html
+
+
+def test_page_is_quiet_when_the_reply_is_already_there(page):
+    """返事が保存済みなら、何も載せないこと（勝手に考えていますを出さない）。"""
+    c, box = page
+    box["messages"] = [
+        {"role": "user", "content": "車", "request_id": "r9"},
+        {"role": "ai", "content": "できました", "request_id": "r9"},
+    ]
+    box["state"] = "done"
+
+    assert "data-pending-request" not in _chat_html(c)
+
+
+def test_page_is_quiet_when_the_generation_was_lost(page):
+    """失敗・中断した回は載せないこと。"""
+    c, box = page
+    box["messages"] = [{"role": "user", "content": "車", "request_id": "r9"}]
+    box["state"] = "gone"
+
+    assert "data-pending-request" not in _chat_html(c)
+
+
+def test_page_is_quiet_with_no_history(page):
+    c, box = page
+    box["messages"] = []
+    assert "data-pending-request" not in _chat_html(c)
+
+
+def test_quotes_in_the_message_cannot_break_the_attribute(page):
+    """引用符を含む文でも、属性が壊れないこと（テンプレートの自動エスケープ）。"""
+    c, box = page
+    box["messages"] = [{"role": "user", "content": '"><script>x</script>',
+                        "request_id": "r9"}]
+    box["state"] = "pending"
+
+    html = _chat_html(c)
+    assert "<script>x</script>" not in html, "そのまま埋め込まれている"
+    assert 'data-pending-request="r9"' in html

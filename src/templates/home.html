@@ -35,7 +35,13 @@
     <button id="new-chat-btn" title="新しいチャットを開始" style="margin-left:auto;background:none;border:1px solid rgba(79,168,58,0.3);color:#4fa83a;border-radius:20px;padding:5px 14px;font-size:0.65rem;font-weight:600;cursor:pointer;transition:background 0.15s;">＋ 新しいチャット</button>
   </h1>
 
-  <div class="chat-container">
+  <div class="chat-container"
+       {% if pending %}
+       {# まだ返事を待っている生成。リロード直後から「考えています」を出すために
+          サーバーがここに載せる（端末側に控えを持たせない） #}
+       data-pending-request="{{ pending.request_id }}"
+       data-pending-message="{{ pending.message }}"
+       {% endif %}>
     <div id="chat-box">
       <!-- チャットのメッセージはここに動的に追加される -->
     </div>

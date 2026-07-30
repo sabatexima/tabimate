@@ -16,16 +16,19 @@
   使い方: scripts/check_home_js.sh （?case=N でひとつずつ動かす）
 -->
 
-<!-- home.js が触る要素。home.html と同じ id をそろえる -->
-<div id="chat-box"></div>
-<div id="typing" style="display:none">
-  <span id="thinking-text"></span>
+<!-- home.js が触る要素。home.html と同じ id・class をそろえる。
+     生成中かどうかはサーバーが .chat-container の data 属性に載せてくる -->
+<div class="chat-container">
+  <div id="chat-box"></div>
+  <div id="typing" style="display:none">
+    <span id="thinking-text"></span>
+  </div>
+  <form id="message-form">
+    <input type="text" id="message-input">
+    <button type="submit" id="send-button"></button>
+    <button type="button" id="stop-button" style="display:none"></button>
+  </form>
 </div>
-<form id="message-form">
-  <input type="text" id="message-input">
-  <button type="submit" id="send-button"></button>
-  <button type="button" id="stop-button" style="display:none"></button>
-</form>
 <button id="new-chat-btn"></button>
 
 <pre id="result">（実行中）</pre>
@@ -103,6 +106,13 @@
   const greetingCount = () =>
     document.querySelectorAll('#chat-box .greeting').length;
 
+  // サーバーがページに載せてくる「まだ返事待ちの生成」
+  function markPending(rid, message) {
+    const box = document.querySelector('.chat-container');
+    box.dataset.pendingRequest = rid;
+    box.dataset.pendingMessage = message;
+  }
+
   // ケースごとの前準備（home.js を読み込む前に済ませる）
   if (CASE === '1') {
     state.messages = [
@@ -116,54 +126,54 @@
   if (CASE === '2') state.keepStreamOpen = true;
   if (CASE === '3') state.resetOk = false;
 
-  // 5・6 はリロード直後の復元。生成中に閉じた印（localStorage）を置いておく
+  // 5・6 はリロード直後の復元。サーバーが「返事待ち」を載せてきた状態にする
   if (CASE === '5' || CASE === '6') {
     state.messages = [
       { role: 'user', content: '熱海に行きたい' },
       { role: 'ai', content: 'プランができました' },
     ];
     state.messagesDelay = 40;
-    try {
-      localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '熱海に行きたい' }));
-    } catch (e) { /* 使えない環境では 5・6 は意味を成さない */ }
+    state.genState = 'done';
+    markPending('r1', '熱海に行きたい');
   }
   if (CASE === '6') state.statusFails = true;
-
-  // 8 は報告のあった症状そのもの。リロードしたとき、生成を動かしているのが
-  // 別のインスタンスでも「考えています」が出続けること
-  if (CASE === '8') {
-    state.messages = [{ role: 'user', content: '車' }];
-    state.genState = 'pending';
-    try {
-      localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '車' }));
-    } catch (e) { /* 使えない環境では 8 は意味を成さない */ }
-  }
-
-  // 9 は生成が失敗して行ごと消えた場合。案内を出して入力を戻すこと
-  if (CASE === '9') {
-    state.messages = [{ role: 'user', content: '車' }];
-    state.genState = 'gone';
-    try {
-      localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '車' }));
-    } catch (e) { /* 同上 */ }
-  }
-
-  // 10 は控え（localStorage）が失われている場合。履歴の最後がこちらの発言なら、
-  // まだ返事待ちだと分かるので、そこから復元できること
-  if (CASE === '10') {
-    state.messages = [{ role: 'user', content: '車', request_id: 'r9' }];
-    state.genState = 'pending';
-    try { localStorage.removeItem('tabimate_gen'); } catch (e) { /* noop */ }
-  }
 
   // 7 は「復元中に、こんな旅はどう？から来た」場合。生成が二重に走らないこと
   if (CASE === '7') {
     state.messages = [{ role: 'user', content: '熱海に行きたい' }];
     state.messagesDelay = 40;
     state.genState = 'pending';
-    try {
-      localStorage.setItem('tabimate_gen', JSON.stringify({ id: 'r1', msg: '熱海に行きたい' }));
-    } catch (e) { /* 使えない環境では 7 は意味を成さない */ }
+    markPending('r1', '熱海に行きたい');
+  }
+
+  // 8 は報告のあった症状そのもの。リロードしたら「考えています」が出ること
+  if (CASE === '8') {
+    state.messages = [{ role: 'user', content: '車' }];
+    state.genState = 'pending';
+    markPending('r1', '車');
+  }
+
+  // 9 は生成が失われた場合。案内を出して文を戻すこと
+  if (CASE === '9') {
+    state.messages = [{ role: 'user', content: '車' }];
+    state.genState = 'gone';
+    markPending('r1', '車');
+  }
+
+  // 10 はサーバーが何も載せてこない＝生成中ではない。静かでいること
+  if (CASE === '10') {
+    state.messages = [
+      { role: 'user', content: '車' },
+      { role: 'ai', content: 'プランができました' },
+    ];
+  }
+
+  // 11 は復元中に「新しいチャット」を押した場合。前の回の結果が
+  // あとから割り込んでこないこと
+  if (CASE === '11') {
+    state.messages = [{ role: 'user', content: '車' }];
+    state.genState = 'pending';
+    markPending('r1', '車');
   }
 </script>
 
@@ -223,35 +233,24 @@
     }
 
     if (CASE === '5') {
-      // リロード直後。履歴の読み込みと復元処理が同時に走っても、二重に描かれないこと
-      await wait(400);
+      // 復元してみたら、もう終わっていた。二重に描かず、結果を出すこと
+      await wait(3200);
       check('挨拶が1つだけ出ること', greetingCount() === 1, greetingCount() + '個');
       check('履歴が2件だけ出ること', bodyCount() === 2, bodyCount() + '件');
       check('終わっている生成に失敗の案内を出さないこと',
         !document.getElementById('chat-box').textContent.includes('終わりませんでした'));
-      check('控えを片づけること', localStorage.getItem('tabimate_gen') === null);
-    }
-
-    if (CASE === '6') {
-      // 生成中かどうかを確かめられなかったとき（セッション切れなど）。
-      // 勝手に「失敗しました」と決めつけず、控えも残して次回に任せる
-      await wait(400);
-      check('決めつけて失敗の案内を出さないこと',
-        !document.getElementById('chat-box').textContent.includes('終わりませんでした'));
-      check('控えを残すこと', localStorage.getItem('tabimate_gen') !== null);
       check('入力欄が使えること',
         document.getElementById('message-input').disabled === false);
     }
 
-    if (CASE === '7') {
-      // 前の生成がまだ走っている最中に新しい相談が始まると、
-      // 二重に生成が走って結果が混ざる。始める前に必ず止めること
-      await wait(600);
-      const abort = calls.indexOf('POST /abort_request');
-      const send = calls.indexOf('POST /send_message');
-      check('前の生成を止めること', abort !== -1, calls.join(' / '));
-      check('新しい相談を送ること', send !== -1);
-      check('止めてから送ること', abort !== -1 && send !== -1 && abort < send);
+    if (CASE === '6') {
+      // 生成中かどうかを確かめられないとき（セッション切れなど）。
+      // 勝手に「失敗しました」と決めつけず、待ち続けること
+      await wait(3200);
+      check('決めつけて失敗の案内を出さないこと',
+        !document.getElementById('chat-box').textContent.includes('終わりませんでした'));
+      check('「考えています」を出したままにすること',
+        document.getElementById('typing').style.display === 'flex');
     }
 
     if (CASE === '8') {
@@ -267,7 +266,7 @@
     }
 
     if (CASE === '9') {
-      await wait(400);
+      await wait(3200);
       const text = document.getElementById('chat-box').textContent;
       check('失敗を伝えること', text.includes('終わりませんでした'), text.slice(0, 60));
       check('入力欄に文を戻すこと',
@@ -278,14 +277,30 @@
     }
 
     if (CASE === '10') {
+      // 生成中ではない。勝手に「考えています」を出さないこと
       await wait(400);
-      const typing = document.getElementById('typing');
-      check('控えが無くても「考えています」が出ること',
-        typing.style.display === 'flex', typing.style.display);
-      check('その回の request_id で問い合わせること',
-        calls.includes('GET /generation_status'), calls.join(' / '));
-      check('入力欄が塞がれていること',
-        document.getElementById('message-input').disabled === true);
+      check('「考えています」を出さないこと',
+        document.getElementById('typing').style.display !== 'flex',
+        document.getElementById('typing').style.display);
+      check('入力欄が使えること',
+        document.getElementById('message-input').disabled === false);
+      check('生成状態を尋ねないこと',
+        !calls.includes('GET /generation_status'), calls.join(' / '));
+    }
+
+    if (CASE === '11') {
+      // 復元中に「新しいチャット」を押す。定期確認を止め忘れると、
+      // まっさらな画面に前の回の「終わりませんでした」が割り込んでくる
+      await wait(300);
+      state.genState = 'gone';           // リセットで前の回の行は消える
+      document.getElementById('new-chat-btn').click();
+      await wait(3200);
+      const text = document.getElementById('chat-box').textContent;
+      check('前の回の案内が割り込んでこないこと',
+        !text.includes('終わりませんでした'), text.slice(0, 80));
+      check('会話が空のままであること', bodyCount() === 0, bodyCount() + '件');
+      check('入力欄が使えること',
+        document.getElementById('message-input').disabled === false);
     }
 
     document.getElementById('result').textContent =

@@ -7,6 +7,9 @@ const chatBox = document.getElementById('chat-box');
 
   let abortController = null;
   let currentRequestId = null;
+  // リロード復元の定期確認。止め忘れると、新しい相談を始めたあとに
+  // 前の回の結果が割り込んでくる
+  let resumePoll = null;
 
   // 生成中の段階表示。先頭(ご希望の読み取り)は条件の質問など短い応答もカバーし、
   // 長い生成のときだけ交通→観光→…と前へ進め、最後で止める（ループしない＝進捗に見える）。
@@ -96,7 +99,7 @@ const chatBox = document.getElementById('chat-box');
     sendButton.style.display = 'flex';
     stopButton.style.display = 'none';
     stopThinking();
-    try { localStorage.removeItem('tabimate_gen'); } catch (e) { /* 非対応環境は無視 */ }
+    if (resumePoll) { clearInterval(resumePoll); resumePoll = null; }
   }
 
   // 走っている生成を止める。サーバーに知らせてから、こちらの受信も打ち切る。
@@ -222,14 +225,10 @@ const chatBox = document.getElementById('chat-box');
     return wrapper;
   }
 
-  // 直近に読み込んだ履歴。生成中かどうかの判断にも使う（下の resumeIfGenerating）
-  let lastMessages = [];
-
   async function loadMessages(forceScroll = false) {
     try {
       const response = await fetch('/get_messages');
       const messages = await response.json();
-      lastMessages = Array.isArray(messages) ? messages : [];
       const currentMsgCount = chatBox.querySelectorAll('.message-wrapper:not(.greeting)').length;
       if (!forceScroll && messages.length === currentMsgCount) return;
 
@@ -262,11 +261,6 @@ const chatBox = document.getElementById('chat-box');
     if (!message) return;
 
     currentRequestId = generateId();
-    // リロードしても「生成中」を復元できるよう request_id と質問文を控えておく
-    // （エラー/中断で結果が残らなかった場合、復元時に質問を入力欄へ戻すのに使う）
-    try {
-      localStorage.setItem('tabimate_gen', JSON.stringify({ id: currentRequestId, msg: message }));
-    } catch (e) { /* 非対応環境は無視 */ }
 
     messageInput.disabled = true;
     sendButton.style.display = 'none';
@@ -368,39 +362,30 @@ const chatBox = document.getElementById('chat-box');
     }
   });
 
-  // リロード後、生成が続いていたら「作成中」表示を復元し、完了を待って結果を出す。
-  // （SSEストリームには再接続できないため、状態をポーリングして完了を検知する）
+  // リロード後、まだ返事を待っている生成があれば「作成中」表示を戻す。
+  //
+  // 誰が生成中かはサーバーが知っている。ページを出すときに
+  // data-pending-request / data-pending-message に載せてくれるので、
+  // それを読むだけでよい（端末側に控えを持たない）。
+  // SSEストリームには繋ぎ直せないので、完了は問い合わせて知る。
   async function resumeIfGenerating() {
-    let saved = null;
-    try {
-      const raw = localStorage.getItem('tabimate_gen');
-      saved = raw ? JSON.parse(raw) : null;  // 旧形式(文字列)はparse失敗→復元しない
-    } catch (e) { saved = null; }
+    const box = document.querySelector('.chat-container');
+    const rid = box && box.dataset.pendingRequest;
+    if (!rid) return;
+    const askedMessage = (box.dataset.pendingMessage || '');
 
-    // 控えが無くても、履歴の最後がこちらの発言なら、その回はまだ返事待ち。
-    //
-    // localStorage は思ったより簡単に失われる。別のタブや別の端末で開いた、
-    // プライベートモード、履歴の削除、それに以前は誤判定のあと自分で消していた。
-    // 控えだけに頼ると「サーバーは作っているのに、画面は何も言わない」状態になり、
-    // 一度そうなるとリロードしても戻ってこない。履歴から拾えるようにしておく。
-    if (!saved || !saved.id) {
-      const last = lastMessages[lastMessages.length - 1];
-      if (last && last.role === 'user' && last.request_id) {
-        saved = { id: last.request_id, msg: last.content };
-      }
-    }
-
-    if (!saved || !saved.id) { try { localStorage.removeItem('tabimate_gen'); } catch (e) {} return; }
-    const rid = saved.id;
+    // 作成中の見た目に戻す（停止ボタンも currentRequestId 経由で効く）
+    currentRequestId = rid;
+    messageInput.disabled = true;
+    sendButton.style.display = 'none';
+    stopButton.style.display = 'flex';
+    startThinking();
 
     // 生成がどうなったかを尋ねる。
     //   'pending' まだ作っている最中
     //   'done'    返答が保存された（成功して終わった）
     //   'gone'    失敗か中断（その回の行はまとめて消えている）
     //   null      通信できなかった。決めつけずに次回へ回す
-    //
-    // 判断はサーバーの state（DBの行）に任せる。active はインスタンスごとの
-    // 記憶なので、複数インスタンスで動いていると当てにならない。
     const askState = async () => {
       try {
         const r = await fetch('/generation_status?request_id=' + encodeURIComponent(rid));
@@ -415,44 +400,30 @@ const chatBox = document.getElementById('chat-box');
 
     // 生成が終わったあとの後片付け。結果が残らなかった（エラー/中断）ときは
     // 質問文を入力欄に戻し、リロードしない時と同じ案内を出す。
-    const finishResume = async () => {
+    const finish = async (state) => {
       resetGenerationState();
-      let msgs = [];
-      try { msgs = await (await fetch('/get_messages')).json(); } catch (e) {}
       await loadMessages(true);
-      const last = msgs[msgs.length - 1];
-      // 最後がユーザー発言＝AIの応答が残っていない＝エラーか中断で終わった
-      if ((!last || last.role === 'user') && saved.msg) {
-        restoreInput(saved.msg);
-        showSystemMessage(
-          '前回のプラン作成は最後まで終わりませんでした。\n'
-          + 'お手数ですが、下のボタンからもう一度お試しください🍀',
-          saved.msg
-        );
-      } else {
+      if (state === 'done') {
         messageInput.focus();
+        return;
       }
+      restoreInput(askedMessage);
+      showSystemMessage(
+        '前回のプラン作成は最後まで終わりませんでした。\n'
+        + 'お手数ですが、下のボタンからもう一度お試しください🍀',
+        askedMessage
+      );
     };
 
-    const state = await askState();
-    if (state === null) return;                              // 次回のリロードに任せる
-    if (state !== 'pending') { await finishResume(); return; }  // 既に完了/中断/エラー
-
-    // まだ生成中 → 作成中UIを復帰（停止ボタンも currentRequestId 経由で機能する）
-    currentRequestId = rid;
-    messageInput.disabled = true;
-    sendButton.style.display = 'none';
-    stopButton.style.display = 'flex';
-    startThinking();
-
     let ticks = 0;
-    const poll = setInterval(async () => {
+    resumePoll = setInterval(async () => {
       ticks += 1;
-      const still = await askState();
-      if (still === null) return;                      // 一時的な通信エラーは次回リトライ
-      if (still === 'pending' && ticks < 360) return;   // まだ生成中（上限15分で強制解除）
-      clearInterval(poll);
-      await finishResume();
+      const state = await askState();
+      if (state === null) return;                     // 一時的な通信エラーは次回リトライ
+      if (state === 'pending' && ticks < 360) return;  // まだ生成中（上限15分で強制解除）
+      clearInterval(resumePoll);
+      resumePoll = null;
+      await finish(state);
     }, 2500);
   }
 

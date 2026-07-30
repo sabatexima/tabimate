@@ -172,9 +172,35 @@ def api_ideas():
 
 @planner.route("/chat")
 def chat():
-    """旅行プラン作成チャット画面（旧ホーム）。"""
+    """旅行プラン作成チャット画面（旧ホーム）。
+
+    まだ返事を待っている生成があれば、その情報をページに載せて返す。こうすると
+    リロード直後から「考えています」を出せる。控えを端末に置いたり、読み込んだ
+    履歴を後から漁ったりする必要がない。
+    """
     logger.debug("チャットアクセス")
-    return render_template("home.html")
+    return render_template("home.html", pending=_pending_generation())
+
+
+def _pending_generation() -> dict | None:
+    """まだ返事が保存されていない生成があれば、その request_id と質問文を返す。
+
+    履歴の最後がこちらの発言なら、その回はまだ返事待ち。失敗・中断した回は
+    行ごと消えているので履歴には残らない（views の run_chat と abort_request）。
+    """
+    if not session.get('user_id'):
+        return None
+    from db import chat_request_state, get_chat_messages
+
+    messages = get_chat_messages(session['user_id'])
+    if not messages:
+        return None
+    last = messages[-1]
+    if last.get('role') != 'user' or not last.get('request_id'):
+        return None
+    if chat_request_state(session['user_id'], last['request_id']) != 'pending':
+        return None
+    return {'request_id': last['request_id'], 'message': last.get('content', '')}
 
 
 @planner.route("/saved_plans")

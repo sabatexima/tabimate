@@ -9,13 +9,22 @@
   Come home, and your photos quietly become sticky notes.
 </p>
 
+<p align="center"><i>A gentle, picture-book-styled travel companion.</i></p>
+
 <p align="center">
-  <i>A gentle, picture-book-styled travel companion.</i>
+  <a href="README_jp.md">🇯🇵&nbsp;日本語</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/sabatexima/tabimate_ios">📱&nbsp;iOS&nbsp;app</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml"><img src="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 <p align="center">
-  <a href="README_jp.md">🇯🇵&nbsp;日本語</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml"><img src="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/Flask-3.1-000000?logo=flask&logoColor=white" alt="Flask 3.1">
+  <img src="https://img.shields.io/badge/LangGraph-1.2-1C3C3C" alt="LangGraph 1.2">
+  <img src="https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
+  <img src="https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?logo=googlecloud&logoColor=white" alt="Cloud Run">
 </p>
 
 <p align="center">
@@ -28,15 +37,14 @@
 
 ---
 
-## 🍀 What is TabiMate?
+## What is TabiMate?
 
-> _From "where should we go?" to "that was fun."<br>
-> Chamu is there for every part of the trip._
+> _From "where should we go?" to "that was fun."_<br>
+> _Chamu is there for every part of the trip._
 
-There are plenty of travel apps &mdash; but TabiMate cares about the **before** and **after** of a trip.
+Plenty of apps help you book a trip. TabiMate cares about the **before** and the **after**.
 
-Plan by simply chatting with the AI. Come home and just drop in your photos.
-The rest is handled by **Chamu**, the mascot, who binds your itinerary, turns memories into sticky notes, and quietly frames your best shots.
+Chat your way to an itinerary. Come home and drop in your photos. **Chamu**, the mascot, binds the itinerary, turns memories into sticky notes, and quietly frames your best shot.
 
 <table>
 <tr>
@@ -48,62 +56,76 @@ The rest is handled by **Chamu**, the mascot, who binds your itinerary, turns me
 
 ---
 
-## ✨ Features
+## Features
 
-### 🗺️ Before &mdash; just chat, and the itinerary appears
+### 🗺️ Before — just chat, and the itinerary appears
 
 > _Chamu: "Where to? How many nights? …Got it, leave it to me."_
 
-- 💬 **Plan by conversation** &mdash; destination, days, budget and more are read from natural chat; missing pieces are asked one at a time. Once everything's set, a team of AI agents (LangGraph) builds the plan together.
-- 🌤️ **Weather-aware** &mdash; reads the forecast for your travel dates: more indoor spots on rainy days, warmer picks when it's cold. It even avoids shops likely closed that weekday.
-- 🍽️ **Real places only** &mdash; candidates are verified against Google Places, so "plausible-sounding but invented" shops get dropped.
-- 🗾 **Watercolor map** &mdash; sights / food / stays as color-coded pins, connected **in visiting order**. Tap a pin for turn-by-turn navigation.
-- 🎒 **Packing list** &mdash; Chamu suggests what to bring from your destination and weather. Check an item and a clover blooms.
-- 🍀 **Departure countdown** &mdash; "12 days to go." A little thrill every time you open the shelf.
-- 📅 **Calendar export** &mdash; export the schedule as `.ics`, straight into Google Calendar and friends.
-- ✏️ **Tweak later** &mdash; "make Day 2 relaxed," "change the hotel" &mdash; all by chat. Rate a plan with ★ and future suggestions quietly adapt.
+| | |
+|---|---|
+| 💬 **Plan by conversation** | Destination, days and budget are read from natural chat; missing pieces are asked one at a time. Then a team of AI agents (LangGraph) builds the plan together. |
+| 🌤️ **Weather-aware** | Reads the forecast for your dates — more indoor spots on rainy days, warmer picks when it's cold, and shops likely closed that weekday are skipped. |
+| 🍽️ **Real places only** | Candidates are verified against Google Places, so plausible-sounding but invented shops get dropped. |
+| 🗾 **Watercolor map** | Sights / food / stays as color-coded pins, connected **in visiting order**. Tap a pin for navigation. |
+| 🎒 **Packing list** | Suggested from your destination and the weather. Check an item and a clover blooms. |
+| 🍀 **Countdown** | "12 days to go." A little thrill every time you open the shelf. |
+| 📅 **Calendar export** | Download the schedule as `.ics`. |
+| ✏️ **Tweak later** | "Make Day 2 relaxed," "change the hotel" — all by chat. Rate with ★ and future suggestions quietly adapt. |
 
-### 📸 After &mdash; photos turn into words on their own
+### 📸 After — photos turn into words on their own
 
 > _Chamu: "Welcome back. Show me the photos… what a trip."_
 
-- 🏷️ **Sticky notes from photos** &mdash; the AI reads your uploads and captures the mood in short "sticky note" phrases.
-- 📖 **Travel journal** &mdash; polaroids and pastel sticky notes on craft paper. Search and favorite to look back.
-- 🏅 **Chamu's best shots** &mdash; picks the "one to frame" from many photos, set in a golden frame.
-- 💰 **Trip ledger** &mdash; record estimate vs. what you actually spent. Under budget? "◯ yen saved 🍀."
-- 🐾 **Footprints map** &mdash; plots your path from photo GPS. Overlay the plan to compare "planned vs. actual."
-- 📔 **Yearly digest** &mdash; "Your year in travel," recapping the year's trips and sticky notes at a glance.
+| | |
+|---|---|
+| 🏷️ **Sticky notes from photos** | The AI reads your uploads and captures the mood in short phrases. |
+| 📖 **Travel journal** | Polaroids and pastel sticky notes on craft paper. Search and favorite to look back. |
+| 🏅 **Chamu's best shot** | Picks the one to frame, and frames it in gold. |
+| 💰 **Trip ledger** | Estimate vs. what you actually spent. Under budget? "◯ yen saved 🍀." |
+| 🐾 **Footprints map** | Plots your path from photo GPS. Overlay the plan to compare planned vs. actual. |
+| 📔 **Yearly digest** | "Your year in travel," recapping the year's trips and sticky notes at a glance. |
 
 ### 🤝 Share
 
-- 🔗 **Public link** for login-free sharing (view-only).
-- ✉️ **Email grants** to allow a specific person to view or edit.
-- 📱 **PWA** &mdash; add to your home screen and launch it as an app from Chamu's icon.
+- 🔗 **Public link** — login-free, view-only.
+- ✉️ **Email grants** — let a specific person view or edit.
+- 📱 **PWA** — add to your home screen and launch it from Chamu's icon.
 
 ---
 
-## 🛠️ Built with
+## 📱 The iOS app
 
-|  |  |
+A native SwiftUI client lives in its own repository:
+
+**→ [sabatexima/tabimate_ios](https://github.com/sabatexima/tabimate_ios)**
+
+Same server, same account, same trips. It talks to the endpoints under `/auth/app/*` and `/api/*` listed below, authenticating with a Bearer token instead of a session cookie (`src/api_auth.py`).
+
+> The `ios/` directory in this repository holds the same code so CI can build it. The standalone repository is the canonical place to work on the app.
+
+---
+
+## Built with
+
+| | |
 |---|---|
-| 🧠 **AI** | LangGraph · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
-| ⚙️ **Backend** | Flask 3.1 · SQLAlchemy · MySQL 8.0 / TiDB · gunicorn |
+| 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
+| ⚙️ **Backend** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **Maps & Geo** | Leaflet · Stadia Maps (watercolor) · Google Places · OSM Nominatim · GSI |
-| ☁️ **Infra** | Google Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
-| 🎨 **Frontend** | Jinja2 · Vanilla JS · PWA · Zen Maru Gothic |
+| ☁️ **Infra** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
+| 🎨 **Frontend** | Jinja2 · vanilla JS · PWA · Zen Maru Gothic |
+| 📱 **iOS** | SwiftUI (iOS 17+) · Swift 6 · XcodeGen |
 
 ---
 
-## 🚀 Run it
+## Quick start
 
 ```bash
-# 1. Clone
-git clone <repo-url> && cd tabimate
+git clone https://github.com/sabatexima/tabimate && cd tabimate
 
-# 2. Prepare env vars (at least: API keys, OAuth, DB)
-cp src/.env.example src/.env   # → fill it in
+cp src/.env.example src/.env      # fill in API keys, OAuth and DB
 
-# 3. Install & run
 cd src
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r ../requirements.txt
@@ -112,12 +134,14 @@ python3 app.py
 
 Open **http://localhost:5007**. Tables are created on first access (`CREATE TABLE IF NOT EXISTS`).
 
-> 🍀 **One command to production** &mdash; `./deploy.sh` handles the whole Cloud Run deploy (Secrets, GCS bucket, IAM roles included).
+```bash
+./deploy.sh    # one command to Cloud Run — Secrets, GCS bucket and IAM included
+```
 
 ---
 
 <details>
-<summary><b>📖 Deep dive (developer docs)</b></summary>
+<summary><b>📖 Deep dive — developer docs</b></summary>
 
 <br>
 
@@ -126,143 +150,189 @@ Open **http://localhost:5007**. Tables are created on first access (`CREATE TABL
 Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-ignored.
 
 | Variable | Required | Purpose |
-|------|------|------|
+|---|---|---|
 | `SECRET_KEY` | prod | Flask session signing key |
 | `GOOGLE_API_KEY` | ✓ | Gemini API key |
 | `TAVILY_API_KEY` | ✓ | Tavily web search |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth (web sign-in) |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | ✓ | Database connection |
-| `STADIA_API_KEY` | | Watercolor map tiles (falls back to standard OSM tiles). ⚠️ Exposed to the browser by design (tile requests), so **always set a domain restriction on the Stadia side** to prevent free-quota piggybacking |
+| `GOOGLE_IOS_CLIENT_ID` | app | Audience for verifying ID tokens from the iOS app. Falls back to `GOOGLE_CLIENT_ID`; **sign-in is refused when neither is set**, because an unset audience makes the library skip `aud` validation entirely |
+| `APP_TOKEN_MAX_AGE_SEC` | | Lifetime of app tokens (default 30 days) |
+| `STADIA_API_KEY` | | Watercolor tiles (falls back to standard OSM). ⚠️ Reaches the browser by design, so **set a domain restriction on the Stadia side** |
 | `GOOGLE_MAPS_API_KEY` | | Google Places-powered geocoding. Unset = free stack (Nominatim + GSI) only |
 | `DB_SSL` / `DB_SSL_CA` | cond. | TLS connection (`DB_SSL=true` required for TiDB Cloud) |
 | `CLOUD_SQL_INSTANCE` | cond. | Connect via Cloud SQL Connector when set |
-| `GCS_BUCKET` | cond. | Uses GCS when set, else local FS |
+| `GCS_BUCKET` | cond. | Uses GCS when set, else the local filesystem |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | Local dir · signed-URL TTL · signer SA |
-| `REDIS_URL` | | Share in-flight generation state via Redis |
-| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override the models used (defaults: `gemini-3.6-flash` / `gemini-3.1-flash-lite`). Lets you roll back a new model with a single line |
-| `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` etc. | | Sticker-generation image count/resize |
+| `REDIS_URL` | | Share in-flight generation state across instances |
+| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override models (defaults `gemini-3.6-flash` / `gemini-3.1-flash-lite`) — roll back a new model with one line |
+| `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | Sticker-generation image count / resize |
 
-### Directory layout
+### Layout
 
 ```
 tabimate/
-├── deploy.sh                 # Cloud Run deploy (Secret/GCS/IAM)
-├── .github/workflows/ci.yml  # CI on push/PR
-├── scripts/                  # backfill_thumbnails.py / setup_alerts.sh
-├── tests/                    # test_smoke.py (E2E) / test_units.py (offline)
+├── deploy.sh                    # Cloud Run deploy (Secrets / GCS / IAM)
+├── dockerfile                   # gunicorn, 1 worker × 20 threads
+├── .github/workflows/ci.yml     # two jobs: ubuntu (server + logic) / macOS (iOS)
+├── scripts/
+│   ├── check_home_js.sh         # drives the chat UI in a real browser
+│   ├── check_ios_logic.sh       # type-checks the iOS logic on Linux Swift
+│   ├── backfill_thumbnails.py
+│   └── setup_alerts.sh
+├── tests/                       # see "Tests & CI"
+├── ios/                         # SwiftUI app (mirror of sabatexima/tabimate_ios)
 └── src/
-    ├── app.py                # Flask app · Blueprint registration
-    ├── db.py                 # DAO for travel_plans / chat_messages
-    ├── db_reflection.py      # DAO for trips / photos / stickers
-    ├── db_sharing.py         # DAO for share links / email grants
-    ├── geocoding.py          # spot name → lat/lng (multi-provider, lazy cache)
-    ├── weather.py            # travel-date forecast (Open-Meteo)
-    ├── chat/                 # plan generation (LangGraph / agents)
-    │   └── chat.py graph.py agents.py models.py llm.py formatter.py logger.py
-    ├── services/             # exif · features · storage · trip_interpreter · packing
-    ├── views/                # planner · auth · reflection · sharing (Blueprints)
-    ├── templates/            # Jinja2 (layout / home / welcome / reflection / shared …)
-    └── static/               # css / js / img
+    ├── app.py                   # Flask app · Blueprints · security headers
+    ├── api_auth.py              # Bearer tokens for the native app
+    ├── db.py                    # travel_plans / chat_messages
+    ├── db_reflection.py         # trips / photos / stickers
+    ├── db_sharing.py            # share links / email grants
+    ├── geocoding.py             # spot name → lat/lng (multi-provider, cached)
+    ├── weather.py               # forecast for the travel dates (Open-Meteo)
+    ├── chat/                    # plan generation (LangGraph agents)
+    ├── services/                # exif · features · storage · interpreter · packing
+    ├── views/                   # planner · auth · reflection · sharing
+    ├── templates/               # Jinja2
+    └── static/                  # css / js / img
 ```
 
 ### Architecture
 
 ```
-         ┌──────────── Flask app (app.py) ────────────┐
-         │  ProxyFix + 4 Blueprints                    │
- Browser ┤  planner("/")  auth("/auth")               │
-         │  reflection("/reflection")  sharing("/share")│
-         └──────┬───────────────┬──────────┬──────────┘
-                │               │          │
-        chat/ (LangGraph)   db.py /     services/
-        multi-agent flow    db_reflection  exif·features·
-                │           (SQLAlchemy)  storage·interpreter
-                ▼               │
-        Gemini + Tavily         ▼
-                          MySQL / TiDB
+          ┌─────────── Flask app (app.py) ────────────┐
+ Browser  │  ProxyFix · security headers               │
+ ─────────┤  planner("/")        auth("/auth")         │
+ iOS app  │  reflection("/reflection")  sharing("/share")
+ ─────────┤                                            │
+  Bearer  └────┬───────────────┬──────────────┬────────┘
+               │               │              │
+        chat/ (LangGraph)   db*.py        services/
+        multi-agent flow  (SQLAlchemy)   exif · storage ·
+               │               │         interpreter
+               ▼               ▼              ▼
+      Gemini + Tavily     MySQL / TiDB       GCS
 ```
 
-- **Shared DB engine**: `get_engine()` (QueuePool) in `db.py` is reused by `db_reflection` / `db_sharing`. Tables are lazily created with `CREATE TABLE IF NOT EXISTS`.
-- **Storage abstraction**: `services/storage.py` switches between GCS and local FS (by `GCS_BUCKET`). GCS signed URLs use caching + parallel generation.
-- **Two sharing methods**: public links (tokens) and email grants, managed in `views/sharing.py` with owner/edit/view control.
+- **One engine, shared** — `get_engine()` (QueuePool) in `db.py` is reused by `db_reflection` / `db_sharing`. Tables are created lazily.
+- **Storage is swappable** — `services/storage.py` picks GCS or the local filesystem by `GCS_BUCKET`. Signed URLs are cached and generated in parallel.
+- **One session, two doors** — the browser uses a session cookie; the app sends `Authorization: Bearer …`, which `api_auth.authenticate_app_token` translates into the same session for that single request. `login_required` therefore needs no special case.
 
-### Plan-generation agents (LangGraph)
+### Plan-generation agents
 
-`chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py` as nodes. State flows as `TravelPlanState` (TypedDict).
+`chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them.
 
 ```
 START
-  → transport (round-trip cost · remaining budget)
-  → sightseeing_candidates → sightseeing (2–3 spots)
-  → accommodation_candidates → accommodation (~40% of remaining · skipped for day trips)
-  → gourmet_candidates → gourmet (~25% of remaining)
-  → timekeeper (chronological schedule)
-  → cost_manager (budget breakdown)
-  → balancer (whole-plan review)
-        └─ approved / budget_infeasible → END
-           fix_* → route back to the relevant node (cap: MAX_BALANCER_RETRIES=5)
+  → transport                  round-trip cost · remaining budget
+  → sightseeing_candidates → sightseeing       2–3 spots
+  → accommodation_candidates → accommodation   ~40% of remaining (skipped for day trips)
+  → gourmet_candidates → gourmet               ~25% of remaining
+  → timekeeper                 chronological schedule
+  → cost_manager               budget breakdown
+  → balancer                   whole-plan review
+        ├─ approved / budget_infeasible → END
+        └─ fix_* → back to the relevant node   (cap: MAX_BALANCER_RETRIES = 5)
 ```
 
-- **Lodging-free check**: `parse_duration()` parses the duration into (nights, days); nights = 0 skips lodging nodes (covers overnight-transit "0泊2日").
-- **Existence check**: with `GOOGLE_MAPS_API_KEY`, sightseeing/food/lodging candidates are verified via Google Places and invented names are dropped.
-- **Preference learning**: `user_preferences` is built from past ★ ratings/comments and softly injected into agents.
-- **Partial editing**: only targeted nodes are regenerated from an edit request (others kept).
-- **Retries**: `invoke_with_retry()` retries 429/503 and network errors up to 5× with backoff.
+- **Lodging-free check** — `parse_duration()` yields (nights, days); zero nights skips the lodging nodes, which covers overnight-transit trips.
+- **Existence check** — with `GOOGLE_MAPS_API_KEY`, candidates are verified against Google Places and invented names are dropped.
+- **Preference learning** — past ★ ratings and comments become `user_preferences`, softly injected into the agents.
+- **Partial editing** — an edit request regenerates only the nodes it touches.
+- **Retries** — `invoke_with_retry()` backs off on 429 / 503 / network errors, up to 5 attempts.
+
+### Generation outlives the connection
+
+Plan generation runs in a background thread that **also writes the result to the database**. Nothing about it depends on the browser staying connected.
+
+That matters because generation takes minutes. If the reply were saved by the SSE responder instead, reloading the page would kill the generator mid-flight and throw the whole generation away.
+
+On page load, `/chat` reports whether a reply is still pending, so the "thinking" state comes back immediately after a reload. That state is derived from the rows in `chat_messages` rather than from process memory, so it stays correct across Cloud Run instances:
+
+| Rows for that `request_id` | Meaning |
+|---|---|
+| an `ai` row exists | finished |
+| only the `user` row, recent | still generating |
+| only the `user` row, 20+ min old | gave up (the worker probably died) |
+| no rows | failed or aborted — already cleaned up |
 
 ### Database
 
 | Table | Purpose |
-|----------|------|
-| `travel_plans` | Saved plans (conditions/results as JSON). Also holds map-coord cache, custom pins, packing list, actual cost, ★ rating |
-| `chat_messages` | Chat history; plan rows also store `plan_json` (the "previous plan" for edits) |
-| `trips` | Trips (title, dates). Holds cover photo, best shots, linked plan |
+|---|---|
+| `travel_plans` | Saved plans (conditions and results as JSON) plus coordinate cache, custom pins, packing list, actual cost, ★ rating |
+| `chat_messages` | Chat history; plan rows also carry `plan_json` (the "previous plan" used when editing) |
+| `trips` | Trips (title, dates), cover photo, best shots, linked plan |
 | `photos` / `stickers` | Photos (path, shoot time, GPS) / sticky notes (display text + internal basis) |
 | `share_links` / `share_grants` | Public links / email-based sharing |
 
-- Ownership is always checked against `user_id` (Google `sub`). Deleting a trip cascades to related rows and physical photos.
+Ownership is always checked against `user_id` (the Google `sub`). Deleting a trip cascades to its rows and its physical photos.
 
-### Key HTTP endpoints
+### HTTP endpoints
 
-**planner (`/`)** &mdash; `/` (chat) · `/saved_plans` · `/plan/<id>` · `/send_message` (SSE) · `/save_plan` · `/edit_saved_plan/<id>` · `/rate_plan/<id>` · `/save_actual_total/<id>` · `/api/packing_list/<id>` · `/api/plan_geo/<id>` · `/api/plan_weather/<id>` · `/export_plan_ics/<id>`
+**Pages** — `/` (welcome) · `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
 
-**reflection (`/reflection`)** &mdash; `/trips` · `/trips/<id>` · `/trips/<id>/photos` · `/trips/<id>/stickers/generate` · `/trips/<id>/best_shots` · `/trips/<id>/linked-plan`
+**Chat** — `/send_message` (SSE) · `/get_messages` · `/reset_chat` · `/abort_request` · `/generation_status`
 
-**sharing (`/share`, `/shared`, `/s/<token>`)** &mdash; create/delete links · grant/revoke email shares · public view · photo & sticker ops on shared trips
+**Plans** — `/save_plan` · `/get_my_plans` · `/get_shared_plans` · `/edit_saved_plan/<id>` · `/apply_saved_plan/<id>` · `/delete_plan/<id>` · `/rate_plan/<id>` · `/save_actual_total/<id>` · `/save_plan_pins/<id>` · `/export_plan_ics/<id>` · `/api/packing_list/<id>` · `/api/plan_geo/<id>` · `/api/plan_weather/<id>` · `/api/geocode`
 
-**auth (`/auth`)** &mdash; `/login` · `/callback` · `/logout`
+**Memories** — `/reflection/trips` (POST) · `/reflection/trips/<id>` (GET / PATCH / DELETE) · `…/photos` · `…/stickers` · `…/stickers/generate` · `…/best_shots` · `…/favorite` · `…/linked-plan` · `/reflection/photo/<path>`
 
-`reflection`, `sharing`, and plan-saving routes are protected by `@login_required`.
+**Sharing** — `/share/<type>/<id>` (state) · `…/link` · `…/grant` · `/share/link/<id>` · `/share/grant/<id>` · `/shared/<type>/<id>` · `/shared/trip/<id>/…` (photo & sticker operations for editors) · `/shared/plan/<id>/ics`
+
+**For the native app** — `/auth/app/signin` · `/auth/app/me` · `/api/ideas` · `/api/chat_messages` · `/reflection/api/trips` · `/reflection/api/trips/<id>` · `/reflection/api/digest`
+
+**Auth** — `/auth/login` · `/auth/callback` · `/auth/logout`
+
+Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the public `/s/<token>` view sits behind `@login_required`, which answers `401 JSON` to API clients and redirects browsers to the login page.
 
 ### Tests & CI
 
 ```bash
-pytest tests/                # full suite
-python tests/test_smoke.py   # E2E plan generation (needs API keys)
+pytest tests/ -k "not smoke"    # 139 offline tests — no API keys, no DB
+scripts/check_home_js.sh        # drives the chat UI in a real browser
+scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
+python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 ```
 
-- `test_units.py` runs **offline (no API keys/DB)** — thumbnail-key derivation, URL generation, path-traversal, geocoding name-variant/candidate selection.
-- **GitHub Actions** runs offline tests, a JS syntax check, and a template compile check on every push / PR.
+| Suite | What it guards |
+|---|---|
+| `test_units.py` (29) | Thumbnail keys, URL generation, path traversal, geocoding variants, app-token issue/verify |
+| `test_ios_routes.py` (44) | Every URL the iOS app calls exists on the server, with the right method |
+| `test_regression.py` (23) | Bugs that came back once already |
+| `test_generation_status.py` (18) | Reload restore — the pending/done/gone decision, and what the page carries |
+| `test_app_api.py` (16) | Authorization and JSON shape for the native-app endpoints |
+| `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |
+| `test_static_js.py` (2) | The JS and the template still fit together (names, element ids) |
+| `tests/js/home_chat.html` (11 scenarios) | The chat screen, driven in headless Chromium |
+
+The browser suite exists because this code breaks in ways a linter cannot see. An inline script once declared a name that `home.js` already held; that killed the entire script silently, and the seasonal-idea chips simply did nothing.
+
+**CI** runs two jobs on every push and PR — Ubuntu (server tests, JS syntax, the browser suite, Swift type-check, template compile) and macOS (build the iOS app, run its unit and UI tests, list any warnings).
 
 ### Security
 
-- No hardcoded secrets — all via env / Secret Manager (`src/.env` never committed).
-- Fails to start in prod if `SECRET_KEY` is unset. Cookies are HttpOnly / SameSite=Lax (Secure in prod).
-- OAuth requires `email_verified`. Every resource is ownership-checked by `user_id`.
-- Plan HTML escapes user strings (XSS); local photo serving is path-traversal-guarded.
-- Rate limiting (chat 5/60s, external-API routes separate), upload limits (≤50 files, extension whitelist, size cap).
-- `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` on all responses. `ProxyFix` trusts Cloud Run forwarded headers.
-- **External API key restrictions** (configured on the provider side):
-  - `STADIA_API_KEY` &mdash; exposed to the browser for tile requests. Always set a **domain (allowed origins) restriction** in the Stadia dashboard; staying on the free plan avoids surprise billing.
-  - `GOOGLE_MAPS_API_KEY` &mdash; server-side only (sent via the `X-Goog-Api-Key` header, so it never lands in URLs or logs). In GCP, set **application restriction to none or IP** (referrer restrictions would block server calls) and **restrict the API to Places API (New)**.
-  - `GOOGLE_API_KEY` (Gemini) / `TAVILY_API_KEY` &mdash; server-side only; never passed to the frontend.
+- No hardcoded secrets — everything through env vars / Secret Manager. `src/.env` is never committed.
+- Refuses to start in production without `SECRET_KEY`. Cookies are HttpOnly / SameSite=Lax, Secure in production.
+- OAuth requires `email_verified`. App ID tokens are rejected outright when no audience is configured, because an unset audience makes the library skip `aud` validation entirely.
+- Every resource is ownership-checked by `user_id`. Plan HTML escapes user strings; local photo serving is guarded against path traversal.
+- Rate limiting (chat 20 requests / 60 s, geocoding 40 / 60 s) and upload limits (≤50 files, extension whitelist, size cap).
+- `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` on every response. `ProxyFix` trusts Cloud Run's forwarded headers.
+- **External key restrictions**, set on the provider side:
+  - `STADIA_API_KEY` reaches the browser for tile requests — set a **domain restriction** in the Stadia dashboard.
+  - `GOOGLE_MAPS_API_KEY` is server-side only (sent as `X-Goog-Api-Key`, so it never lands in URLs or logs). In GCP use **no application restriction or an IP one** — a referrer restriction would block server calls — and **restrict it to Places API (New)**.
+  - `GOOGLE_API_KEY` (Gemini) and `TAVILY_API_KEY` never reach the frontend.
 
 ### Troubleshooting
 
-- **No `.env`** → create `src/.env` and fill in the variables.
-- **Can't connect to MySQL** → check `DB_HOST`. Cloud SQL uses `CLOUD_SQL_INSTANCE`; TiDB needs `DB_SSL=true`.
-- **Generation times out (504)** → `deploy.sh` sets `--timeout=3600`. For manual deploys: `gcloud run services update ... --timeout=3600`.
-- **Slow photos** → signed URLs call IAM signBlob per photo. `storage.get_urls()` caches + parallelizes; lists serve thumbnails. Backfill old photos with `scripts/backfill_thumbnails.py`.
-- **No pins on the map** → with `GOOGLE_MAPS_API_KEY`, you must enable **Places API (New)**. The startup log's "外部連携" line shows enabled/disabled.
+| Symptom | Likely cause |
+|---|---|
+| Startup fails on missing config | Create `src/.env` and fill it in |
+| Cannot reach MySQL | Check `DB_HOST`. Cloud SQL uses `CLOUD_SQL_INSTANCE`; TiDB needs `DB_SSL=true` |
+| Generation times out (504) | `deploy.sh` sets `--timeout=3600`; a manual deploy needs the same |
+| Photos load slowly | Signed URLs call IAM signBlob per photo. `storage.get_urls()` caches and parallelizes; lists use thumbnails. Backfill old ones with `scripts/backfill_thumbnails.py` |
+| No pins on the map | With `GOOGLE_MAPS_API_KEY` you must enable **Places API (New)**. The startup log's `外部連携` line shows what is active |
+| The iOS app cannot sign in | `GOOGLE_IOS_CLIENT_ID` is not reaching the server — add it to `src/.env` and to `deploy.sh` |
 
 </details>
 

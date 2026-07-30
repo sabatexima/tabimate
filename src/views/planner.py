@@ -251,6 +251,17 @@ def send_message():
     done_event = threading.Event()
 
     def run_chat():
+        """AIを呼び、結果をDBに確定させる。
+
+        保存も後片付けもここでやるのが要点。以前は送信側（generate）で保存して
+        いたため、生成中にリロードされると接続が切れ、その generator が次の yield
+        で止まり、保存に到達しないまま生成が丸ごと捨てられていた。しかも finally
+        で active_requests から外れるので、サーバーは「生成していない」と答え、
+        リロードした人には「終わりませんでした」と出ていた。
+
+        このスレッドはクライアントの接続とは無関係に走りきる。誰も見ていなくても
+        結果は残るので、開き直せばプランが出てくる。
+        """
         try:
             response, plan = _ai_chat(
                 user_message,
@@ -259,38 +270,41 @@ def send_message():
                 active_requests=active_requests,
                 user_id=user_id,
             )
-            result['response'] = response
-            result['plan'] = plan  # プラン生成時のみ構造化データ。メッセージと一緒に保存する
+            # 停止ボタンが押されると active_requests から外れる。その回は残さない
+            if response is None or request_id not in active_requests:
+                delete_chat_messages_by_request(user_id, request_id)
+                logger.info("リクエストがキャンセルされました: request_id=%s", request_id)
+                result['outcome'] = 'aborted'
+            else:
+                # plan はプラン生成時のみ。メッセージと一緒に保存する
+                save_chat_message(user_id, 'ai', response, request_id, plan_json=plan)
+                logger.info("メッセージ処理完了: request_id=%s", request_id)
+                result['outcome'] = 'ok'
         except Exception:
             logger.exception("メッセージ処理中にエラーが発生しました: request_id=%s", request_id)
-            result['error'] = True
+            delete_chat_messages_by_request(user_id, request_id)
+            result['outcome'] = 'error'
         finally:
+            active_requests.discard(request_id)
             done_event.set()
 
     threading.Thread(target=run_chat, daemon=True).start()
 
     def generate():
-        try:
-            while not done_event.wait(timeout=3):
-                yield "data: {\"status\": \"thinking\"}\n\n"
+        """進み具合と結果を伝えるだけ。DBには触らない。
 
-            if result.get('error'):
-                delete_chat_messages_by_request(user_id, request_id)
-                yield f"data: {json.dumps({'status': 'ERROR', 'message': 'プランの生成中にエラーが発生しました'})}\n\n"
-                return
+        ここで何かを確定させると、見ている人が居なくなった時点で失われる。
+        """
+        while not done_event.wait(timeout=3):
+            yield "data: {\"status\": \"thinking\"}\n\n"
 
-            ai_response = result.get('response')
-            if ai_response is None or request_id not in active_requests:
-                delete_chat_messages_by_request(user_id, request_id)
-                logger.info("リクエストがキャンセルされました: request_id=%s", request_id)
-                yield f"data: {json.dumps({'status': 'ABORTED', 'id': request_id})}\n\n"
-                return
-
-            save_chat_message(user_id, 'ai', ai_response, request_id, plan_json=result.get('plan'))
-            logger.info("メッセージ処理完了: request_id=%s", request_id)
+        outcome = result.get('outcome')
+        if outcome == 'ok':
             yield f"data: {json.dumps({'status': 'OK', 'id': request_id})}\n\n"
-        finally:
-            active_requests.discard(request_id)
+        elif outcome == 'aborted':
+            yield f"data: {json.dumps({'status': 'ABORTED', 'id': request_id})}\n\n"
+        else:
+            yield f"data: {json.dumps({'status': 'ERROR', 'message': 'プランの生成中にエラーが発生しました'})}\n\n"
 
     return Response(
         stream_with_context(generate()),

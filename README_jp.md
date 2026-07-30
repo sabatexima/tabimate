@@ -14,8 +14,6 @@
 <p align="center">
   <a href="README.md">🇬🇧&nbsp;English</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/sabatexima/tabimate_ios">📱&nbsp;iOSアプリ</a>
-  &nbsp;·&nbsp;
   <a href="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml"><img src="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -94,13 +92,9 @@
 
 ## 📱 iOSアプリ
 
-SwiftUI のネイティブアプリは、別のリポジトリにあります。
+SwiftUI のネイティブアプリが [`ios/`](ios/) にあります。同じサーバー・同じアカウント・同じしおり。
 
-**→ [sabatexima/tabimate_ios](https://github.com/sabatexima/tabimate_ios)**
-
-同じサーバー・同じアカウント・同じしおり。下に載せた `/auth/app/*` と `/api/*` を叩き、セッションCookieの代わりに Bearer トークンで認証します（`src/api_auth.py`）。
-
-> このリポジトリの `ios/` にも同じコードがありますが、それはCIでビルドするためのものです。アプリを触るときは上のリポジトリを使ってください。
+下に載せた `/auth/app/*` と `/api/*` を叩き、セッションCookieの代わりに Bearer トークンで認証します（`src/api_auth.py`）。導入とビルドの手順は [`ios/README.md`](ios/README.md) に、CIは push のたびにビルドとテストを回します。
 
 ---
 
@@ -179,7 +173,7 @@ tabimate/
 │   ├── backfill_thumbnails.py
 │   └── setup_alerts.sh
 ├── tests/                       # 「テストとCI」を参照
-├── ios/                         # SwiftUIアプリ（sabatexima/tabimate_ios の写し）
+├── ios/                         # SwiftUIアプリ（XcodeGen。ios/README.md 参照）
 └── src/
     ├── app.py                   # Flaskアプリ · Blueprint · セキュリティヘッダ
     ├── api_auth.py              # ネイティブアプリ用の Bearer トークン

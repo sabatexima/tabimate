@@ -675,7 +675,7 @@ def timekeeper(state: TravelPlanState):
             log.warning("⏱️ スケジュールの日数不足を検出（%s日目が欠落）。作り直します",
                         "・".join(str(d) for d in sorted(missing)))
             retry_prompt = prompt + (
-                f"\n\n【重大な不備（必ず修正すること）】前回の出力には "
+                "\n\n【重大な不備（必ず修正すること）】前回の出力には "
                 + "、".join(f"「{d}日目」" for d in sorted(missing))
                 + f" のブロックがありませんでした。この旅行は{num_nights}泊{total_days}日です。"
                 f"「1日目」〜「{total_days}日目」の全ブロックを必ず作成し、各日の先頭行に「N日目」の行を置き、"

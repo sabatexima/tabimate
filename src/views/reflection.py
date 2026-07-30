@@ -152,7 +152,7 @@ def api_digest():
         "years": data["years"],
         "trips": data["trips"],
         "photo_total": data["photo_total"],
-        "stickers": [s for s in data["stickers"]],
+        "stickers": data["stickers"],
     })
 
 

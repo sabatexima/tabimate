@@ -14,7 +14,7 @@
   - 写真実体は本番では GCS 署名付きURL（時間制限つき）で配信されるため、
     共有閲覧者でも追加の認証なしに表示できる。
 """
-from flask import (Blueprint, Response, abort, jsonify, redirect, render_template,
+from flask import (Blueprint, Response, abort, jsonify, render_template,
                    request, session, url_for)
 
 import db

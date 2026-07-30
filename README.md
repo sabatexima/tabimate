@@ -14,8 +14,6 @@
 <p align="center">
   <a href="README_jp.md">🇯🇵&nbsp;日本語</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/sabatexima/tabimate_ios">📱&nbsp;iOS&nbsp;app</a>
-  &nbsp;·&nbsp;
   <a href="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml"><img src="https://github.com/sabatexima/tabimate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -96,13 +94,9 @@ Chat your way to an itinerary. Come home and drop in your photos. **Chamu**, the
 
 ## 📱 The iOS app
 
-A native SwiftUI client lives in its own repository:
+A native SwiftUI client lives in [`ios/`](ios/) — same server, same account, same trips.
 
-**→ [sabatexima/tabimate_ios](https://github.com/sabatexima/tabimate_ios)**
-
-Same server, same account, same trips. It talks to the endpoints under `/auth/app/*` and `/api/*` listed below, authenticating with a Bearer token instead of a session cookie (`src/api_auth.py`).
-
-> The `ios/` directory in this repository holds the same code so CI can build it. The standalone repository is the canonical place to work on the app.
+It talks to the endpoints under `/auth/app/*` and `/api/*` listed below, authenticating with a Bearer token instead of a session cookie (`src/api_auth.py`). Setup and build steps are in [`ios/README.md`](ios/README.md); CI builds it and runs its tests on every push.
 
 ---
 
@@ -181,7 +175,7 @@ tabimate/
 │   ├── backfill_thumbnails.py
 │   └── setup_alerts.sh
 ├── tests/                       # see "Tests & CI"
-├── ios/                         # SwiftUI app (mirror of sabatexima/tabimate_ios)
+├── ios/                         # SwiftUI app (XcodeGen; see ios/README.md)
 └── src/
     ├── app.py                   # Flask app · Blueprints · security headers
     ├── api_auth.py              # Bearer tokens for the native app

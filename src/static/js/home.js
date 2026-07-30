@@ -185,14 +185,6 @@ const chatBox = document.getElementById('chat-box');
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
-  function escapeHtml(text) {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
   function createMessageElement(role, content) {
     const wrapper = document.createElement('div');
     wrapper.classList.add('message-wrapper');

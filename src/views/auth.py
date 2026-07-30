@@ -9,7 +9,7 @@ login_required デコレータでログイン必須エンドポイントを保�
 import json
 import os
 from functools import wraps
-from flask import Blueprint, redirect, url_for, session, request, flash
+from flask import Blueprint, redirect, url_for, session, request
 from authlib.integrations.flask_client import OAuth
 from chat.logger import get_logger
 

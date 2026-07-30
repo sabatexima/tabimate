@@ -26,18 +26,12 @@ logger = get_logger("services.trip_interpreter")
 # --- モデル設定（環境変数で差替可能）---
 # 付箋生成は短文の創作タスク（旅ごとに1回だけ）なので軽量モデルで十分。
 _MODEL = os.getenv("INTERPRETER_MODEL", "gemini-3.1-flash-lite")
-_SEND_IMAGES_DEFAULT = os.getenv("INTERPRETER_SEND_IMAGES", "false").lower() == "true"
-
-# 画像送付（任意機能）のコスト保護: 送る最大枚数と縮小後の最大辺(px)。
+# 画像は常に送る（写真を見ずに付箋は書けない）。コストは「送る枚数」と
+# 「縮小後の最大辺(px)」で抑える。
 _MAX_IMAGES = int(os.getenv("INTERPRETER_MAX_IMAGES", "4"))
 _IMAGE_MAX_EDGE = int(os.getenv("INTERPRETER_IMAGE_MAX_EDGE", "512"))
-# 付箋生成は画像が主役。称号・レポートより多めに送る（コストは枚数で調整）。
+# 付箋生成は画像が主役なので、他の用途より多めに送る。
 _STICKER_MAX_IMAGES = int(os.getenv("STICKER_MAX_IMAGES", "6"))
-
-
-def send_images_enabled() -> bool:
-    """画像送付オプションが有効か（既定オフ）。呼び出し側の判定用。"""
-    return _SEND_IMAGES_DEFAULT
 
 
 def _prepare_image_blocks(images: Optional[list], max_images: Optional[int] = None) -> list:

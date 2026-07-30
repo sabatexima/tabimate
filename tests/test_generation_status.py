@@ -107,10 +107,16 @@ class _FakeConn:
 
 
 @pytest.mark.parametrize("rows,expected", [
-    ([("user",), ("ai",)], "done"),      # 返答が保存された
-    ([("user",)],          "pending"),   # まだ作っている最中
-    ([],                   "gone"),      # 失敗か中断で消えている
-    ([("ai",)],            "done"),      # 返答だけ残っている場合も完了扱い
+    ([("user", 0), ("ai", 0)], "done"),     # 返答が保存された
+    ([("user", 0)],            "pending"),  # まだ作っている最中
+    ([("user", 3)],            "pending"),  # 3分経過。生成は数分かかることがある
+    ([],                       "gone"),     # 失敗か中断で消えている
+    ([("ai", 0)],              "done"),     # 返答だけ残っている場合も完了扱い
+    # ワーカーが落ちるとユーザーの発言だけが残り続ける。いつまでも
+    # 「考えています」を出さないよう、古すぎるものは諦める
+    ([("user", 20)],           "gone"),
+    ([("user", 999)],          "gone"),
+    ([("user", None)],         "pending"),  # 経過時間が取れなくても止めない
 ])
 def test_state_is_decided_by_the_rows(monkeypatch, rows, expected):
     import db

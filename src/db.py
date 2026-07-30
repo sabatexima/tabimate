@@ -583,6 +583,11 @@ def delete_chat_messages_by_request(google_user_id: str, request_id: str) -> Non
         )
 
 
+# 生成中のまま放置された行を、いつまで「作っている最中」と見なすか。
+# 画面側は15分で打ち切るので、それより少し長くとる。
+_PENDING_MAX_MINUTES = 20
+
+
 def chat_request_state(google_user_id: str, request_id: str) -> str:
     """その request_id の生成がどうなったかを、保存されている行から判断する。
 
@@ -598,6 +603,13 @@ def chat_request_state(google_user_id: str, request_id: str) -> str:
       'done'    AIの返答が保存されている（成功して終わった）
       'pending' ユーザーの発言だけある（まだ作っている最中）
       'gone'    行が1つも無い（失敗か中断。後片付けで消えている）
+
+    ただし、生成中にワーカーが落ちるとユーザーの発言だけが残り続ける。それを
+    そのまま pending と答えると、開くたびに「考えています」が延々と出てしまう。
+    _PENDING_MAX_MINUTES を過ぎたものは諦めて gone とする。
+
+    経過時間はDBの時計で測る（TIMESTAMPDIFF）。アプリ側の now() と比べると、
+    サーバーのタイムゾーンや時刻ずれで誤判定しうるため。
     """
     if not request_id:
         return "gone"
@@ -605,14 +617,18 @@ def chat_request_state(google_user_id: str, request_id: str) -> str:
         conn.execute(text(_CREATE_CHAT_TABLE))
         rows = conn.execute(
             text(
-                "SELECT role FROM chat_messages "
+                "SELECT role, TIMESTAMPDIFF(MINUTE, created_at, NOW()) AS age_min "
+                "FROM chat_messages "
                 "WHERE google_user_id = :uid AND request_id = :rid"
             ),
             {"uid": google_user_id, "rid": request_id},
         ).fetchall()
     if not rows:
         return "gone"
-    return "done" if any(r[0] == "ai" for r in rows) else "pending"
+    if any(r[0] == "ai" for r in rows):
+        return "done"
+    oldest = max((r[1] or 0) for r in rows)
+    return "gone" if oldest >= _PENDING_MAX_MINUTES else "pending"
 
 
 def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = None) -> int:

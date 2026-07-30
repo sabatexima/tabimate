@@ -184,3 +184,28 @@ def test_thinking_is_sent_while_waiting(env, monkeypatch):
     finally:
         release["go"] = True
         res.close()
+
+
+def test_abort_that_lands_just_before_the_save_is_honoured(env, monkeypatch):
+    """保存の直前に停止が届いても、返事が残らないこと。
+
+    AIが完成してから保存するまでの隙間に /abort_request が入ると、abort 側は
+    まだ存在しない返事を消しに行くので、そのあと保存した行が取り残される。
+    中断したのに返事だけ現れる、という分かりにくい壊れ方になる。
+    """
+    import db
+
+    client, log, P = env
+    monkeypatch.setattr(P, "_ai_chat", lambda *a, **k: ("できました", None))
+
+    real_save = db.save_chat_message
+
+    def save_then_abort(uid, role, content, rid=None, plan_json=None):
+        real_save(uid, role, content, rid, plan_json)
+        if role == "ai":
+            P.active_requests.discard(RID)  # ちょうどこの隙間に停止が届いた
+
+    monkeypatch.setattr(db, "save_chat_message", save_then_abort)
+    _send_then_disconnect(client)
+
+    assert _wait(lambda: log["deleted"] == [RID]), "取り残した返事を片づけていない"

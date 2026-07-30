@@ -278,8 +278,16 @@ def send_message():
             else:
                 # plan はプラン生成時のみ。メッセージと一緒に保存する
                 save_chat_message(user_id, 'ai', response, request_id, plan_json=plan)
-                logger.info("メッセージ処理完了: request_id=%s", request_id)
-                result['outcome'] = 'ok'
+                # 保存の直前に停止ボタンが届いていた場合、abort_request は「まだ無い
+                # 返事」を消しに行っている。確かめ直して、取り残しを片づける
+                # （でないと、中断したのに返事だけ現れる）
+                if request_id not in active_requests:
+                    delete_chat_messages_by_request(user_id, request_id)
+                    logger.info("保存直後に中断されました: request_id=%s", request_id)
+                    result['outcome'] = 'aborted'
+                else:
+                    logger.info("メッセージ処理完了: request_id=%s", request_id)
+                    result['outcome'] = 'ok'
         except Exception:
             logger.exception("メッセージ処理中にエラーが発生しました: request_id=%s", request_id)
             delete_chat_messages_by_request(user_id, request_id)

@@ -1,13 +1,6 @@
-FROM ubuntu:22.04
-
-RUN apt update \
-    && apt install -y \
-    python3.10 \
-    python3-pip \
-    curl \
-    sudo \
-    && apt-get autoremove -y && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# 公式の Python イメージを使う（以前は ubuntu に apt で python3.10 を入れていた）。
+# 依存はすべて wheel で入るので、コンパイラや開発ヘッダの要らない slim で足りる。
+FROM python:3.13-slim
 
 COPY requirements.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

@@ -332,6 +332,16 @@ The browser suite exists because this code breaks in ways a linter cannot see. A
 
 ---
 
+## License
+
+Published so it can be read, not to be reused — see [LICENSE](LICENSE).
+All rights reserved; please get in touch before using any part of it.
+
+The libraries, map data and fonts it stands on keep their own licenses and
+attribution, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+---
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/src/static/img/mate.png" alt="Chamu" width="90"><br>
   <sub><i>Whenever you feel like traveling again, just call Chamu. 🍀</i></sub>

@@ -330,6 +330,17 @@ python tests/test_smoke.py      # プラン生成の通し確認（APIキーが�
 
 ---
 
+## ライセンス
+
+読んでいただくために公開しているもので、再利用のためではありません
+→ [LICENSE](LICENSE)。著作権は留保しています。一部でも使いたい場合は、
+まずご連絡ください。
+
+土台にしているライブラリ・地図データ・書体は、それぞれのライセンスと帰属表示に
+従います。一覧は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に。
+
+---
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/src/static/img/mate.png" alt="ちゃむ" width="90"><br>
   <sub><i>また旅に出たくなったら、ちゃむを呼んでくださいね。🍀</i></sub>

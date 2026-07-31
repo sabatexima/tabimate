@@ -1,0 +1,62 @@
+Copyright (c) 2026 sabatexima. All rights reserved.
+
+TabiMate (たびメイト)
+https://github.com/sabatexima/tabimate
+
+
+This repository is published so that the work can be read and reviewed.
+It is not open source, and no license to use the code is granted.
+
+You may:
+  - view and read the source code
+  - fork the repository within GitHub, as permitted by the GitHub Terms of
+    Service, for the purpose of reading and reviewing it
+
+You may not, without prior written permission from the copyright holder:
+  - use the code, in whole or in part, in any project
+  - copy, modify, translate or create derivative works from it
+  - redistribute it, in source or binary form, including as a container image
+  - use it for any commercial purpose
+
+The mascot "Chamu" (ちゃむ), the artwork under src/static/img/ and docs/img/,
+and the visual design are likewise reserved.
+
+Third-party components bundled or depended upon keep their own licenses.
+See THIRD_PARTY_NOTICES.md.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+If you would like to use any part of this project, please get in touch first.
+
+
+--------------------------------------------------------------------------
+日本語（参考訳 / reference translation）
+--------------------------------------------------------------------------
+
+Copyright (c) 2026 sabatexima. All rights reserved.
+
+このリポジトリは、成果物を読んでいただくために公開しています。
+オープンソースではなく、コードを利用する許諾は与えていません。
+
+できること:
+  - ソースコードを閲覧・通読すること
+  - GitHub の利用規約の範囲で、読むためにフォークすること
+
+著作権者の事前の書面による許可なくできないこと:
+  - コードの全部または一部を、何らかのプロジェクトで利用すること
+  - 複製・改変・翻案し、派生物を作ること
+  - ソース・バイナリを問わず再配布すること（コンテナイメージを含む）
+  - 商用目的で利用すること
+
+マスコット「ちゃむ」、src/static/img/ および docs/img/ 以下の画像、
+ならびに画面デザインについても同様です。
+
+同梱・依存している第三者の成果物は、それぞれのライセンスに従います。
+THIRD_PARTY_NOTICES.md を参照してください。
+
+本ソフトウェアは「現状のまま」提供され、明示黙示を問わずいかなる保証も
+ありません。
+
+一部でも利用したい場合は、まずご連絡ください。

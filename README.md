@@ -167,7 +167,7 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 ```
 tabimate/
 ├── deploy.sh                    # Cloud Run deploy (Secrets / GCS / IAM)
-├── dockerfile                   # gunicorn, 1 worker × 20 threads
+├── Dockerfile                   # python:3.13-slim · gunicorn, 1 worker × 20 threads
 ├── .github/workflows/ci.yml     # two jobs: ubuntu (server + logic) / macOS (iOS)
 ├── scripts/
 │   ├── check_home_js.sh         # drives the chat UI in a real browser

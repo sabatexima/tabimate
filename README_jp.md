@@ -165,7 +165,7 @@ python3 app.py
 ```
 tabimate/
 ├── deploy.sh                    # Cloud Run へのデプロイ（Secret / GCS / IAM）
-├── dockerfile                   # gunicorn、ワーカー1 × スレッド20
+├── Dockerfile                   # python:3.13-slim · gunicorn、ワーカー1 × スレッド20
 ├── .github/workflows/ci.yml     # 2ジョブ: ubuntu（サーバー＋ロジック）/ macOS（iOS）
 ├── scripts/
 │   ├── check_home_js.sh         # チャット画面を本物のブラウザで動かす

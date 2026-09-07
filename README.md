@@ -132,6 +132,28 @@ Open **http://localhost:5007**. Tables are created on first access (`CREATE TABL
 ./deploy.sh    # one command to Cloud Run — Secrets, GCS bucket and IAM included
 ```
 
+The container and CI both run Python 3.13. Locally 3.11 is also known to work — no dependency asks for more than 3.10.
+
+`deploy.sh` runs `gcloud run deploy --source .`, so Cloud Build picks up the
+`Dockerfile` in the repository root. The file has to be named exactly that —
+it was `dockerfile` for a while, and a lowercase name is not what Cloud Build
+looks for, which quietly falls back to Buildpacks instead. If you change how
+the image is built, check the build log says `FROM python:3.13-slim`.
+
+### Changing dependencies
+
+`requirements.txt` is generated, not edited. Add or bump what you need in
+`requirements.in`, then resolve it in a clean environment on the same Python
+the container uses:
+
+```bash
+python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.in
+/tmp/resolve/bin/pip freeze | sort -f > /tmp/pins && cat /tmp/pins   # → requirements.txt
+```
+
+Then regenerate the dependency table in `THIRD_PARTY_NOTICES.md` — the script
+for it is in that file.
+
 ---
 
 <details>
@@ -160,12 +182,24 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | Local dir · signed-URL TTL · signer SA |
 | `REDIS_URL` | | Share in-flight generation state across instances |
 | `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override models (defaults `gemini-3.6-flash` / `gemini-3.1-flash-lite`) — roll back a new model with one line |
-| `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | Sticker-generation image count / resize |
+| `MAX_CONTENT_LENGTH_MB` | | Upload size cap per request (default 100) |
+| `SEARCH_SNIPPET_CHARS` / `SEARCH_QUERY_CHARS` | | How much of each web-search result is kept, and the cap per query (600 / 2400) — trims what reaches the model |
+| `INTERPRETER_MODEL` | | Model used for sticky notes and best-shot picking (default `gemini-3.1-flash-lite`) |
+| `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | Photos sent for sticky notes (6) and the longest edge each is resized to before sending (512 px) — the cost dial for that call |
+| `INTERPRETER_MAX_IMAGES` | | Fallback cap (4) for callers that don't set their own. Both current callers do — sticky notes use `STICKER_MAX_IMAGES`, best-shot picking sends every sampled photo (up to 12) — so changing this alone does nothing today |
+| `INTERPRETER_PRICE_INPUT_PER_M` / `INTERPRETER_PRICE_OUTPUT_PER_M` | | Prices per million tokens used only to log an estimated cost (0.25 / 1.50) |
+
+`K_SERVICE` is set by Cloud Run itself and is read to detect production (secure
+cookies, refusing to start without `SECRET_KEY`). Do not set it by hand.
 
 ### Layout
 
 ```
 tabimate/
+├── LICENSE                      # all rights reserved — published to be read
+├── THIRD_PARTY_NOTICES.md       # dependency licenses and map attribution
+├── requirements.in              # direct dependencies (edit this one)
+├── requirements.txt             # the resolved, pinned result (generated)
 ├── deploy.sh                    # Cloud Run deploy (Secrets / GCS / IAM)
 ├── Dockerfile                   # python:3.13-slim · gunicorn, 1 worker × 20 threads
 ├── .github/workflows/ci.yml     # two jobs: ubuntu (server + logic) / macOS (iOS)

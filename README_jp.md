@@ -130,6 +130,28 @@ python3 app.py
 ./deploy.sh    # Cloud Run へ一発（Secret・GCSバケット・IAM まで込み）
 ```
 
+コンテナも CI も Python 3.13 です。手元では 3.11 でも動くのを確認しています
+（3.10 より新しいものを要求している依存はありません）。
+
+`deploy.sh` は `gcloud run deploy --source .` なので、Cloud Build が
+リポジトリ直下の `Dockerfile` を拾います。**名前はこの綴りでないといけません。**
+一時期 `dockerfile`（小文字）になっていましたが、それだと Cloud Build は
+見つけられず、黙って Buildpacks でのビルドに落ちます。イメージの作り方を
+変えたら、ビルドログに `FROM python:3.13-slim` が出ているか確認してください。
+
+### 依存を変えるとき
+
+`requirements.txt` は生成物なので直接編集しません。`requirements.in` に足すか
+上げてから、コンテナと同じ Python のまっさらな環境で解決し直します。
+
+```bash
+python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.in
+/tmp/resolve/bin/pip freeze | sort -f > /tmp/pins && cat /tmp/pins   # → requirements.txt
+```
+
+そのあと `THIRD_PARTY_NOTICES.md` の依存一覧も作り直してください。
+生成用のスクリプトはそのファイルの中に載せてあります。
+
 ---
 
 <details>
@@ -158,12 +180,25 @@ python3 app.py
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | 保存先 · 署名URLの有効期間 · 署名用SA |
 | `REDIS_URL` | | 生成中の状態をインスタンス間で共有する |
 | `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | 使うモデルの上書き（既定 `gemini-3.6-flash` / `gemini-3.1-flash-lite`）。新モデルを1行で戻せます |
-| `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | 付箋生成に使う画像の枚数・リサイズ |
+| `MAX_CONTENT_LENGTH_MB` | | 1リクエストあたりのアップロード上限（既定100） |
+| `SEARCH_SNIPPET_CHARS` / `SEARCH_QUERY_CHARS` | | Web検索の結果をどこまで残すかと、1クエリあたりの上限（600 / 2400）。モデルに渡す量を抑える |
+| `INTERPRETER_MODEL` | | 付箋づくりとベストショット選びに使うモデル（既定 `gemini-3.1-flash-lite`） |
+| `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | 付箋づくりに送る写真の枚数（6）と、送る前に縮める長辺（512px）。付箋のコストはここで決まる |
+| `INTERPRETER_MAX_IMAGES` | | 枚数を指定しない呼び出しのための既定値（4）。いまはどちらの呼び出しも自前で指定しているので（付箋は `STICKER_MAX_IMAGES`、ベストショットは間引いた写真を全部＝最大12枚）、ここだけ変えても効きません |
+| `INTERPRETER_PRICE_INPUT_PER_M` / `INTERPRETER_PRICE_OUTPUT_PER_M` | | 概算コストをログに出すためだけの百万トークン単価（0.25 / 1.50） |
+
+`K_SERVICE` は Cloud Run が自動で設定するもので、本番かどうかの判定に使って
+います（Cookieのsecure化、`SECRET_KEY` 未設定なら起動しない、など）。
+自分で設定しないでください。
 
 ### 置き場所
 
 ```
 tabimate/
+├── LICENSE                      # 全ての権利を留保。読んでもらうための公開
+├── THIRD_PARTY_NOTICES.md       # 依存のライセンスと地図の帰属表示
+├── requirements.in              # 直接依存（直すのはこちら）
+├── requirements.txt             # 解決して固定した結果（生成物）
 ├── deploy.sh                    # Cloud Run へのデプロイ（Secret / GCS / IAM）
 ├── Dockerfile                   # python:3.13-slim · gunicorn、ワーカー1 × スレッド20
 ├── .github/workflows/ci.yml     # 2ジョブ: ubuntu（サーバー＋ロジック）/ macOS（iOS）

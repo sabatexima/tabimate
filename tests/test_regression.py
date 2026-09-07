@@ -153,6 +153,106 @@ def test_formatter_skips_empty_accommodation_and_nowraps_cost():
     assert 'white-space:nowrap">8,500円/人' in html      # 金額＋単位は泣き別れさせない
 
 
+def test_plan_card_has_no_blank_lines():
+    """プランカードのHTMLに空行が無いこと。
+
+    このHTMLは画面側で marked.parse() を通る。Markdown は空行を見つけると
+    「HTMLはここまで」と判断してMarkdownの解釈に戻り、その次に来る
+    4字下げの行をコードブロックにしてしまう。
+
+    実際にそれで壊れていた。日帰り（宿泊が空）だと空のセクションが
+    空白だけの行を残し、次の `    <details>` がコードブロックになって、
+    画面に `<details>` という文字がそのまま出たうえ、スケジュールは
+    折りたためず開きっぱなしになっていた。
+    """
+    from chat.formatter import _format_plan
+
+    for name, state in [
+        ("日帰り（宿泊が空）", _sample_plan_state()),
+        ("観光が空", _sample_plan_state(spots=[])),
+        ("総評なし", _sample_plan_state(status="")),
+        ("予算不足", _sample_plan_state(status="budget_infeasible")),
+    ]:
+        html = _format_plan(state)
+        blanks = [i for i, line in enumerate(html.splitlines(), 1) if not line.strip()]
+        assert not blanks, f"{name}: {blanks}行目が空。marked がここでHTMLを打ち切る"
+
+
+def _markdown_breaks_out(html: str):
+    """marked が「HTMLはここまで」と判断して表示を壊す箇所を返す（無ければ None）。
+
+    CommonMark のうち、ここで効くのは2つだけ:
+      ・ブロック要素で始まる行からHTMLブロックが始まり、**空行で終わる**
+      ・**4字下げの行はコードブロック**
+    つまり「空行のすぐあとに4字下げの行」が来たら、そこがそのまま文字として出る。
+    """
+    ended = False
+    for i, line in enumerate(html.splitlines(), 1):
+        if not line.strip():
+            ended = True
+            continue
+        if ended and line.startswith("    "):
+            return f"{i}行目 {line.strip()[:40]!r} がコードブロックとして表示される"
+        ended = False        # 字下げの浅い行からは、またHTMLとして読まれる
+    return None
+
+
+def test_plan_card_survives_markdown():
+    """プランカードが marked を通っても崩れないこと。
+
+    test_plan_card_has_no_blank_lines より一段ゆるいが、こちらは
+    「画面でどう見えるか」に直結する。報告された症状はこれだった:
+    `<details>` という文字が四角い枠で出て、スケジュールが折りたためない。
+    """
+    from chat.formatter import _format_plan
+
+    for name, state in [
+        ("日帰り（宿泊が空）", _sample_plan_state()),
+        ("観光が空", _sample_plan_state(spots=[])),
+        ("グルメが空", _sample_plan_state(restaurants=[])),
+        ("スケジュールが空", _sample_plan_state(schedule=[])),
+    ]:
+        broken = _markdown_breaks_out(_format_plan(state))
+        assert broken is None, f"{name}: {broken}"
+
+
+def test_old_plans_in_history_are_repaired(monkeypatch):
+    """直す前に保存されたプランも、開き直したときは崩れないこと。
+
+    保存されているのは古いHTMLのままなので、formatter を直しただけでは
+    履歴を開いた人には壊れて見える。返すときにも手当てする。
+    """
+    import json as _json
+
+    import app as app_mod
+    import db
+    import views.planner as P
+
+    broken = ('<div class="plan-card">\n  <div class="plan-accordion">\n'
+              '    <details><summary>✨ 主要観光地</summary></details>\n'
+              '    \n'                      # 宿泊が空 → 空白だけの行
+              '    <details><summary>📅 スケジュール</summary></details>\n'
+              '  </div>\n</div>')
+    # ふつうの返事。段落を分ける空行は絶対に消してはいけない
+    plain = 'どこに行きましょう？\n\n- 熱海\n- 箱根'
+
+    monkeypatch.setattr(db, "get_chat_messages", lambda uid: [
+        {"role": "user", "content": "千葉に日帰りで"},
+        {"role": "ai", "content": broken},
+        {"role": "ai", "content": plain},
+    ])
+    app_mod.app.config["TESTING"] = True
+    with app_mod.app.test_client() as c:
+        with c.session_transaction() as sess:
+            sess["user_id"] = "u-1"
+            sess["user_email"] = "u@example.com"
+        got = _json.loads(c.get("/get_messages").data)
+
+    assert _markdown_breaks_out(got[1]["content"]) is None, "古いプランが直っていない"
+    assert got[2]["content"] == plain, "ふつうの返事の空行まで消している（段落が潰れる）"
+    assert P._repair_plan_html(plain) == plain
+
+
 def test_booking_url_is_google_maps_not_rakuten():
     from chat.formatter import booking_url
     u = booking_url("静岡")

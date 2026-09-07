@@ -45,6 +45,23 @@ def plan_payload(state: dict) -> dict:
     }
 
 
+def _no_blank_lines(html: str) -> str:
+    """空行（空白だけの行を含む）を落とす。プランカードを返す前の最後の一手。
+
+    このHTMLは画面側で marked.parse() を通ってから表示される。Markdown は
+    空行を見つけると「HTMLはここまで」と判断してMarkdownの解釈に戻るので、
+    その次に来る4字下げの行を**コードブロック**とみなしてしまう。
+
+    実際これで、日帰りプラン（宿泊が空）のスケジュールが壊れていた:
+    空の宿泊セクションが空白だけの行を残す → 次の `    <details>` が
+    コードブロックになり、`<details>` という文字がそのまま表示され、
+    スケジュールは折りたためないまま中身が開きっぱなしになる。
+
+    行の形に依存しないよう、空行を持たせないことで防ぐ。
+    """
+    return "\n".join(line for line in html.splitlines() if line.strip())
+
+
 def _format_plan(state: dict) -> str:
     """TravelPlanState をプランカードのHTML文字列に変換する。
 
@@ -58,15 +75,20 @@ def _format_plan(state: dict) -> str:
         return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     def accordion(icon: str, label: str, items: list, open: bool = False) -> str:
-        """項目リストを <details> 折りたたみブロックのHTMLにする。空なら出さない（日帰りの宿泊等）。"""
+        """項目リストを <details> 折りたたみブロックのHTMLにする。空なら出さない（日帰りの宿泊等）。
+
+        改行も字下げも入れずに1行で返すこと。このHTMLは画面側で
+        marked.parse() を通るので、行の形がそのまま表示に効いてしまう
+        （詳しくは _no_blank_lines の説明）。
+        """
         if not items:
             return ""
         items_html = "".join(f"<li>{esc(i)}</li>" for i in items)
         open_attr = " open" if open else ""
-        return f"""<details{open_attr}>
-  <summary>{icon} {label}</summary>
-  <div class="plan-accordion-body"><ul>{items_html}</ul></div>
-</details>"""
+        return (f"<details{open_attr}>"
+                f"<summary>{icon} {label}</summary>"
+                f'<div class="plan-accordion-body"><ul>{items_html}</ul></div>'
+                f"</details>")
 
     status = state.get("status")
     logger.debug("フォーマット開始: destination=%s, status=%s", state.get("destination"), status)
@@ -88,12 +110,12 @@ def _format_plan(state: dict) -> str:
 
     if status == "budget_infeasible":
         logger.warning("予算不足でプラン生成を中断: destination=%s", state.get("destination"))
-        return header + f"""
+        return _no_blank_lines(header + f"""
   <div class="plan-error">
     <strong>❌ 予算不足により旅行プランの作成を断念しました</strong>
     <p>{esc(state.get('feedback', ''))}</p>
   </div>
-</div>"""
+</div>""")
 
     plan_json = json.dumps(plan_payload(state), ensure_ascii=False).replace("'", "&#39;").replace('"', "&quot;")
 
@@ -121,16 +143,20 @@ def _format_plan(state: dict) -> str:
         f'target="_blank" rel="noopener">🏨 {esc(state.get("destination"))}の宿を探す</a></div>'
     )
 
-    return header + f"""
-  <div class="plan-accordion">
-    {accordion("✨", "主要観光地", state.get("spots", []))}
-    {accordion("🍱", "グルメ", state.get("restaurants", []))}
-    {accordion("🏨", "宿泊施設", state.get("accommodation", []))}
-    {accordion("📅", "スケジュール", state.get("schedule", []))}
-    {accordion("💰", "費用見積もり", state.get("budget_estimate", []))}
-  </div>
+    # 空のセクションは "" になる。行として並べると空白だけの行が残るので、
+    # 連結してから埋める（_no_blank_lines の説明を参照）
+    accordions = "".join([
+        accordion("✨", "主要観光地", state.get("spots", [])),
+        accordion("🍱", "グルメ", state.get("restaurants", [])),
+        accordion("🏨", "宿泊施設", state.get("accommodation", [])),
+        accordion("📅", "スケジュール", state.get("schedule", [])),
+        accordion("💰", "費用見積もり", state.get("budget_estimate", [])),
+    ])
+
+    return _no_blank_lines(header + f"""
+  <div class="plan-accordion">{accordions}</div>
   {book}
   {footer}
   {edit_hint}
   {save_button}
-</div>"""
+</div>""")

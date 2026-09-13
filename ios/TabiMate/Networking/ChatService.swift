@@ -130,15 +130,38 @@ enum ChatService {
         try await APIClient.shared.send(req)
     }
 
-    /// その生成がまだ続いているか。アプリを閉じて戻ってきたときの状態復元に使う。
-    /// false は「結果がもう確定している（完了か中断）」という意味。
-    static func isGenerating(requestId: String) async throws -> Bool {
-        try await APIClient.shared
+    /// 生成の行きつく先。アプリを閉じて戻ってきたときの状態復元に使う。
+    enum GenerationState: String {
+        /// まだ作っている最中。
+        case pending
+        /// 出来上がって履歴に入った。
+        case done
+        /// 失敗か中断。その回の行はサーバーが片付けているので残っていない。
+        case gone
+    }
+
+    /// その生成がどうなったかを尋ねる。
+    ///
+    /// 見るのは state。サーバーが返す active は「このインスタンスがいま抱えているか」で、
+    /// Cloud Run のように複数インスタンスで動いていると、別のインスタンスが走らせている
+    /// 生成を取りこぼして「もう終わった」と答えてしまう。state は保存された行から
+    /// 決まるので、どのインスタンスに当たっても同じ答えになる（src/db.py の
+    /// chat_request_state）。active は state を返さない古いサーバー向けの保険。
+    static func generationState(requestId: String) async throws -> GenerationState {
+        let res = try await APIClient.shared
             .get("generation_status", query: ["request_id": requestId],
-                 as: GenerationStatus.self).active
+                 as: GenerationStatus.self)
+        return resolveState(state: res.state, active: res.active)
+    }
+
+    /// 応答の2つの欄から行きつく先を決める（通信を伴わないので単体で試せる）。
+    static func resolveState(state: String?, active: Bool?) -> GenerationState {
+        if let state, let known = GenerationState(rawValue: state) { return known }
+        return (active ?? false) ? .pending : .gone
     }
 
     private struct GenerationStatus: Codable {
-        let active: Bool
+        let active: Bool?
+        let state: String?
     }
 }

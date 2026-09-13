@@ -725,3 +725,131 @@ def test_route_after_balancer_has_no_unreachable_branch():
                  "candidates_ready", "accommodation_candidates_ready"):
         assert name not in known, f"{name} はどこからも代入されない"
         assert f'"{name}"' not in source, f"{name} の分岐が残っている"
+
+
+# ----------------------------------------------------------------------
+# 「運転しない」がどこかのエージェントで抜け落ちないこと
+# ----------------------------------------------------------------------
+def test_is_car_covers_spelling_variants():
+    """車を指す言い回しの揺れを拾い、電車・自転車を巻き込まないこと。
+
+    以前は ("車","レンタカー","自家用車","マイカー") の完全一致だけで見ており、
+    「自動車」「レンタカー（現地で借りる）」がすり抜けて、運転しない人に
+    「この手段で固定」と指示していた。
+    """
+    from chat.agents import _is_car
+    for mode in ("車", "レンタカー", "自家用車", "マイカー", "自動車",
+                 "レンタカー（現地で借りる）", "car", "Car", "ドライブ", "車（レンタカー）"):
+        assert _is_car(mode), mode
+    for mode in ("新幹線", "電車", "飛行機", "高速バス", "おまかせ", "特急",
+                 "在来線", "自転車", "船", "電車＋バス", "夜行バス", "列車", ""):
+        assert not _is_car(mode), mode
+
+
+def test_no_car_reaches_every_prompt_building_agent():
+    """プロンプトを組み立てるエージェントは全員 no_car を見ていること。
+
+    宿・飲食店・観光のどこか1つでも見落とすと、運転しない人に
+    車でしか行けない場所が混ざる。実際に宿とグルメ候補で抜けていた。
+    """
+    import inspect
+    import chat.agents as A
+
+    # 費用マネージャーは決まったプランに値段を付けるだけで、行き先も経路も選ばない
+    prices_only = {"cost_manager"}
+    builders = [name for name, fn in vars(A).items()
+                if inspect.isfunction(fn) and fn.__module__ == A.__name__
+                and not name.startswith("_") and "prompt" in inspect.getsource(fn)
+                and name not in prices_only]
+    assert len(builders) >= 8, builders
+    missing = [n for n in builders if "no_car" not in inspect.getsource(getattr(A, n))]
+    assert not missing, f"no_car を見ていないエージェント: {missing}"
+
+
+# ----------------------------------------------------------------------
+# 会話は毎ターン作り直される。任意項目が黙って消えないこと
+# ----------------------------------------------------------------------
+def _complete_state(**over):
+    from chat.chat import ConversationState
+    base = dict(destination="静岡", travel_date="2099年8月1日", duration="1泊2日",
+                themes=["温泉"], num_people=2, budget_limit=30000,
+                departure_location="川崎", is_complete=True,
+                plan_change_request="宿を変えて", edit_targets=["accommodation"])
+    base.update(over)
+    return ConversationState(**base)
+
+
+def test_optional_preferences_survive_a_turn_that_forgets_them(monkeypatch):
+    """抽出が任意項目を落としても、前回プランに控えた値で補うこと。
+
+    「免許がない」と伝えた数ターン後に「宿を変えて」と言っただけで、
+    軽量モデルが no_car を返さなくなると配慮ごと消えていた。
+    """
+    import chat.chat as C
+    captured = {}
+    monkeypatch.setattr(C, "invoke_with_retry", lambda llm, msgs: _complete_state())
+    monkeypatch.setattr(C, "_build_user_preferences", lambda uid: "")
+    monkeypatch.setattr(C, "generate_travel_plan",
+                        lambda inputs: (captured.update(inputs), dict(inputs, status="approved"))[1])
+    import db
+    monkeypatch.setattr(db, "get_last_plan", lambda uid: {
+        "destination": "静岡", "duration": "1泊2日", "travel_date": "2099年8月1日",
+        "num_people": 2, "budget_limit": 30000, "departure_location": "川崎",
+        "transport_mode": "新幹線", "no_car": True, "schedule_pref": "夕方までに帰りたい",
+        "special_requirements": ["魚介類アレルギー"],
+        "spots": ["a"], "restaurants": ["b"], "accommodation": ["c"],
+        "schedule": ["1日目"], "budget_estimate": ["x"],
+        "transport_cost": 5000, "remaining_budget": 25000,
+    })
+    C.chat("宿を変えて", messages_history=[], user_id="u1")
+    assert captured["no_car"] is True
+    assert captured["transport_mode"] == "新幹線"
+    assert captured["schedule_pref"] == "夕方までに帰りたい"
+    assert captured["special_requirements"] == ["魚介類アレルギー"]
+
+
+def test_explicit_change_beats_the_carried_over_value(monkeypatch):
+    """今回はっきり答えた値は、前回の控えより優先されること（引き継ぎで上書きしない）。"""
+    import chat.chat as C
+    captured = {}
+    monkeypatch.setattr(C, "invoke_with_retry",
+                        lambda llm, msgs: _complete_state(no_car=False, transport_mode="車",
+                                                          special_requirements=[]))
+    monkeypatch.setattr(C, "_build_user_preferences", lambda uid: "")
+    monkeypatch.setattr(C, "generate_travel_plan",
+                        lambda inputs: (captured.update(inputs), dict(inputs, status="approved"))[1])
+    import db
+    monkeypatch.setattr(db, "get_last_plan", lambda uid: {
+        "destination": "静岡", "duration": "1泊2日", "travel_date": "2099年8月1日",
+        "num_people": 2, "budget_limit": 30000, "departure_location": "川崎",
+        "transport_mode": "新幹線", "no_car": True, "special_requirements": ["魚介類アレルギー"],
+    })
+    C.chat("やっぱり車で行く", messages_history=[], user_id="u1")
+    assert captured["no_car"] is False              # 明示的に「運転する」に変えた
+    assert captured["transport_mode"] == "車"
+    assert captured["special_requirements"] == []   # 「無い」と答えたなら空のまま
+
+
+def test_transport_agent_neutralises_a_car_mode_for_non_drivers(monkeypatch):
+    """運転しない人に「自動車で固定」と指示しないこと。
+
+    交通手段の文字列は軽量モデルが自由に書くので、表記が少しずれただけで
+    除外をすり抜けてはいけない。
+    """
+    import chat.agents as A
+    seen = {}
+    monkeypatch.setattr(A, "invoke_with_retry",
+                        lambda llm, prompt: (seen.update(p=prompt),
+                                             type("R", (), {"transport_cost": 5000})())[1])
+    monkeypatch.setattr(A, "llm", type("L", (), {"with_structured_output": lambda s, m: None})())
+
+    base = dict(destination="静岡", departure_location="川崎", num_people=2,
+                travel_date="2099年8月1日", budget_limit=30000, no_car=True)
+    for mode in ("車", "自動車", "レンタカー（現地で借りる）", "マイカー"):
+        A.transport_agent(dict(base, transport_mode=mode))
+        assert "で固定すること" not in seen["p"], mode
+        assert "運転免許がない" in seen["p"], mode
+
+    # 運転できる人の指定は、これまでどおりその手段で固定する
+    A.transport_agent(dict(base, no_car=False, transport_mode="レンタカー"))
+    assert "「レンタカー」で固定すること" in seen["p"]

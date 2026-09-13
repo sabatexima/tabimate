@@ -149,9 +149,9 @@ enum StubResponses {
         default:
             // 個別に用意していないもの（保存・削除・生成など）。
             // 呼び出し側がどの形で読もうとしても通るよう、必要な鍵をまとめて入れておく
-            // （id=保存の結果 / count=写真の枚数 / items=持ち物 / active=生成中か）。
+            // （id=保存の結果 / count=写真の枚数 / items=持ち物 / state=生成の行きつく先）。
             return #"""
-            {"status":"OK","id":1,"count":1,"active":false,"is_favorite":true,
+            {"status":"OK","id":1,"count":1,"active":false,"state":"gone","is_favorite":true,
              "items":["水着","日焼け止め","酔い止め"],
              "token":"abc","url":"https://example.com/s/abc","permission":"view",
              "email":"friend@example.com","grantee_email":"friend@example.com"}

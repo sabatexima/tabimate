@@ -132,6 +132,21 @@ def _filter_real_places(names: list, destination: str, min_keep: int) -> list:
     return kept
 
 
+# 車での移動を指す言い回し。表記ゆれが多いので、完全一致ではなく「含むか」で見る。
+_CAR_WORDS = ("車", "カー", "ドライブ", "自家用", "マイカー", "car")
+
+
+def _is_car(mode: str) -> bool:
+    """交通手段の文字列が車での移動を指しているか（運転しない人の除外判定用）。
+
+    「電車」「自転車」「乗車」は車ではないので、先に取り除いてから見る。
+    """
+    m = (mode or "").lower()
+    for not_a_car in ("電車", "汽車", "自転車", "乗車", "下車", "駐車", "列車", "停車"):
+        m = m.replace(not_a_car, "")
+    return any(w in m for w in _CAR_WORDS)
+
+
 def transport_agent(state: TravelPlanState):
     """往復交通費を概算し、予算上限から差し引いた残予算を返す。
 
@@ -141,8 +156,10 @@ def transport_agent(state: TravelPlanState):
         return {}  # 部分編集: 交通は対象外。前回の交通費・残予算を引き継ぐ
     transport_mode = state.get("transport_mode", "おまかせ")
     no_car = state.get("no_car", False)
-    # 運転免許なしの場合は車・レンタカーを使わない（誤って車指定でも公共交通に切替）
-    if no_car and transport_mode in ("車", "レンタカー", "自家用車", "マイカー"):
+    # 運転免許なしの場合は車・レンタカーを使わない（誤って車指定でも公共交通に切替）。
+    # 完全一致で見ると「自動車」「レンタカー（現地で借りる）」のような書き方をすり抜け、
+    # 運転しない人に「この手段で固定」と指示してしまうので、語を含むかで判定する。
+    if no_car and _is_car(transport_mode):
         transport_mode = "おまかせ"
     log.info(
         "[🚄 交通エージェント]: 往復交通費を試算中... destination=%s, mode=%s, no_car=%s",
@@ -156,6 +173,8 @@ def transport_agent(state: TravelPlanState):
 ・高速バス・夜行バスの場合: 往復の運賃を1人あたりで見積もること
 ・飛行機の場合: 往復の航空券代＋必要なら空港アクセス費を1人あたりで見積もること
 ・新幹線・特急など鉄道の場合: 往復の運賃＋特急/指定席料金を1人あたりで見積もること"""
+        if no_car:
+            mode_instruction += "\n・ただし運転免許がない/運転しない前提のため、車・レンタカーの運転を伴う手段は選ばないこと"
     elif no_car:
         mode_instruction = """・運転免許がない/運転しない前提。車・レンタカーは選ばないこと。
 ・新幹線・特急・飛行機・高速バス・在来線など公共交通機関のみで、所要時間と費用のバランスが最も良い手段を選ぶこと"""
@@ -294,7 +313,7 @@ def accommodation_candidates(state: TravelPlanState):
     # 1泊あたりの予算目安（残予算の40%を泊数で割る）。この価格帯で泊まれる候補を集める。
     per_night_budget = int(state.get("remaining_budget", 0) * ACCOMMODATION_BUDGET_RATIO) // max(num_nights, 1)
     queries = [
-        f"{state['destination']} ホテル 旅館 おすすめ {state['themes'][0]} 公式",
+        f"{state['destination']} ホテル 旅館 おすすめ {(state['themes'] or [''])[0]} 公式",
         f"{state['destination']} 宿泊 1泊 {per_night_budget}円以内 おすすめ",
         f"{state['destination']} 格安 ビジネスホテル ゲストハウス",
     ]
@@ -324,6 +343,8 @@ def accommodation_candidates(state: TravelPlanState):
 【出力】
 厳密に3個以上5個以下の施設名のみを返してください。
 """
+    if state.get("no_car"):
+        prompt += "\n【重要】運転免許がない/運転しない前提です。駅・バス停から公共交通機関＋徒歩で無理なく行ける宿だけを選び、車が前提の立地（送迎が無い山中・郊外など）は除外すること。"
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(AccommodationCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -396,6 +417,8 @@ def accommodation_agent(state: TravelPlanState):
             prompt += "上記の食事・観光・現地交通の費用も踏まえ、合計が予算内に収まるよう宿の価格帯を調整すること（安くしすぎて質を落とす必要はないが、食費等を圧迫しないこと）。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して宿泊施設を選んでください。"
+    if state.get("no_car"):
+        prompt += "\n【重要】運転免許がない/運転しない前提です。駅・バス停から公共交通機関＋徒歩で無理なく行ける宿だけを選び、車が前提の立地（送迎が無い山中・郊外など）は除外すること。"
     prompt += _pref(state)
     prompt += _directive(state)
 
@@ -451,6 +474,8 @@ def gourmet_candidates(state: TravelPlanState):
 【出力】
 厳密に4個以上6個以下の飲食店名のみを返してください。
 """
+    if state.get("no_car"):
+        prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行ける店だけを選び、車でしか行けない店は除外すること。"
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(GourmetCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)

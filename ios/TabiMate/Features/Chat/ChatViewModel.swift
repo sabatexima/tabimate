@@ -16,6 +16,8 @@ final class ChatViewModel: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var currentRequestId: String?
+    /// 復帰待ちのあいだ控えておく、そのとき聞いた文章（失敗したら入力欄に戻す）。
+    private var pendingQuestion: String?
     /// 自分で「やめる」を押した最中かどうか。
     ///
     /// AsyncThrowingStream は取り消されると例外ではなく「正常終了」で返るため、
@@ -125,6 +127,7 @@ final class ChatViewModel: ObservableObject {
         isGenerating = false
         isAborting = false
         currentRequestId = nil
+        pendingQuestion = nil
         UserDefaults.standard.removeObject(forKey: Self.pendingKey)
         if reload { await reloadMessages() }
         // 履歴の読み直しでエラーが消えてしまわないよう、後から入れる
@@ -145,17 +148,21 @@ final class ChatViewModel: ObservableObject {
     private func resumeIfGenerating() async {
         guard let requestId = UserDefaults.standard.string(forKey: Self.pendingKey) else { return }
 
-        let active: Bool
+        let state: ChatService.GenerationState
         do {
-            active = try await ChatService.isGenerating(requestId: requestId)
+            state = try await ChatService.generationState(requestId: requestId)
         } catch {
             return  // 通信できないだけなら、次に開いたときに任せる
         }
-        guard active else {
-            // もう決着している（完了か中断）。履歴はさっき読んだ内容で正しい
+        guard state == .pending else {
+            // もう決着している。履歴はさっき読んだ内容で正しい
             UserDefaults.standard.removeObject(forKey: Self.pendingKey)
             return
         }
+
+        // 生成が最後まで行かなかったとき、サーバーはその回の行を消す。
+        // そうなると聞いた文章もろとも消えるので、まだ残っている今のうちに控える
+        pendingQuestion = messages.last(where: { $0.role == "user" })?.content
 
         currentRequestId = requestId
         isGenerating = true
@@ -171,15 +178,32 @@ final class ChatViewModel: ObservableObject {
                 try? await Task.sleep(for: .seconds(2.5))
                 if Task.isCancelled { return }
                 guard let self else { return }
-                guard let stillGenerating = try? await ChatService.isGenerating(requestId: requestId)
+                guard let state = try? await ChatService.generationState(requestId: requestId)
                 else { continue }  // 一時的な通信エラーは次の周回で
-                if !stillGenerating {
+                switch state {
+                case .pending:
+                    continue
+                case .done:
                     await self.finish(reload: true)
+                    return
+                case .gone:
+                    await self.giveUpResume()
                     return
                 }
             }
-            await self?.finish(reload: true)
+            await self?.giveUpResume()
         }
+    }
+
+    /// 復帰を待っていた生成が、結果を残さずに終わっていたときの後始末。
+    ///
+    /// その回の行はサーバーが消しているため、履歴を読み直しても聞いた文章は戻らない。
+    /// 控えておいた文章を入力欄に戻し、打ち直さずにもう一度頼めるようにする。
+    private func giveUpResume() async {
+        let question = pendingQuestion
+        await finish(reload: true,
+                     error: "前回のプラン作成は最後まで終わらなかったみたい。もう一度ためしてね🍀")
+        if let question { restoreDraft(question) }
     }
 
     // MARK: - 保存とリセット

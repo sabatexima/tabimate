@@ -63,3 +63,29 @@ final class RequestBuildingTests: XCTestCase {
         XCTAssertEqual(APIError.rateLimited("混んでいます").errorDescription, "混んでいます")
     }
 }
+
+/// 生成の状態を尋ねたときの読み取り。
+///
+/// active はそのインスタンスの記憶でしかなく、Cloud Run のように複数インスタンスで
+/// 動いていると、別のインスタンスが走らせている生成を取りこぼす。保存された行から
+/// 決まる state を優先すること。
+final class GenerationStateTests: XCTestCase {
+
+    func testPrefersStateOverActive() {
+        // 別インスタンスに当たって active=false でも、行が残っていれば生成中
+        XCTAssertEqual(ChatService.resolveState(state: "pending", active: false), .pending)
+        XCTAssertEqual(ChatService.resolveState(state: "done", active: false), .done)
+        XCTAssertEqual(ChatService.resolveState(state: "gone", active: false), .gone)
+    }
+
+    func testFallsBackToActiveWhenStateIsMissing() {
+        XCTAssertEqual(ChatService.resolveState(state: nil, active: true), .pending)
+        XCTAssertEqual(ChatService.resolveState(state: nil, active: false), .gone)
+        XCTAssertEqual(ChatService.resolveState(state: nil, active: nil), .gone)
+    }
+
+    func testUnknownStateFallsBackToActive() {
+        XCTAssertEqual(ChatService.resolveState(state: "wat", active: true), .pending)
+        XCTAssertEqual(ChatService.resolveState(state: "", active: false), .gone)
+    }
+}

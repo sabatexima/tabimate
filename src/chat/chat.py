@@ -61,6 +61,9 @@ D) すでにプラン提示済みで、変更要望ではない雑談・お礼�
 ・すでにアシスタントが聞いた必須項目は再度聞かないこと。
 ・会話が始まったばかり or 旅行と無関係な発言には「どちらへのご旅行をお考えですか？」と聞くこと。
 ・任意項目（交通手段の希望・特別条件）は、必須7項目が揃ってから最後に確認すること。
+・一度でも会話に出た項目は、その後のターンでも毎回そのまま設定し続けること。直近の発言に
+  書かれていないからといって Null に戻さないこと（「免許がない」「アレルギーがある」等が
+  途中で消えると、作り直したプランからその配慮が失われる）。
 ・交通手段は会話から読み取り、希望があればその手段を、こだわりがなければ「おまかせ」を transport_mode に設定すること。
 ・「運転免許がない」「運転できない」「ペーパードライバー」「公共交通機関で行きたい」などの発言があれば no_car=true を設定すること。その場合は車・レンタカーを選ばないこと（transport_mode は新幹線/電車/バス等または「おまかせ」にする）。
 ・「夕方までに帰りたい」「早めに帰りたい」「朝はゆっくり」「◯時には出発したい」などの時間に関する希望があれば、その内容を schedule_pref に設定すること（スケジュールの帰宅・出発時刻に反映される）。
@@ -297,6 +300,24 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         logger.info("リクエストがキャンセルされました: request_id=%s", request_id)
         return None, None
 
+    # 前回プランは、HTMLを正規表現で読み戻す代わりにDBの構造化データから取得する
+    # （直近のAIプランメッセージと一緒に保存した plan_json）。
+    from db import get_last_plan
+    prev = get_last_plan(user_id) if (state.plan_change_request and user_id) else None
+
+    # 会話状態は毎ターン履歴から作り直している。必須7項目が欠けたら聞き直すので
+    # 取りこぼしに気づけるが、任意項目（交通手段・運転の可否・時間の希望・特別条件）は
+    # 抜けても黙って既定値になる。「宿を変えて」の一言で、前に伝えた
+    # 「免許がない」「アレルギーがある」が消えるのはまずいので、前回プランから補う。
+    # None は「今回の抽出では読み取れなかった」の意味。値が入っていれば
+    # 明示的な変更なので、そちらを優先する（例: 「やっぱり車で行く」→ no_car=False）。
+    def _kept(value, key):
+        """今回の抽出で読み取れなかった（None）ときだけ、前回プランの控えを使う。
+
+        空文字・空リスト・False は「今回そう答えた」なので、そのまま尊重する。
+        """
+        return (prev or {}).get(key) if value is None else value
+
     inputs = {
         "destination":          state.destination,
         "travel_date":          state.travel_date,
@@ -305,10 +326,10 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         "num_people":           state.num_people,
         "budget_limit":         state.budget_limit,
         "departure_location":   state.departure_location,
-        "transport_mode":       state.transport_mode or "おまかせ",
-        "no_car":               bool(state.no_car),
-        "schedule_pref":        state.schedule_pref or "",
-        "special_requirements": state.special_requirements or [],
+        "transport_mode":       _kept(state.transport_mode, "transport_mode") or "おまかせ",
+        "no_car":               bool(_kept(state.no_car, "no_car")),
+        "schedule_pref":        _kept(state.schedule_pref, "schedule_pref") or "",
+        "special_requirements": _kept(state.special_requirements, "special_requirements") or [],
         # 既存プランへの変更要望は user_feedback として各エージェントに最優先で反映させる
         "user_feedback":        state.plan_change_request or "",
         # 過去の★評価から得た好み（参考としてやんわり反映）
@@ -319,10 +340,6 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 前回の成果物を引き継いで対象領域だけを再生成する（指定外はそのまま保持）。
     # 変更要望はあるが対象が空の場合は、全体作り直し(["all"])として扱う。
     targets = state.edit_targets or (["all"] if state.plan_change_request else [])
-    # 前回プランは、HTMLを正規表現で読み戻す代わりにDBの構造化データから取得する
-    # （直近のAIプランメッセージと一緒に保存した plan_json）。
-    from db import get_last_plan
-    prev = get_last_plan(user_id) if (state.plan_change_request and user_id) else None
 
     # 期間・日程・行き先・人数・予算といった基本条件が前回から変わった場合は、
     # 部分編集では整合が取れない（旧日数のスケジュールや旧予算の残額を引き継いで

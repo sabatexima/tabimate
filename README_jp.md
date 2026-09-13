@@ -26,9 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal.png" alt="旅の振り返り" width="240">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf.png" alt="保存プラン" width="240">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail.png" alt="プラン詳細" width="240">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/readme-screens.png" alt="旅の振り返り・保存プラン・プラン詳細" width="760">
 </p>
 
 ---
@@ -47,7 +45,8 @@
 > _旅のぜんぶに、ちゃむがそっと寄り添います。_
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/02-journey.png" alt="そうだん → しおり → たび → ふりかえり" width="720">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/02-journey.png" alt="そうだん → しおり → たび → ふりかえり" width="760"><br>
+  <sub>使う流れはこの4つ。相談して、しおりができて、旅に出て、帰ったら振り返る。</sub>
 </p>
 
 <table>
@@ -65,6 +64,11 @@
 ### 🗺️ 旅の「まえ」— 話すだけで、しおりができる
 
 > _ちゃむ「どこ行く？ 何泊？ …うん、わかった。まかせて」_
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/readme-chat.png" alt="話しかける → しおりができる" width="760"><br>
+  <sub>実際の画面。「金沢に2泊3日、2人で」と話しかけると予算だけ聞き返され、しおりが返ってくる。</sub>
+</p>
 
 | | |
 |---|---|
@@ -103,13 +107,15 @@
 プランは1つのAIが一気に書くのではなく、**役割を分けた10のエージェント**が順に手を入れます。最後の「まとめ役」が納得しなければ、原因のノードだけに差し戻します。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/03-agents.png" alt="10のエージェント" width="760">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/03-agents.png" alt="10のエージェント" width="760"><br>
+  <sub>交通費と観光候補は先に並列で。あとは観光 → 宿 → 食 → 時間割 → お金 の順に手を入れ、まとめ役が判定する。</sub>
 </p>
 
 サーバーは Cloud Run 上の Flask ひとつ。ブラウザも iOS アプリも同じサーバー・同じアカウント・同じしおりを見にいきます。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/04-architecture.png" alt="構成" width="760">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/04-architecture.png" alt="構成" width="760"><br>
+  <sub>つかう側（ブラウザ・iOS）→ Cloud Run 上の Flask → たよる先（Gemini・検索・地図・DB・ストレージ）。</sub>
 </p>
 
 ---

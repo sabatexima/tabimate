@@ -26,9 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-journal-en.png" alt="Trip journal" width="240">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-bookshelf-en.png" alt="Saved plans" width="240">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/screen-plan-detail-en.png" alt="Plan detail" width="240">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/readme-screens-en.png" alt="Trip journal, saved plans, plan detail" width="760">
 </p>
 
 <p align="center"><sub>The app UI is Japanese; screenshots are English-localized mockups of the same screens.</sub></p>
@@ -49,7 +47,8 @@ Plenty of apps help you book. TabiMate cares about the **before** and the **afte
 > _Chamu is there for every part of the trip._
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/02-journey.png" alt="chat → itinerary → trip → look back" width="720">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/02-journey.png" alt="chat → itinerary → trip → look back" width="760"><br>
+  <sub>Four steps: chat, get the itinerary, travel, look back when you're home. (Figure text is Japanese.)</sub>
 </p>
 
 <table>
@@ -67,6 +66,11 @@ Plenty of apps help you book. TabiMate cares about the **before** and the **afte
 ### 🗺️ Before — just chat, and the itinerary appears
 
 > _Chamu: "Where to? How many nights? …Got it, leave it to me."_
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/img/readme-chat-en.png" alt="Just talk → the itinerary appears" width="760"><br>
+  <sub>The real screen. "Kanazawa, two nights, two of us" — Chamu asks only about the budget, then the itinerary arrives.</sub>
+</p>
 
 | | |
 |---|---|
@@ -105,13 +109,15 @@ Plenty of apps help you book. TabiMate cares about the **before** and the **afte
 A plan is not written by one model in one go. **Ten agents with separate jobs** take turns on it, and a final reviewer sends the plan back — only to the node that caused the problem — when it isn't satisfied.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/03-agents.png" alt="ten agents" width="760">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/03-agents.png" alt="ten agents" width="760"><br>
+  <sub>Transport and sightseeing candidates run first, in parallel. Then sights → stay → food → timetable → costs, and a reviewer decides.</sub>
 </p>
 
 The server is a single Flask app on Cloud Run. The browser and the iOS app talk to the same server, the same account and the same plans.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/04-architecture.png" alt="architecture" width="760">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/04-architecture.png" alt="architecture" width="760"><br>
+  <sub>Clients (browser, iOS) → one Flask app on Cloud Run → the services it leans on (Gemini, search, maps, DB, storage).</sub>
 </p>
 
 ---

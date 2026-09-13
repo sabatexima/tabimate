@@ -298,7 +298,7 @@ START
   → balancer                   whole-plan review
         ├─ approved / budget_infeasible → END
         └─ fix_* → back to the relevant node   (cap: MAX_BALANCER_RETRIES = 5)
-             first try re-picks (cheap); a repeated verdict refetches candidates (costly)
+             1st re-picks (cheap); repeated verdict or 3rd rejection refetches candidates (costly)
 ```
 
 - **Lodging-free check** — `parse_duration()` yields (nights, days); zero nights skips the lodging nodes, which covers overnight-transit trips.
@@ -307,7 +307,7 @@ START
 - **Preference learning** — past ★ ratings and comments become `user_preferences`, softly injected into the agents.
 - **Day-by-day map** — the `N日目` headings in the schedule decide which day each pin belongs to, so multi-day trips can be filtered one day at a time (a hotel belongs to both surrounding days). If fewer than half the pins could be dated, the filter is withheld — picking a day would make pins vanish and look broken.
 - **Partial editing** — an edit request regenerates only the nodes it touches.
-- **Escalating retries** — the first rejection re-picks from the same candidate pool (cheap). If the same verdict comes back twice, the pool itself holds no right answer, so the graph returns to candidate gathering and changes the lineup (costly: search + LLM). Candidate agents receive the review notes and the rejected lineup — without them, temperature 0 just rebuilds the identical list.
+- **Escalating retries** — the first rejection re-picks from the same candidate pool (cheap). On a repeated verdict, or from the third rejection onwards, the graph returns to candidate gathering and changes the lineup (costly: search + LLM). The retry-count trigger matters: with verdicts alternating between areas, the repeat trigger never fires and the pool would go untouched to the cap. Candidate agents receive the review notes and the rejected lineup — without them, temperature 0 just rebuilds the identical list. The search queries stay the same, so a refreshed pool is drawn from the same evidence plus the exclusion.
 - **Retries** — `invoke_with_retry()` backs off on 429 / 503 / network errors, up to 5 attempts.
 
 ### Generation outlives the connection
@@ -391,7 +391,7 @@ Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the pub
 ### Tests & CI
 
 ```bash
-pytest tests/ -k "not smoke"    # 183 offline tests — no API keys, no DB
+pytest tests/ -k "not smoke"    # 185 offline tests — no API keys, no DB
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
@@ -401,7 +401,7 @@ python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 |---|---|
 | `test_units.py` (38) | Thumbnail keys, URL generation, path traversal, geocoding variants, destination-country resolution, app-token issue/verify |
 | `test_ios_routes.py` (44) | Every URL the iOS app calls exists on the server, with the right method |
-| `test_regression.py` (54) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, "I don't drive" survives a save-and-edit round trip, … |
+| `test_regression.py` (56) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, "I don't drive" survives a save-and-edit round trip, … |
 | `test_generation_status.py` (18) | Reload restore — the pending/done/gone decision, and what the page carries |
 | `test_app_api.py` (16) | Authorization and JSON shape for the native-app endpoints |
 | `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |

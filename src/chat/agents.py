@@ -1029,6 +1029,10 @@ def balancer(state: TravelPlanState):
 # 同じ指摘が2回続いたときに戻る先。選び直しでは直らないので、候補集めからやり直す。
 # fix_budget は宿が予算の主因なので宿の候補から、fix_time は行程が入りきらない
 # ＝観光の顔ぶれが重いということなので観光の候補から集め直す。
+# 指摘が毎回違っていても、この回数目の差し戻しからは候補集めまで戻す。
+# 上限（MAX_BALANCER_RETRIES=5）に達する前に必ず2回は入れ替えが走る。
+_REFRESH_FROM_RETRY = 3
+
 _REFRESH_POOL = {
     "fix_sightseeing":   "sightseeing_candidates",
     "fix_gourmet":       "gourmet_candidates",
@@ -1061,12 +1065,17 @@ def route_after_balancer(state: TravelPlanState):
     if state["retry_count"] >= MAX_BALANCER_RETRIES:
         log.warning("⚠️ 差し戻し上限（5回）に達したため強制終了します。最終ステータス: %s", status)
         return "end"
-    if status == prev_status and status in fix_statuses:
-        # 2回続けて同じ指摘ということは、候補プールの中に正解が無い。
-        # 選び直し（安い）では抜けられないので、候補集め（検索＋LLM。高い）まで戻して
-        # 顔ぶれそのものを入れ替える。1回目は選び直しで済ませ、2回目から使う。
+    # 候補プールの中に正解が無いときは、選び直し（安い）では永久に抜けられない。
+    # 候補集め（検索＋LLM。高い）まで戻して顔ぶれを入れ替える。使うのは2通り:
+    #   ・同じ指摘が2回続いた   … その領域のプールが原因だとはっきりしている
+    #   ・差し戻しが3回目に入った … 指摘が毎回違っても、安い手では収束していない
+    # 後者が要るのは、観光→グルメ→観光…と交互に指摘が来ると前者が一度も成立せず、
+    # 上限5回を使い切るまで同じ観光候補から選び直し続けてしまうため（実際そうなる）。
+    _repeated = status == prev_status
+    if status in fix_statuses and (_repeated or state["retry_count"] >= _REFRESH_FROM_RETRY):
         pool = _REFRESH_POOL[status]
-        log.warning("⚠️ 同じ問題（%s）が繰り返されたため、%s から候補を集め直します。", status, pool)
+        log.warning("⚠️ %s（%s）のため、%s から候補を集め直します。",
+                    "同じ問題の繰り返し" if _repeated else "差し戻しが続いている", status, pool)
         return pool
 
     return {

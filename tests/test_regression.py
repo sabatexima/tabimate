@@ -1134,3 +1134,97 @@ def test_refresh_hint_is_quiet_outside_a_rejection():
     assert _refresh_hint({}, ["a"], "観光") == ""
     hint = _refresh_hint({"feedback": "だめ", "status": "fix_sightseeing"}, [], "観光")
     assert "だめ" in hint and "前回選ばれて" not in hint   # 顔ぶれが無ければその節は出さない
+
+
+def test_retry_routing_holds_for_every_possible_sequence():
+    """差し戻しの並びを総当たりして、ルーティングの性質を確かめる。
+
+    1つの並びを手で試すだけでは足りない。実際、最初の実装は「同じ指摘が2回続く」
+    でしか候補を集め直さず、観光→グルメ→観光…と交互に来る並びでは観光の候補が
+    上限まで一度も入れ替わらなかった（総当たりで初めて気づいた）。
+    """
+    import itertools
+    from chat.agents import route_after_balancer, _REFRESH_POOL, MAX_BALANCER_RETRIES
+
+    fixes = sorted(_REFRESH_POOL)
+    pools = set(_REFRESH_POOL.values())
+    # 入れ替えの開始回が上限以上だと、一度も走らないまま打ち切られる
+    from chat.agents import _REFRESH_FROM_RETRY
+    assert _REFRESH_FROM_RETRY < MAX_BALANCER_RETRIES
+
+    def trace(seq):
+        """審査結果の並びを流して [(status, 行き先)] を返す。"""
+        prev, out = "", []
+        for i, status in enumerate(seq, start=1):
+            route = route_after_balancer(
+                {"status": status, "prev_status": prev, "retry_count": i})
+            out.append((status, route))
+            prev = status
+            if route == "end":
+                break
+        return out
+
+    checked = 0
+    for n in range(1, MAX_BALANCER_RETRIES + 1):
+        for seq in itertools.product(fixes, repeat=n):
+            checked += 1
+            acted = [(s, r) for s, r in trace(seq) if r != "end"]   # end の回は手が打てない
+            routes = {r for _, r in acted}
+            for status in {s for s, _ in acted}:
+                seen = sum(1 for s, _ in acted if s == status)
+                cheap = sum(1 for s, r in acted if s == status and r not in pools)
+                # 2回以上出た指摘は、担当プールが一度は入れ替わっていること
+                # （宿と予算は同じプールを共有するので、どちらが引き金でもよい）
+                if seen >= 2:
+                    assert _REFRESH_POOL[status] in routes, (seq, status)
+                # 同じ指摘に安い選び直しを2回使わないこと
+                assert cheap <= 1, (seq, status)
+            # 3回以上差し戻したら、必ず一度は入れ替えが走っていること
+            if len(acted) >= 3:
+                assert routes & pools, seq
+    assert checked > 3000, checked      # 総当たりが縮んでいないこと
+
+
+def test_worst_case_retry_loop_fits_in_the_recursion_limit():
+    """上限まで差し戻しても、LangGraph の recursion_limit に当たらないこと。
+
+    候補集めに戻る経路は1周が1ノブん長い。上限まで回ったときに
+    recursion_limit を超えると、プランが返らず例外になる。
+    """
+    from langgraph.graph import StateGraph, START, END
+    from chat.models import TravelPlanState
+    from chat.agents import route_after_balancer, MAX_BALANCER_RETRIES
+    import chat.graph as G
+    import inspect
+    import re as _re
+
+    steps = []
+
+    def node(name, out):
+        def run(state):
+            steps.append(name)
+            return out
+        return run
+
+    def balancer(state):
+        steps.append("balancer")
+        return {"status": "fix_sightseeing", "prev_status": state.get("status", ""),
+                "feedback": "だめ", "retry_count": state.get("retry_count", 0) + 1}
+
+    # 本物と同じ形（chat/graph.py の辺をそのまま写す）
+    w = StateGraph(TravelPlanState)
+    for name in ("sightseeing_candidates", "sightseeing", "accommodation_candidates",
+                 "accommodation", "gourmet_candidates", "gourmet", "timekeeper", "cost_manager"):
+        w.add_node(name, node(name, {}))
+    w.add_node("balancer", balancer)
+    for src, dst in sorted(G.workflow.edges):
+        w.add_edge(START if src == "__start__" else src, dst)
+    w.add_conditional_edges("balancer", route_after_balancer,
+                            {"end": END, **{n: n for n in G.workflow.nodes}})
+
+    limit = int(_re.search(r'"recursion_limit":\s*(\d+)', inspect.getsource(G)).group(1))
+    w.compile().invoke({"status": "", "prev_status": "", "retry_count": 0},
+                       {"recursion_limit": limit})
+    assert steps.count("balancer") == MAX_BALANCER_RETRIES
+    assert "sightseeing_candidates" in steps          # 入れ替えを通っている
+    assert len(steps) < limit, f"{len(steps)} ステップで上限 {limit} に近い"

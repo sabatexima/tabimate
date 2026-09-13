@@ -853,3 +853,64 @@ def test_transport_agent_neutralises_a_car_mode_for_non_drivers(monkeypatch):
     # 運転できる人の指定は、これまでどおりその手段で固定する
     A.transport_agent(dict(base, no_car=False, transport_mode="レンタカー"))
     assert "「レンタカー」で固定すること" in seen["p"]
+
+
+# ----------------------------------------------------------------------
+# グルメの候補集めに宿を渡す（「夕食は宿の徒歩圏で」を満たせるようにする）
+# ----------------------------------------------------------------------
+def _capture_agent(monkeypatch):
+    """エージェントに渡るプロンプトと検索クエリを覗くための差し替え。"""
+    import chat.agents as A
+    seen = {}
+    monkeypatch.setattr(A, "invoke_with_retry", lambda llm, prompt: (
+        seen.update(prompt=prompt),
+        type("R", (), {"restaurants": ["x", "y", "z", "w"],
+                       "accommodation": ["h1", "h2", "h3"]})())[1])
+    monkeypatch.setattr(A, "llm", type("L", (), {"with_structured_output": lambda s, m: None})())
+    monkeypatch.setattr(A, "build_search_context",
+                        lambda qs: (seen.update(queries=qs), "")[1])
+    monkeypatch.setattr(A, "_filter_real_places", lambda names, dest, min_keep: names)
+    return A, seen
+
+
+_AGENT_BASE = dict(destination="熱海", travel_date="2099年8月1日", duration="1泊2日",
+                   themes=["温泉"], num_people=2, special_requirements=[],
+                   remaining_budget=25000, budget_limit=30000,
+                   spots=["起雲閣", "来宮神社"])
+
+
+def test_gourmet_candidates_know_the_chosen_hotel(monkeypatch):
+    """宿はグルメより先に決まるので、候補集めの段階で渡すこと。
+
+    渡さないと、宿の徒歩圏の店が候補に1軒も入らないまま
+    「夕食は宿の徒歩圏で」とタイムキーパーに要求することになる。
+    """
+    A, seen = _capture_agent(monkeypatch)
+    A.gourmet_candidates(dict(_AGENT_BASE, accommodation=["ホテル熱海"]))
+    assert "選定済みの宿泊施設: ホテル熱海" in seen["prompt"]
+    assert any("ホテル熱海" in q for q in seen["queries"]), seen["queries"]
+    assert "徒歩圏" in seen["prompt"]
+
+
+def test_gourmet_candidates_skip_the_hotel_for_a_day_trip(monkeypatch):
+    """日帰りでは宿の検索も指示も足さないこと（存在しない宿を探しに行かない）。"""
+    A, seen = _capture_agent(monkeypatch)
+    A.gourmet_candidates(dict(_AGENT_BASE, duration="日帰り", accommodation=[]))
+    assert "宿泊施設: なし（宿泊しない行程）" in seen["prompt"]
+    assert not any("徒歩圏 夕食" in q for q in seen["queries"]), seen["queries"]
+
+
+def test_accommodation_prompts_omit_the_always_empty_restaurant_line(monkeypatch):
+    """飲食店が決まる前の宿のプロンプトに、空の「飲食店:」行を出さないこと。
+
+    グラフ順が 宿 → グルメ なので、初回は必ず空になる行だった。
+    差し戻しや部分編集で埋まっているときは、これまでどおり渡す。
+    """
+    A, seen = _capture_agent(monkeypatch)
+    for agent, extra in ((A.accommodation_candidates, {}),
+                         (A.accommodation_agent, {"accommodation_candidates": ["h1"],
+                                                  "retry_count": 0})):
+        agent(dict(_AGENT_BASE, restaurants=[], **extra))
+        assert "\n飲食店: " not in seen["prompt"], agent.__name__
+        agent(dict(_AGENT_BASE, restaurants=["磯丸"], **extra))
+        assert "飲食店: 磯丸" in seen["prompt"], agent.__name__

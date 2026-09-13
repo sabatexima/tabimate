@@ -333,7 +333,7 @@ def accommodation_candidates(state: TravelPlanState):
 1泊1人あたりの予算目安: {per_night_budget:,}円（この価格帯で泊まれる施設を中心に）
 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
 観光スポット: {', '.join(spots)}
-飲食店: {', '.join(restaurants)}
+{f"飲食店: {', '.join(restaurants)}" if restaurants else ""}
 {search_context}
 
 【選定の基準】
@@ -382,7 +382,7 @@ def accommodation_agent(state: TravelPlanState):
 宿泊費の目安上限（1泊あたり）: {per_night_budget:,}円/人
 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
 観光スポット: {', '.join(state.get('spots', []))}
-飲食店: {', '.join(state.get('restaurants', []))}
+{f"飲食店: {', '.join(state.get('restaurants', []))}" if state.get('restaurants') else ""}
 
 【候補一覧】
 {chr(10).join(f'- {c}' for c in candidates)}
@@ -446,10 +446,16 @@ def gourmet_candidates(state: TravelPlanState):
         return {}  # 部分編集: グルメは対象外
     log.info("[🍣 グルメハンター]: 飲食店候補を抽出中... destination=%s", state["destination"])
     spots = state.get("spots", [])
+    # 宿はこの時点で決まっている（グラフ順が 宿 → グルメ）。
+    # タイムキーパーには「夕食は宿の徒歩圏で」と指示しているのに、候補を集める段階で
+    # 宿を知らないと徒歩圏の店が1軒も入らず、その指示を満たしようがなかった。
+    stay = state.get("accommodation", [])
     queries = [
         f"{state['destination']} {' '.join(spots)} 周辺 レストラン おすすめ",
         f"{state['destination']} 郷土料理 地元名物 人気店",
     ]
+    if stay:
+        queries.append(f"{state['destination']} {stay[0]} 周辺 徒歩圏 夕食")
     if any("アレルギー" in r for r in state["special_requirements"]):
         queries.append(f"{state['destination']} 魚介類アレルギー対応 レストラン")
     if any("車椅子" in r for r in state["special_requirements"]):
@@ -462,6 +468,7 @@ def gourmet_candidates(state: TravelPlanState):
 旅行日程: {state['travel_date']}
 期間: {state['duration']}
 選定されたスポット: {', '.join(spots)}
+{f"選定済みの宿泊施設: {', '.join(stay)}" if stay else "宿泊施設: なし（宿泊しない行程）"}
 旅行のテーマ: {', '.join(state['themes'])}
 参加人数: {state['num_people']}人
 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
@@ -470,6 +477,7 @@ def gourmet_candidates(state: TravelPlanState):
 【方針】
 ・{state['travel_date']}{_weekday_hint(state['travel_date'])} に営業している店を優先し、その曜日が定休日に当たりそうな店は候補から外すこと
 ・地図で検索できる正式な店名で答えること。「駅前のカフェ」「地元の食堂」のような曖昧な総称は使わない。
+・宿泊施設がある場合は、その徒歩圏（または宿の館内）で夕食にできる店も1〜2件は候補に含めること（夜にタクシーで往復するだけの外出を避けるため）
 
 【出力】
 厳密に4個以上6個以下の飲食店名のみを返してください。

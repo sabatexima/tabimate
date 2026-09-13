@@ -8,6 +8,12 @@
 
 {% block content %}
 <div class="detail">
+  {% if not session.get('user_id') %}
+  {# ログインしていない人にも、どこのサービスか分かるように #}
+  <a class="public-brand" href="{{ url_for('planner.home') }}">
+    <img src="{{ url_for('static', filename='img/mate-head.png') }}" alt="">たびメイト
+  </a>
+  {% endif %}
   <div class="share-banner">
     <span class="tag">共有</span>
     <span>これは共有された旅の記録です{% if can_edit %}（編集できます）{% else %}（閲覧のみ）{% endif %}。</span>
@@ -44,23 +50,24 @@
   <div class="section">
     <h2>📷 写真</h2>
     <div class="photo-grid" id="photo-grid">
+      {# 閲覧のみでも同じポラロイド。以前は素の <img> だったため CSS が当たらず、
+         原寸のまま横に並んでカードからはみ出していた（スマホでは横スクロールに） #}
       {% for p in photos %}
-        {% if can_edit %}
-          <figure class="photo" data-id="{{ p.id }}">
-            <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
-                 onerror="this.onerror=null;this.src=this.dataset.full;">
-            <button class="photo-del" aria-label="写真を削除">×</button>
-          </figure>
-        {% else %}
+        <figure class="photo" data-id="{{ p.id }}">
           <img src="{{ p.thumb_url or p.url }}" data-full="{{ p.url }}" alt="photo" loading="lazy" decoding="async"
                onerror="this.onerror=null;this.src=this.dataset.full;">
-        {% endif %}
+          {% if can_edit %}<button class="photo-del" aria-label="写真を削除">×</button>{% endif %}
+        </figure>
       {% endfor %}
     </div>
     <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
     {% if can_edit %}
-      <input type="file" id="photo-input" accept="image/*" multiple style="margin-bottom:10px;">
-      <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
+      <div class="upload-row">
+        <input type="file" id="photo-input" accept="image/*" multiple class="visually-hidden">
+        <label for="photo-input" class="btn secondary">📷 写真を選ぶ</label>
+        <span class="upload-chosen" id="photo-chosen"></span>
+        <button class="btn" id="upload-btn">アップロード</button>
+      </div>
     {% endif %}
   </div>
 

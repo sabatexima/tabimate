@@ -329,3 +329,40 @@
     .page-lead, .hint, .words-lead, .empty-state p, p.lead, .memory-desc {
       word-break: auto-phrase;
     }
+
+    /* ------------------------------------------------------------------
+       PC ではサイドバーを画面に固定する。長いページで一番下まで
+       スクロールしないとログアウトに届かない、という状態をなくす
+       （スマホは上の @media で既に fixed のスライドメニュー） */
+    @media (min-width: 769px) {
+      .sidebar {
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+        height: 100vh;
+        height: 100dvh;
+        overflow-y: auto;
+      }
+    }
+
+    /* ログインしていない人が共有ページを開いたときの小さなブランド表示 */
+    .public-brand {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin: 0 0 12px; text-decoration: none;
+      color: var(--text-main); font-weight: 700; font-size: 0.95em;
+    }
+    .public-brand img { width: 30px; height: 30px; object-fit: contain; }
+    .public-brand:hover { color: var(--primary-dark); }
+
+    /* 画面には出さないが、支援技術とキーボードからは触れる（file input など） */
+    .visually-hidden {
+      position: absolute !important; width: 1px; height: 1px;
+      margin: -1px; padding: 0; border: 0; overflow: hidden;
+      clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .visually-hidden:focus-visible + label { outline: 2px solid rgba(79, 168, 58, 0.55); outline-offset: 2px; }
+
+    /* 写真を選ぶ → 枚数 → アップロード（振り返り詳細・共有された旅で共通） */
+    .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .upload-row label.btn { cursor: pointer; }
+    .upload-chosen { font-size: 0.85em; color: var(--text-muted); }

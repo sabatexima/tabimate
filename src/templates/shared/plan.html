@@ -19,6 +19,12 @@
 {% endmacro %}
 
 {% block content %}
+<div class="shared-plan-wrap">
+{% if not session.get('user_id') %}
+<a class="public-brand" href="{{ url_for('planner.home') }}">
+  <img src="{{ url_for('static', filename='img/mate-head.png') }}" alt="">たびメイト
+</a>
+{% endif %}
 <div class="share-banner">
   <span class="tag">共有</span>
   <span>これは共有された旅行プランです（閲覧のみ）。</span>
@@ -63,6 +69,7 @@
     <a class="plan-map-btn" href="{{ url_for('sharing.shared_plan_ics', resource_id=plan.id) }}{% if share_token %}?token={{ share_token }}{% endif %}">📅 カレンダーに追加</a>
     <div class="plan-map-container" id="shared-plan-map" hidden></div>
   </div>
+</div>
 </div>
 
 {% if plan.spots %}

@@ -12,6 +12,15 @@ if (CFG.canEdit) {
   }
 
   // 写真アップロード
+  // 「写真を選ぶ」で選んだ枚数を横に出す（input 自体は隠してある）
+  const photoInput = document.getElementById('photo-input');
+  const chosen = document.getElementById('photo-chosen');
+  if (photoInput && chosen) {
+    photoInput.addEventListener('change', () => {
+      const n = photoInput.files ? photoInput.files.length : 0;
+      chosen.textContent = n ? `${n}枚を選択中` : '';
+    });
+  }
   const uploadBtn = document.getElementById('upload-btn');
   if (uploadBtn) uploadBtn.addEventListener('click', async () => {
     const input = document.getElementById('photo-input');

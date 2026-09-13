@@ -303,6 +303,46 @@ def test_every_url_for_in_templates_points_to_a_real_endpoint():
     assert not bad, f"存在しない endpoint を参照している: {bad}"
 
 
+def test_public_trip_link_wraps_every_photo(monkeypatch):
+    """公開リンクで開いた旅（閲覧のみ）でも、写真が1枚ずつポラロイド枠に入っていること。
+
+    閲覧のみのときだけ素の <img> を並べていたため、写真用のCSSが当たらず
+    原寸のまま横に並び、カードからはみ出していた（スマホでは横スクロール）。
+    共有リンクで人に見せる一番ふつうの場面で崩れていたので、ここで押さえる。
+    """
+    import re
+
+    import app as app_mod
+    import db_reflection as repo
+    import views.sharing as S
+    from services import storage
+
+    trip = {"id": 1, "user_id": "owner", "title": "沼津", "start_date": "2025-06-12",
+            "end_date": "2025-06-13", "is_favorite": 0, "best_shots": "[]"}
+    photos = [{"id": i, "trip_id": 1, "storage_path": f"p/{i}.jpg", "taken_at": None,
+               "lat": None, "lng": None} for i in range(1, 4)]
+    monkeypatch.setattr(S.sharing, "get_link_by_token",
+                        lambda t: {"resource_type": "trip", "resource_id": 1, "permission": "view"})
+    monkeypatch.setattr(repo, "get_trip_by_id", lambda tid, viewer_id=None: dict(trip))
+    monkeypatch.setattr(repo, "get_trip", lambda tid, uid: None)
+    monkeypatch.setattr(repo, "get_photos", lambda tid: [dict(p) for p in photos])
+    monkeypatch.setattr(repo, "get_stickers", lambda tid: [])
+    monkeypatch.setattr(storage, "get_urls", lambda paths: {p: f"/u/{p}" for p in paths})
+    monkeypatch.setattr(storage, "get_thumb_urls", lambda paths: {p: f"/t/{p}" for p in paths})
+    app_mod.app.config["TESTING"] = True
+
+    with app_mod.app.test_client() as c:
+        res = c.get("/s/abc")
+    assert res.status_code == 200
+    html = res.get_data(as_text=True)
+    grid = re.search(r'<div class="photo-grid"[^>]*>(.*?)</div>\s*<div class="photo-count"', html, re.S).group(1)
+    imgs = len(re.findall(r"<img\b", grid))
+    figs = len(re.findall(r'<figure class="photo"', grid))
+    assert imgs == 3, "写真が3枚出ていない"
+    assert figs == imgs, f"枠に入っていない写真がある（img {imgs} / figure {figs}）"
+    assert "photo-del" not in grid, "閲覧のみなのに削除ボタンが出ている"
+
+
 def test_public_plan_link_renders(monkeypatch):
     """公開リンク（/s/<token>）でプランを開けること。ここが元の不具合。"""
     import app as app_mod

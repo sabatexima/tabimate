@@ -66,8 +66,14 @@
     {% endfor %}
   </div>
   <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
-  <input type="file" id="photo-input" accept="image/*" multiple style="margin-bottom:10px;">
-  <div><button class="btn secondary" id="upload-btn">アップロード</button></div>
+  {# ブラウザ既定の「ファイルを選択」ボタンは英語表記で浮くので、
+     input は隠して label をボタンにする（label なので JS 無しで開く） #}
+  <div class="upload-row">
+    <input type="file" id="photo-input" accept="image/*" multiple class="visually-hidden">
+    <label for="photo-input" class="btn secondary">📷 写真を選ぶ</label>
+    <span class="upload-chosen" id="photo-chosen"></span>
+    <button class="btn" id="upload-btn">アップロード</button>
+  </div>
 </div>
 
 <!-- ちゃむのベストショット（写真が3枚以上あるときだけ）-->

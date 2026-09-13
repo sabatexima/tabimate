@@ -30,8 +30,7 @@
             <span class="perm-tag {{ 'view' if t.permission != 'edit' else '' }}">{{ '編集可' if t.permission == 'edit' else '閲覧' }}</span>
           </div>
           <div class="meta">
-            {% if t.start_date %}{{ t.start_date }}{% endif %}
-            {% if t.end_date %} 〜 {{ t.end_date }}{% endif %}
+            {% if t.start_date or t.end_date %}📅 {{ t.start_date | tripdates(t.end_date) }}{% endif %}
           </div>
         </a>
         <button class="unshare-btn" data-grant="{{ t.grant_id }}" type="button" aria-label="共有を解除">共有解除</button>

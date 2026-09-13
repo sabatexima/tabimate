@@ -28,6 +28,13 @@
   line-height: 1.2;
 }
 .stat .lbl { font-size: 0.75em; color: var(--text-muted); font-weight: 600; }
+/* スマホでは3つを横一列に。以前は 2＋1 に割れて最後のタイルだけ横長になっていた */
+@media (max-width: 600px) {
+  .stats { gap: 8px; }
+  .stat { flex: 1 1 0; min-width: 0; padding: 12px 6px; }
+  .stat .num { font-size: 1.45rem; }
+  .stat .lbl { font-size: 0.7em; }
+}
 
 /* 月ごとのタイムライン */
 .timeline { margin-top: 18px; }

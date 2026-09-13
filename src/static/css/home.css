@@ -423,31 +423,8 @@
     30% { opacity: 1; transform: translateY(-3px); }
   }
 
-  /* ログイン画面のアニメ：マスコットのふわふわ＋四つ葉の漂い */
-  .login-hero { position: relative; }
-  .hero-mascot { animation: heroBob 3s ease-in-out infinite; }
-  @keyframes heroBob {
-    0%, 100% { transform: translateY(0) rotate(-1deg); }
-    50% { transform: translateY(-10px) rotate(1deg); }
-  }
-  .drift-clover {
-    position: absolute;
-    bottom: 20%;
-    font-size: 1.3rem;
-    opacity: 0;
-    pointer-events: none;
-    animation: cloverDrift 7s ease-in-out infinite;
-  }
-  @keyframes cloverDrift {
-    0% { transform: translateY(0) rotate(0deg); opacity: 0; }
-    15% { opacity: 0.75; }
-    80% { opacity: 0.4; }
-    100% { transform: translateY(-120px) rotate(25deg); opacity: 0; }
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .thinking-mate, .thinking-dots i, .hero-mascot, .drift-clover { animation: none; }
-    .drift-clover { display: none; }
+    .thinking-mate, .thinking-dots i { animation: none; }
   }
 
   #message-form {

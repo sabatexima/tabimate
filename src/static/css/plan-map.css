@@ -98,6 +98,38 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   border: 1.5px solid #fff;
 }
 
+/* 日の切り替え（複数日のプランだけ・地図左上のズームの下） */
+.plan-map-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+  background: rgba(255, 252, 245, 0.94);
+  border: 1px solid #e6dcc8;
+  border-radius: 12px;
+  padding: 5px 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.plan-map-days .day-chip {
+  border: 1px solid rgba(79, 168, 58, 0.45);
+  background: #fff;
+  color: var(--primary-color, #3b8a2c);
+  border-radius: 12px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.plan-map-days .day-chip:hover { background: #eef7ea; }
+.plan-map-days .day-chip.on {
+  background: var(--primary-color, #4fa83a);
+  border-color: var(--primary-color, #4fa83a);
+  color: #fff;
+}
+
 /* カスタムピンの編集バー（地図左下） */
 .plan-map-editbar {
   display: flex;
@@ -205,6 +237,7 @@ a.plan-map-btn { text-decoration: none; display: inline-block; }
   .plan-map-editbar .pin-edit-btn { padding: 9px 16px; font-size: 14px; }
   .plan-map-editbar .pin-edit-hint { font-size: 12px; }
   .plan-map-editbar .pin-chip { padding: 7px 12px; font-size: 13px; }
+  .plan-map-days .day-chip { padding: 7px 12px; font-size: 13px; }
 
   /* ポップアップ内のフォーム・削除ボタンも大きく */
   .leaflet-popup-content .pin-form .pin-name { padding: 9px 10px; font-size: 15px; }

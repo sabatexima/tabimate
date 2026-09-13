@@ -30,6 +30,10 @@ struct PlanPin: Identifiable, Hashable {
     var lng: Double
     /// 移動する順番（1始まり）。
     var order: Int = 0
+    /// スケジュールのどの日に出てくるか（「N日目」の N）。
+    /// 宿は初日にチェックインして翌朝に出るので複数の日に属する。どの日にも
+    /// 見つからなければ空（「すべて」のときだけ出す）。
+    var days: Set<Int> = []
 }
 
 /// ピンを「移動する順番」に並べる。
@@ -49,8 +53,60 @@ enum PlanItinerary {
             + build(names: plan.accommodation, coords: geo.accommodationCoords, category: .accommodation)
 
         pins = ordered(pins, schedule: plan.schedule)
+        assignDays(&pins, schedule: plan.schedule)
         spreadOverlaps(&pins)
         return pins
+    }
+
+    // MARK: - 日ごと
+
+    /// 「N日目」の見出し行なら N。エージェント側（agents.py の _days_in）と同じ判定で、
+    /// 「【2日目】」「3日目：熱海へ」「１日目」（全角）も見出しとして扱う。
+    static func dayNumber(of line: String) -> Int? {
+        var s = Substring(line.precomposedStringWithCompatibilityMapping
+            .trimmingCharacters(in: .whitespacesAndNewlines))
+        if let first = s.first, first == "【" || first == "[" { s = s.dropFirst() }
+        s = s.drop(while: { $0 == " " })
+        let digits = s.prefix(while: { $0.isNumber })
+        guard !digits.isEmpty, let n = Int(digits) else { return nil }
+        let rest = s.dropFirst(digits.count).drop(while: { $0 == " " })
+        return rest.hasPrefix("日目") ? n : nil
+    }
+
+    /// スケジュールを「N日目」の見出しで日ごとのブロックに分ける（照合用に正規化済み）。
+    /// 見出し行そのものもブロックに含める（地名が入ることがある）。見出しが無ければ空。
+    static func dayBlocks(_ schedule: [String]) -> [(day: Int, text: String)] {
+        var blocks: [(day: Int, lines: [String])] = []
+        for line in schedule {
+            if let day = dayNumber(of: line) {
+                blocks.append((day, [line]))
+            } else if !blocks.isEmpty {
+                blocks[blocks.count - 1].lines.append(line)
+            }
+        }
+        return blocks.map { ($0.day, normalize($0.lines.joined(separator: "\n"))) }
+    }
+
+    /// 各ピンに、登場する日の集合を付ける（Web版 plan-map.js の daysByItinerary と同じ）。
+    static func assignDays(_ pins: inout [PlanPin], schedule: [String]) {
+        let blocks = dayBlocks(schedule)
+        guard blocks.count >= 2 else { return }
+        let allNames = pins.map { normalize($0.name) }
+        for index in pins.indices {
+            var days = Set<Int>()
+            for block in blocks
+            where firstIndex(of: pins[index].name, in: block.text, otherNames: allNames) != nil {
+                days.insert(block.day)
+            }
+            pins[index].days = days
+        }
+    }
+
+    /// 切り替えに出す日。ピンが1本でもある日だけを昇順で返し、2日未満なら空
+    /// （切り替える意味が無い）。
+    static func selectableDays(_ pins: [PlanPin]) -> [Int] {
+        let days = Set(pins.flatMap { $0.days }).sorted()
+        return days.count >= 2 ? days : []
     }
 
     /// 名前と座標を突き合わせる（座標が取れなかった名前は地図に出さない）。

@@ -79,7 +79,7 @@ Plenty of apps help you book. TabiMate cares about the **before** and the **afte
 | 💬 **Plan by conversation** | Destination, days and budget are read from natural chat; missing pieces are asked one at a time. Then a team of AI agents (LangGraph) builds the plan together. |
 | 🌤️ **Weather-aware** | Reads the forecast for your dates — more indoor spots on rainy days, warmer picks when it's cold, and shops likely closed that weekday are skipped. |
 | 🍽️ **Real places only** | Candidates are verified against Google Places, so plausible-sounding but invented shops get dropped. |
-| 🗾 **Watercolor map** | Sights / food / stays as color-coded pins, connected **in visiting order**. Tap a pin for navigation. |
+| 🗾 **Watercolor map** | Sights / food / stays as color-coded pins, connected **in visiting order**. Multi-day trips can be viewed **one day at a time**. Tap a pin for navigation. |
 | 🌏 **Overseas too** | Say "Paris, 3 nights" and the plan comes with flights, local time and yen-converted costs; place names carry their local spelling so the map can find them. |
 | 🎒 **Packing list** | Suggested from your destination and the weather. Check an item and a clover blooms. |
 | 🍀 **Countdown** | "12 days to go." A little thrill every time you open the shelf. |

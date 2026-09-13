@@ -10,6 +10,8 @@ struct PlanMapCard: View {
     @State private var state: LoadState = .loading
     @State private var camera: MapCameraPosition = .automatic
     @State private var selected: PlanPin?
+    /// 絞り込んでいる日（nil なら「すべて」）。複数日のプランだけ切り替えが出る
+    @State private var selectedDay: Int?
 
     enum LoadState { case loading, ready, empty, failed(String) }
 
@@ -32,6 +34,7 @@ struct PlanMapCard: View {
                         .foregroundStyle(Theme.Palette.textMuted)
                         .padding(16)
                 case .ready:
+                    if !days.isEmpty { dayPicker }
                     map
                     legend
                 }
@@ -49,16 +52,56 @@ struct PlanMapCard: View {
             .padding(.bottom, 11)
     }
 
+    /// 切り替えに出す日（ピンのある日だけ・2日以上あるときだけ）。
+    private var days: [Int] { PlanItinerary.selectableDays(pins) }
+
+    /// いま地図に出すピン。日で絞っていればその日のものだけ。番号は通しのまま
+    /// （しおりの番号と一致させておく）。
+    private var visiblePins: [PlanPin] {
+        guard let day = selectedDay else { return pins }
+        return pins.filter { $0.days.contains(day) }
+    }
+
+    private var dayPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                dayChip("すべて", day: nil)
+                ForEach(days, id: \.self) { day in
+                    dayChip("\(day)日目", day: day)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+        }
+    }
+
+    private func dayChip(_ label: String, day: Int?) -> some View {
+        let on = selectedDay == day
+        return Button {
+            selectedDay = day
+        } label: {
+            Text(label)
+                .font(Theme.Font_.rounded(13, weight: .semibold))
+                .foregroundStyle(on ? Color.white : Theme.Palette.textMain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(on ? Theme.Palette.primary : Theme.Palette.surface, in: Capsule())
+                .overlay(Capsule().stroke(on ? Theme.Palette.primary : Theme.Palette.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     private var map: some View {
         Map(position: $camera, selection: $selected) {
-            // 番号どおりに全ピンをつなぐ線（順番＝線の並び）
-            if pins.count >= 2 {
-                MapPolyline(coordinates: pins.map(\.coordinate))
+            // 番号どおりにピンをつなぐ線（順番＝線の並び）。日で絞ればその日の分だけ
+            if visiblePins.count >= 2 {
+                MapPolyline(coordinates: visiblePins.map(\.coordinate))
                     .stroke(Theme.Palette.primary.opacity(0.65),
                             style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round,
                                                dash: [7, 6]))
             }
-            ForEach(pins) { pin in
+            ForEach(visiblePins) { pin in
                 Annotation(pin.name, coordinate: pin.coordinate) {
                     NumberedPin(pin: pin)
                 }
@@ -68,6 +111,11 @@ struct PlanMapCard: View {
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .frame(height: 280)
+        .onChange(of: selectedDay) {
+            // 日を切り替えたら、その日のピンが収まる範囲に寄せ直す
+            selected = nil
+            camera = .region(region(for: visiblePins))
+        }
         .overlay(alignment: .bottom) {
             if let selected {
                 Text("\(selected.order). \(selected.name)")

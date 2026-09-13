@@ -174,13 +174,15 @@
       + `<a href="${url}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
   }
 
-  // 1カテゴリぶんのピンを地図に置く
+  // 1カテゴリぶんのピンを地図に置く。置いたマーカーを点と組にして返す
+  // （日ごとの表示切り替えで出し入れするのに使う）
   function addMarkers(map, points, cat, labelFor) {
-    points.forEach((p, i) => {
+    return points.map((p, i) => {
       const label = labelFor ? labelFor(p) : (cat.glyph || (i + 1));
       const icon = makeIcon(label, cat);
       const m = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml(p));
       m.on('popupopen', (e) => loadThumb(e.popup, p.name));
+      return { m, p };
     });
   }
 
@@ -253,6 +255,70 @@
     const orderOf = new Map();
     ordered.forEach((p, idx) => orderOf.set(p, idx + 1));
     return { orderOf, route: ordered };
+  }
+
+  // 「N日目」の見出し行か。エージェント側（agents.py の _days_in）と同じ判定。
+  // 全角数字や「【1日目】」「1日目：熱海へ」も見出しとして扱う
+  const DAY_HEADER_RE = /^[【\[]?\s*(\d+)\s*日目/;
+  function dayNumber(line) {
+    const m = DAY_HEADER_RE.exec(String(line || '').normalize('NFKC').trim());
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  // スケジュールを「N日目」の見出しで日ごとのブロックに分ける。
+  // 見出し行そのものもブロックに含める（「1日目：熱海へ」のように地名が入ることがある）。
+  // 返り値: [{ day, text }]（text は照合用に正規化済み）。見出しが無ければ []
+  function splitDays(schedule) {
+    const blocks = [];
+    (Array.isArray(schedule) ? schedule : []).forEach((line) => {
+      const d = dayNumber(line);
+      if (d !== null) { blocks.push({ day: d, lines: [line] }); return; }
+      if (blocks.length) blocks[blocks.length - 1].lines.push(line);
+    });
+    return blocks.map(b => ({ day: b.day, text: normText(b.lines.join('\n')) }));
+  }
+
+  // 各ピンが登場する日の集合を求める。
+  // 宿は初日にチェックインして翌朝に出るので、複数の日に属する（だから集合）。
+  // どの日にも見つからないピンは空集合（「すべて」のときだけ出る）。
+  // 返り値: { days: ピンが1本でもある日（昇順）, daysOf: Map(点 → Set(日)) }。
+  // ピンのある日が2つ未満なら null（切り替える意味が無い）
+  function daysByItinerary(points, schedule) {
+    const blocks = splitDays(schedule);
+    if (!points.length) return null;
+    const allNames = points.map(p => normText(p.name));
+    const daysOf = new Map();
+    points.forEach((p) => {
+      const set = new Set();
+      blocks.forEach((b) => { if (findInSchedule(b.text, p.name, allNames) >= 0) set.add(b.day); });
+      daysOf.set(p, set);
+    });
+    const days = [...new Set(blocks.map(b => b.day))].sort((a, b) => a - b)
+      .filter(d => points.some(p => daysOf.get(p).has(d)));
+    return days.length >= 2 ? { days, daysOf } : null;
+  }
+  window.planMapDays = daysByItinerary;  // 検査用（tests/test_static_js.py）
+
+  // 日の切り替え（左上・ズームの下）。「すべて」と、ピンのある日だけを並べる
+  function addDayControl(map, dayInfo, onSelect) {
+    const ctl = L.control({ position: 'topleft' });
+    ctl.onAdd = function () {
+      const div = L.DomUtil.create('div', 'plan-map-days');
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      const chips = [{ day: '', label: 'すべて' }].concat(dayInfo.days.map(d => ({ day: String(d), label: `${d}日目` })));
+      div.innerHTML = chips.map((c, i) =>
+        `<button type="button" class="day-chip${i === 0 ? ' on' : ''}" data-day="${c.day}" aria-pressed="${i === 0}">${c.label}</button>`
+      ).join('');
+      div.querySelectorAll('.day-chip').forEach(b => b.onclick = () => {
+        div.querySelectorAll('.day-chip').forEach(x => { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+        b.classList.add('on');
+        b.setAttribute('aria-pressed', 'true');
+        onSelect(b.dataset.day === '' ? null : parseInt(b.dataset.day, 10));
+      });
+      return div;
+    };
+    ctl.addTo(map);
   }
 
   // 凡例。実際に地図にあるカテゴリだけ載せる
@@ -517,19 +583,47 @@
 
     // スケジュールに登場する順（＝移動する順番）で、観光・グルメ・宿を
     // 横断した通し番号を振る。色はカテゴリのまま、番号だけ移動順。
-    const seq = orderByItinerary([...spotPoints, ...restPoints, ...accPoints], plan.schedule);
+    const autoPoints = [...spotPoints, ...restPoints, ...accPoints];
+    const seq = orderByItinerary(autoPoints, plan.schedule);
 
     // 点線も移動順につなぐ（スケジュールと照合できないときは従来どおり観光の並び順）。
-    const routePts = seq ? seq.route : spotPoints;
-    if (routePts.length > 1) {
-      L.polyline(routePts.map(p => [p.lat, p.lng]),
-        { color: '#7ab870', weight: 2.5, opacity: 0.7, dashArray: '6,4' }).addTo(map);
+    // 日で絞ったときに引き直すので、関数にしてある
+    const routeAll = seq ? seq.route : spotPoints;
+    let routeLine = null;
+    function drawRoute(pts) {
+      if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+      if (pts.length > 1) {
+        routeLine = L.polyline(pts.map(p => [p.lat, p.lng]),
+          { color: '#7ab870', weight: 2.5, opacity: 0.7, dashArray: '6,4' }).addTo(map);
+      }
     }
+    drawRoute(routeAll);
 
     const labelFor = seq ? ((p) => seq.orderOf.get(p)) : null;
-    addMarkers(map, spotPoints, CATEGORIES.spot, labelFor);
-    addMarkers(map, restPoints, CATEGORIES.restaurant, labelFor);
-    addMarkers(map, accPoints, CATEGORIES.accommodation, labelFor);
+    const autoMarkers = [
+      ...addMarkers(map, spotPoints, CATEGORIES.spot, labelFor),
+      ...addMarkers(map, restPoints, CATEGORIES.restaurant, labelFor),
+      ...addMarkers(map, accPoints, CATEGORIES.accommodation, labelFor),
+    ];
+
+    // 複数日のプランは「N日目」ごとにピンと線を絞れるようにする。
+    // 番号は通しのまま（しおりの番号と地図の番号を一致させておく）。
+    // 自分で置いたピンは日を持たないので、どの日でも出しておく
+    const dayInfo = daysByItinerary(autoPoints, plan.schedule);
+    if (dayInfo) {
+      addDayControl(map, dayInfo, (day) => {
+        const show = (p) => day === null || dayInfo.daysOf.get(p).has(day);
+        autoMarkers.forEach(({ m, p }) => {
+          if (show(p)) { if (!map.hasLayer(m)) m.addTo(map); }
+          else if (map.hasLayer(m)) map.removeLayer(m);
+        });
+        drawRoute(routeAll.filter(show));
+        const visible = autoPoints.filter(show);
+        if (visible.length) {
+          map.fitBounds(L.latLngBounds(visible.map(p => [p.lat, p.lng])).pad(0.2), { maxZoom: 15 });
+        }
+      });
+    }
 
     // カスタムピン：自分のプランは編集UI付き、それ以外（共有閲覧）は表示のみ
     const customMarkers = [];

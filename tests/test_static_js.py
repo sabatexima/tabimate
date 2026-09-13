@@ -68,3 +68,67 @@ def test_inline_scripts_do_not_shadow_home_js_names():
         f"home.js と同じ名前をテンプレート側で宣言している: {sorted(set(clashes))}。"
         "スクリプト全体が動かなくなるので、名前を変えるか home.js へ移すこと"
     )
+
+
+# ----------------------------------------------------------------------
+# plan-map.js: 複数日のプランで、ピンがどの日に出てくるか
+# ----------------------------------------------------------------------
+PLAN_MAP_JS = ROOT / "src" / "static" / "js" / "plan-map.js"
+
+
+def _run_plan_map_days(points: list[dict], schedule: list[str]) -> dict | None:
+    """plan-map.js を node で読み込み、daysByItinerary の答えを JSON で受け取る。
+
+    ファイルは読み込み時に document と L（Leaflet）を触るので、そこだけ空の
+    代わりを置く。地図の描画までは動かさない（それは実機の仕事）。
+    """
+    import json
+    import subprocess
+
+    harness = """
+      const fs = require('fs');
+      global.window = global;
+      global.document = { querySelector: () => null };
+      global.L = {};
+      global.localStorage = { getItem: () => null, setItem: () => {} };
+      global.sessionStorage = global.localStorage;
+      require('vm').runInThisContext(fs.readFileSync(process.argv[1], 'utf8'));
+      const input = JSON.parse(process.argv[2]);
+      const r = window.planMapDays(input.points, input.schedule);
+      process.stdout.write(JSON.stringify(r === null ? null : {
+        days: r.days,
+        daysOf: input.points.map(p => [...r.daysOf.get(p)].sort()),
+      }));
+    """
+    out = subprocess.run(
+        ["node", "-e", harness, str(PLAN_MAP_JS),
+         json.dumps({"points": points, "schedule": schedule}, ensure_ascii=False)],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def test_plan_map_assigns_pins_to_days():
+    """宿は両日に、観光はその日にだけ、見つからないものはどの日にも属さないこと。"""
+    points = [{"name": "熱海城"}, {"name": "ホテル熱海"}, {"name": "起雲閣"}, {"name": "謎の場所"}]
+    r = _run_plan_map_days(points, [
+        "1日目", "10:00 熱海城", "17:00 ホテル熱海にチェックイン",
+        "【2日目】", "09:00 ホテル熱海を出発", "10:00 起雲閣",
+    ])
+    assert r["days"] == [1, 2]
+    assert r["daysOf"] == [[1], [1, 2], [2], []]
+
+
+def test_plan_map_has_no_day_filter_for_single_day_plans():
+    """見出しが無い、またはピンのある日が1日だけなら、切り替えは出さない（null）。"""
+    assert _run_plan_map_days([{"name": "熱海城"}], ["09:00 熱海城", "12:00 昼食"]) is None
+    assert _run_plan_map_days([{"name": "熱海城"}],
+                              ["1日目", "10:00 熱海城", "2日目", "終日フリー"]) is None
+    assert _run_plan_map_days([], ["1日目", "2日目"]) is None
+
+
+def test_plan_map_day_headers_match_the_agent_rule():
+    """全角数字・角括弧・「N日目：地名」も見出しとして扱うこと（agents.py の _days_in と同じ）。"""
+    points = [{"name": "熱海城"}, {"name": "起雲閣"}]
+    r = _run_plan_map_days(points, ["１日目：熱海へ", "10:00 熱海城", "[2日目] 帰路", "10:00 起雲閣"])
+    assert r["days"] == [1, 2] and r["daysOf"] == [[1], [2]]

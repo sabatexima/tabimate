@@ -117,6 +117,48 @@ final class PlanItineraryTests: XCTestCase {
         let coordinates = Set(built.map { "\($0.lat),\($0.lng)" })
         XCTAssertEqual(coordinates.count, 3, "同じ位置のピンが重なったまま")
     }
+
+    // MARK: - 日ごと
+
+    func testRecognisesDayHeaders() {
+        XCTAssertEqual(PlanItinerary.dayNumber(of: "1日目"), 1)
+        XCTAssertEqual(PlanItinerary.dayNumber(of: "【2日目】"), 2)
+        XCTAssertEqual(PlanItinerary.dayNumber(of: "3日目：熱海へ"), 3)
+        XCTAssertEqual(PlanItinerary.dayNumber(of: "１日目"), 1)          // 全角
+        XCTAssertEqual(PlanItinerary.dayNumber(of: "  [10日目] 帰路"), 10)
+        XCTAssertNil(PlanItinerary.dayNumber(of: "10:00 出発"))
+        // 判定は先頭一致（agents.py の _days_in・plan-map.js と同じ）。行頭が「N日目」なら見出し
+        XCTAssertEqual(PlanItinerary.dayNumber(of: "2日目の予定は未定"), 2)
+        XCTAssertNil(PlanItinerary.dayNumber(of: ""))
+    }
+
+    func testAssignsPinsToTheDaysTheyAppearIn() {
+        var built = [PlanPin(name: "熱海城", category: .spot, lat: 35, lng: 139),
+                     PlanPin(name: "ホテル熱海", category: .accommodation, lat: 35, lng: 139),
+                     PlanPin(name: "起雲閣", category: .spot, lat: 35, lng: 139),
+                     PlanPin(name: "謎の場所", category: .spot, lat: 35, lng: 139)]
+        PlanItinerary.assignDays(&built, schedule: [
+            "1日目", "10:00 熱海城", "17:00 ホテル熱海にチェックイン",
+            "2日目", "09:00 ホテル熱海を出発", "10:00 起雲閣",
+        ])
+        XCTAssertEqual(built[0].days, [1])
+        XCTAssertEqual(built[1].days, [1, 2])      // 宿は両日に出る
+        XCTAssertEqual(built[2].days, [2])
+        XCTAssertEqual(built[3].days, [])          // 見つからなければ空
+        XCTAssertEqual(PlanItinerary.selectableDays(built), [1, 2])
+    }
+
+    func testSingleDayPlansHaveNoDayFilter() {
+        var built = [PlanPin(name: "熱海城", category: .spot, lat: 35, lng: 139)]
+        PlanItinerary.assignDays(&built, schedule: ["09:00 熱海城", "12:00 昼食"])
+        XCTAssertEqual(built[0].days, [])
+        XCTAssertEqual(PlanItinerary.selectableDays(built), [])
+
+        // 見出しはあっても、ピンのある日が1日だけなら切り替えは出さない
+        var two = [PlanPin(name: "熱海城", category: .spot, lat: 35, lng: 139)]
+        PlanItinerary.assignDays(&two, schedule: ["1日目", "10:00 熱海城", "2日目", "終日フリー"])
+        XCTAssertEqual(PlanItinerary.selectableDays(two), [])
+    }
 }
 
 /// 年間ダイジェストの月まとめ。

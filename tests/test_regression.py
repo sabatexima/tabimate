@@ -866,7 +866,8 @@ def _capture_agent(monkeypatch):
     monkeypatch.setattr(A, "invoke_with_retry", lambda llm, prompt: (
         seen.update(prompt=prompt),
         type("R", (), {"restaurants": ["x", "y", "z", "w"],
-                       "accommodation": ["h1", "h2", "h3"]})())[1])
+                       "accommodation": ["h1", "h2", "h3"],
+                       "candidates": ["s1", "s2", "s3", "s4", "s5"]})())[1])
     monkeypatch.setattr(A, "llm", type("L", (), {"with_structured_output": lambda s, m: None})())
     monkeypatch.setattr(A, "build_search_context",
                         lambda qs: (seen.update(queries=qs), "")[1])
@@ -1054,3 +1055,82 @@ def test_dest_center_falls_back_when_nominatim_misses(monkeypatch):
     monkeypatch.setattr(geocoding, "geocode_one",
                         lambda q, **kw: pytest.fail("中心が取れているのにフォールバックした"))
     assert weather.dest_center("パリ")["country_code"] == "fr"
+
+
+# ----------------------------------------------------------------------
+# 同じ指摘が続いたとき、候補プールごと入れ替えられること
+# ----------------------------------------------------------------------
+def test_repeated_rejection_falls_back_to_refetching_candidates():
+    """2回続けて同じ指摘なら、選び直しではなく候補集めまで戻ること。
+
+    以前は fix_sightseeing がいつも選定ノードに戻っており、観光の候補プールは
+    グラフの外で一度作られたきりだった。プールの中に正解が無い場合、
+    同じ候補から選び直すだけで差し戻し上限まで回りきっていた。
+    """
+    from chat.agents import route_after_balancer, _REFRESH_POOL
+
+    def route(status, prev=""):
+        return route_after_balancer({"status": status, "prev_status": prev, "retry_count": 1})
+
+    # 1回目は安い選び直し（検索もLLMの候補集めも走らせない）
+    assert route("fix_sightseeing") == "sightseeing"
+    assert route("fix_accommodation") == "accommodation"
+    assert route("fix_time") == "timekeeper"
+    # 2回目は候補集めまで戻る
+    assert route("fix_sightseeing", "fix_sightseeing") == "sightseeing_candidates"
+    assert route("fix_accommodation", "fix_accommodation") == "accommodation_candidates"
+    assert route("fix_budget", "fix_budget") == "accommodation_candidates"
+    assert route("fix_time", "fix_time") == "sightseeing_candidates"
+    assert route("fix_gourmet", "fix_gourmet") == "gourmet_candidates"
+    # 差し戻し種別を増やしたら戻り先も決めること（取りこぼしを防ぐ）
+    assert set(_REFRESH_POOL) == {"fix_sightseeing", "fix_gourmet", "fix_accommodation",
+                                  "fix_budget", "fix_time"}
+
+
+def test_every_refresh_target_is_wired_back_into_the_graph():
+    """候補集めに戻ったあと、選定を通って審査まで戻ってこられること。
+
+    ノードとして登録され、分岐の行き先にも入っていて、かつ出口の辺があること。
+    どれか1つでも欠けると、戻った先で行き止まりになる。
+    """
+    from chat.agents import _REFRESH_POOL
+    from chat.graph import workflow
+
+    branch = next(iter(workflow.branches["balancer"].values()))
+    for target in set(_REFRESH_POOL.values()):
+        assert target in workflow.nodes, f"{target} がノードに無い"
+        assert target in (branch.ends or {}), f"{target} が分岐の行き先に無い"
+        assert any(src == target for src, _ in workflow.edges), f"{target} から先へ進む辺が無い"
+    # 観光の候補集めは選定へ戻る（初回は並列先行実行なので START からは繋がない）
+    assert ("sightseeing_candidates", "sightseeing") in workflow.edges
+    assert ("__start__", "sightseeing_candidates") not in workflow.edges
+
+
+def test_candidate_agents_get_the_review_feedback(monkeypatch):
+    """候補を集め直すとき、審査の指摘と前回の顔ぶれを渡すこと。
+
+    候補エージェントは temperature=0。指摘を渡さなければ、検索とLLMを使って
+    まったく同じ候補を作り直すだけになる（実際そうなっていた）。
+    """
+    A, seen = _capture_agent(monkeypatch)
+    base = dict(_AGENT_BASE, destination="金沢", spots=["兼六園"],
+                restaurants=["いきいき亭"], accommodation=["町家宿"])
+    for agent, rejected in ((A.sightseeing_candidates, "兼六園"),
+                            (A.accommodation_candidates, "町家宿"),
+                            (A.gourmet_candidates, "いきいき亭")):
+        agent(dict(base, status="fix_time", feedback="移動が長すぎます"))
+        assert "移動が長すぎます" in seen["prompt"], agent.__name__
+        assert rejected in seen["prompt"], agent.__name__
+        # 初回生成では付けない（プロンプトを無駄に長くしない）
+        agent(dict(base, status="approved", feedback=""))
+        assert "前回の審査での指摘" not in seen["prompt"], agent.__name__
+
+
+def test_refresh_hint_is_quiet_outside_a_rejection():
+    """差し戻し以外では、ヒントを一切足さないこと。"""
+    from chat.agents import _refresh_hint
+    assert _refresh_hint({"feedback": "", "status": "fix_time"}, ["a"], "観光") == ""
+    assert _refresh_hint({"feedback": "だめ", "status": "approved"}, ["a"], "観光") == ""
+    assert _refresh_hint({}, ["a"], "観光") == ""
+    hint = _refresh_hint({"feedback": "だめ", "status": "fix_sightseeing"}, [], "観光")
+    assert "だめ" in hint and "前回選ばれて" not in hint   # 顔ぶれが無ければその節は出さない

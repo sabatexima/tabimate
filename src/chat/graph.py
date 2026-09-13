@@ -42,6 +42,9 @@ log = get_logger("graph")
 # （これらは差し戻しの戻り先ではないため、グラフから外しても再生成ループに影響しない）。
 workflow = StateGraph(TravelPlanState)
 
+# 観光の候補集め。初回は generate_travel_plan が並列に先行実行するのでここは通らない。
+# 同じ指摘が2回続いたときだけ、バランサーからここへ戻して顔ぶれを入れ替える
+workflow.add_node("sightseeing_candidates", sightseeing_candidates)
 workflow.add_node("sightseeing", sightseeing_expert)
 workflow.add_node("accommodation_candidates", accommodation_candidates)
 workflow.add_node("accommodation", accommodation_agent)
@@ -52,6 +55,7 @@ workflow.add_node("cost_manager", cost_manager)
 workflow.add_node("balancer", balancer)
 
 workflow.add_edge(START, "sightseeing")
+workflow.add_edge("sightseeing_candidates", "sightseeing")
 workflow.add_edge("sightseeing", "accommodation_candidates")
 workflow.add_edge("accommodation_candidates", "accommodation")
 workflow.add_edge("accommodation", "gourmet_candidates")
@@ -70,6 +74,9 @@ workflow.add_conditional_edges(
         "timekeeper": "timekeeper",
         # fix_gourmet の戻り先。飲食店だけ候補の抽出からやり直す
         "gourmet_candidates": "gourmet_candidates",
+        # 同じ指摘が続いたときの戻り先（agents._REFRESH_POOL）
+        "sightseeing_candidates": "sightseeing_candidates",
+        "accommodation_candidates": "accommodation_candidates",
     },
 )
 

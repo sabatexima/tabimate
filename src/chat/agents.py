@@ -76,6 +76,27 @@ def _skip(state, area: str) -> bool:
     return run is not None and area not in run
 
 
+def _refresh_hint(state, rejected: list, what: str) -> str:
+    """候補を集め直すときにだけ添える、審査の指摘と「前回の顔ぶれ」。
+
+    候補エージェントは temperature=0 なので、同じプロンプトなら同じ候補が返る。
+    差し戻しで呼び直しても指摘を渡さなければ、検索とLLMを使ってまったく同じ
+    顔ぶれを作り直すだけで、1円も1秒も無駄になる（実際そうなっていた）。
+    指摘と、前回選ばれて弾かれた顔ぶれを渡して、別の候補が出るようにする。
+
+    差し戻し以外（初回生成・部分編集）では空文字を返し、プロンプトを変えない。
+    """
+    if not state.get("feedback") or not str(state.get("status", "")).startswith("fix"):
+        return ""
+    hint = ("\n【前回の審査での指摘（必ず反映すること）】\n" + str(state["feedback"])
+            + f"\n上の指摘を踏まえて、{what}の顔ぶれを見直すこと。")
+    if rejected:
+        hint += ("\n【前回選ばれて指摘を受けた顔ぶれ】: " + "、".join(rejected)
+                 + "\n指摘に当てはまるものは候補から必ず外し、その分を新しい候補で補うこと。"
+                 "指摘に関係のないものは残してよい。")
+    return hint
+
+
 def _pref(state) -> str:
     """過去の★評価から得たユーザーの好みを、参考としてプロンプトに添える。"""
     p = state.get("user_preferences")
@@ -265,6 +286,7 @@ def sightseeing_candidates(state: TravelPlanState):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して候補を選ぶこと。"
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行けるスポットだけを選び、車でしか行けない場所は除外すること。"
+    prompt += _refresh_hint(state, state.get("spots") or [], "観光スポット")
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(SightseeingCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -367,6 +389,7 @@ def accommodation_candidates(state: TravelPlanState):
 """
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。駅・バス停から公共交通機関＋徒歩で無理なく行ける宿だけを選び、車が前提の立地（送迎が無い山中・郊外など）は除外すること。"
+    prompt += _refresh_hint(state, state.get("accommodation") or [], "宿泊施設")
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(AccommodationCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -507,6 +530,7 @@ def gourmet_candidates(state: TravelPlanState):
 """
     if state.get("no_car"):
         prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行ける店だけを選び、車でしか行けない店は除外すること。"
+    prompt += _refresh_hint(state, state.get("restaurants") or [], "飲食店")
     prompt += _directive(state)
     structured_llm = llm.with_structured_output(GourmetCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
@@ -1002,6 +1026,18 @@ def balancer(state: TravelPlanState):
     }
 
 
+# 同じ指摘が2回続いたときに戻る先。選び直しでは直らないので、候補集めからやり直す。
+# fix_budget は宿が予算の主因なので宿の候補から、fix_time は行程が入りきらない
+# ＝観光の顔ぶれが重いということなので観光の候補から集め直す。
+_REFRESH_POOL = {
+    "fix_sightseeing":   "sightseeing_candidates",
+    "fix_gourmet":       "gourmet_candidates",
+    "fix_accommodation": "accommodation_candidates",
+    "fix_budget":        "accommodation_candidates",
+    "fix_time":          "sightseeing_candidates",
+}
+
+
 def route_after_balancer(state: TravelPlanState):
     """バランサーの審査結果に応じて、次に実行するノード名を返す分岐関数。
 
@@ -1026,8 +1062,12 @@ def route_after_balancer(state: TravelPlanState):
         log.warning("⚠️ 差し戻し上限（5回）に達したため強制終了します。最終ステータス: %s", status)
         return "end"
     if status == prev_status and status in fix_statuses:
-        log.warning("⚠️ 同じ問題（%s）が繰り返されたため、観光スポット選定からやり直します。", status)
-        return "sightseeing"
+        # 2回続けて同じ指摘ということは、候補プールの中に正解が無い。
+        # 選び直し（安い）では抜けられないので、候補集め（検索＋LLM。高い）まで戻して
+        # 顔ぶれそのものを入れ替える。1回目は選び直しで済ませ、2回目から使う。
+        pool = _REFRESH_POOL[status]
+        log.warning("⚠️ 同じ問題（%s）が繰り返されたため、%s から候補を集め直します。", status, pool)
+        return pool
 
     return {
         "fix_sightseeing": "sightseeing",

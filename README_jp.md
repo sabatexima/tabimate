@@ -390,7 +390,7 @@ START
 ### テストとCI
 
 ```bash
-pytest tests/ -k "not smoke"    # 185件のオフラインテスト（APIキーもDBも不要）
+pytest tests/ -k "not smoke"    # 238件のオフラインテスト（APIキーもDBも不要）
 scripts/check_home_js.sh        # チャット画面を本物のブラウザで動かす
 scripts/check_ios_logic.sh      # iOSのロジックを Linux の Swift で型検査
 python tests/test_smoke.py      # プラン生成の通し確認（APIキーが要ります）
@@ -404,6 +404,7 @@ python tests/test_smoke.py      # プラン生成の通し確認（APIキーが�
 | `test_generation_status.py`（18） | リロード後の復元。pending / done / gone の判断と、ページが載せる情報 |
 | `test_app_api.py`（16） | ネイティブアプリ向けAPIの認可とJSONの形 |
 | `test_send_message_survives_disconnect.py`（7） | ブラウザが去っても生成が捨てられないこと |
+| `test_pipeline.py`（53） | AIの返事だけ偽物にして、プラン生成を丸ごと通す。旅の形（日帰り〜5泊・国内/海外・運転の可否）を総当たりして、プロンプトに埋め残しや空欄が無いか、条件どおりの指示が出入りするか、差し戻しで指摘が候補集めに届くかを見る |
 | `test_static_js.py`（6） | JSとテンプレートが噛み合っていること（名前・要素のid）と、地図が各ピンをどの日に割り当てるか |
 | `tests/js/home_chat.html`（11場面） | チャット画面をヘッドレスChromiumで実際に動かす |
 

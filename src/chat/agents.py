@@ -563,7 +563,7 @@ def gourmet_hunter(state: TravelPlanState):
 参加人数: {state['num_people']}人
 宿泊・食事・観光の予算: {state['remaining_budget']:,}円/人
 食費の目安上限: {int(state['remaining_budget'] * FOOD_BUDGET_RATIO):,}円/人
-選定済みの宿泊施設: {', '.join(accommodation)}
+{f"選定済みの宿泊施設: {', '.join(accommodation)}" if accommodation else "宿泊施設: なし（宿泊しない行程）"}
 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
 
 【候補一覧】

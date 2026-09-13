@@ -19,7 +19,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from chat.llm import invoke_with_retry
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("services.trip_interpreter")
 

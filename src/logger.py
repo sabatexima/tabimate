@@ -2,7 +2,7 @@ import logging
 import sys
 from pathlib import Path
 
-LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
+LOG_DIR = Path(__file__).resolve().parent / "logs"  # src/logs（chat/ にあった頃と同じ場所）
 LOG_DIR.mkdir(exist_ok=True)
 
 logger = logging.getLogger("travel_planner")

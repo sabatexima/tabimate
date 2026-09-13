@@ -6,7 +6,7 @@ Pillow を使用。EXIF が無い／壊れている場合は None を返し、
 import io
 from datetime import datetime
 
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("services.exif")
 

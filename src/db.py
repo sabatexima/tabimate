@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
-from chat.logger import get_logger
+from logger import get_logger
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 

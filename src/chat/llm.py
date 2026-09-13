@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_tavily import TavilySearch
-from chat.logger import get_logger
+from logger import get_logger
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'))
 

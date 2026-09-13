@@ -128,7 +128,6 @@
 
   /* ===== 詳細ページ（1冊をひらいた状態）===== */
   .detail-wrap { max-width: 860px; margin: 0 auto; }
-  .detail-wrap .back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }
   #plan-root { margin-top: 10px; }
 
   .plan-card {

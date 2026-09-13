@@ -7,7 +7,7 @@ import json
 
 from sqlalchemy import text
 
-from chat.logger import get_logger
+from logger import get_logger
 from db import get_engine
 
 logger = get_logger("db_reflection")

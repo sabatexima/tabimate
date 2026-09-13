@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from langgraph.graph import StateGraph, START, END
 from chat.models import TravelPlanState
 from chat.llm import estimate_cost, USD_TO_JPY
-from chat.logger import get_logger
+from logger import get_logger
 from chat.agents import (
     transport_agent, sightseeing_candidates, sightseeing_expert,
     gourmet_candidates, gourmet_hunter,
@@ -96,7 +96,7 @@ def generate_travel_plan(inputs: dict):
     def _compute_weather():
         # 旅行日の天気予報を取得して屋内/屋外調整のヒントにする（取得不可なら空）。
         try:
-            import weather as wx
+            from services import weather as wx
             return wx.generation_hint(
                 inputs.get("destination"), inputs.get("travel_date"), inputs.get("duration"))
         except Exception:

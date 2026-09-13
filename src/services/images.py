@@ -9,7 +9,7 @@ normalize は元データを、thumbnail は None を返して呼び出し側で
 import io
 import os
 
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("services.images")
 

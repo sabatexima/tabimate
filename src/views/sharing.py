@@ -20,7 +20,7 @@ from flask import (Blueprint, Response, abort, jsonify, render_template,
 import db
 import db_reflection as repo
 import db_sharing as sharing
-from chat.logger import get_logger
+from logger import get_logger
 from services import exif, features, images, storage, trip_interpreter
 from views.auth import login_required
 from views.reflection import _collect_images_for_stickers
@@ -275,10 +275,10 @@ def _render_shared(resource_type: str, resource_id: int, can_edit: bool, share_t
         if not plan:
             abort(404)
         # 地図座標が未取得なら今ここで取得してキャッシュ（共有閲覧でも地図が出るように）
-        from geocoding import ensure_plan_coords
+        from services.geocoding import ensure_plan_coords
         ensure_plan_coords(plan)
         # 旅行日の天気予報も共有閲覧に表示する（本人プランと体験を揃える）
-        import weather
+        from services import weather
         from chat.formatter import booking_url
         weather_days = weather.plan_forecast(plan)
         return render_template("shared/plan.html", plan=plan,

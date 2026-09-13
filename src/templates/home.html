@@ -6,6 +6,7 @@
 {% if session.get('user_id') %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/plan-card.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% else %}
 {# ログイン前はチャットのCSSを読まない。home.css の h1 の飾り（ちゃむの顔・波線）が

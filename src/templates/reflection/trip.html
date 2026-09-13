@@ -3,6 +3,7 @@
 {% block title %}{{ trip.title }} — 旅の振り返り{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/trip-detail.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reflection-trip.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
 {% endblock %}

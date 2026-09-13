@@ -3,6 +3,7 @@
 {% block title %}{{ trip.title }} — 共有された旅{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/trip-detail.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/shared-trip.css') }}">
 {% endblock %}
 

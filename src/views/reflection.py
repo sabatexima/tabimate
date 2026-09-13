@@ -14,7 +14,7 @@ from flask import (Blueprint, Response, abort, jsonify, render_template,
                    request, session)
 
 import db_reflection as repo
-from chat.logger import get_logger
+from logger import get_logger
 from services import exif, features, images, storage, trip_interpreter
 from views.auth import login_required
 
@@ -280,7 +280,7 @@ def _trip_detail_data(trip_id: int, trip: dict | None = None,
             lp = get_travel_plan_by_id(linked_plan_id)
             if lp and lp.get("google_user_id") == _uid():
                 # 旧プランで座標未取得でも重ね合わせが出るよう、ここで取得・キャッシュ
-                from geocoding import ensure_plan_coords
+                from services.geocoding import ensure_plan_coords
                 ensure_plan_coords(lp)
                 planned = lp.get("spot_coords") or []
             else:

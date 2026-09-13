@@ -3,6 +3,7 @@
 {% block title %}{{ plan.destination }} の旅行プラン — 共有{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/plan-card.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/shared-plan.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/plan-map.css') }}">
 {% endblock %}

@@ -8,7 +8,7 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from chat.llm import llm, invoke_with_retry
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("packing")
 
@@ -27,7 +27,7 @@ def generate_packing_list(plan: dict) -> list:
     # 天気ヒント（取得できない環境・日付では空文字。持ち物生成は続行する）
     wx = ""
     try:
-        import weather
+        from services import weather
         wx = weather.generation_hint(dest, plan.get("travel_date"), duration) or ""
     except Exception:
         logger.info("持ち物生成: 天気ヒントの取得をスキップ")

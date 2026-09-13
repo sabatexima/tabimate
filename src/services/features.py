@@ -10,7 +10,7 @@ import math
 from collections import Counter
 from datetime import datetime
 
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("services.features")
 

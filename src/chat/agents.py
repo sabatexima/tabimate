@@ -17,10 +17,10 @@ invoke_with_retry でリトライしながら実行する。
 
 import re
 from datetime import date
-from weather import parse_duration
+from services.weather import parse_duration
 from chat.models import TravelPlanState
 from chat.llm import llm, llm_strong, invoke_with_retry, build_search_context
-from chat.logger import get_logger
+from logger import get_logger
 from chat.models import (
     TransportOutput, SightseeingOutput, GourmetOutput,
     TimekeeperOutput, AccommodationOutput, CostOutput, BalancerOutput,
@@ -111,7 +111,7 @@ def _filter_real_places(names: list, destination: str, min_keep: int) -> list:
     検証できない名前（None＝APIエラー等）は落とさない。実在確認できた候補が
     min_keep 未満になる場合は、選択肢を保つため絞り込みを諦めて全件返す。
     """
-    from geocoding import verify_place_exists
+    from services.geocoding import verify_place_exists
     checked = [(n, verify_place_exists(n, destination)) for n in names or []]
     dropped = [n for n, ok in checked if ok is False]
     if not dropped:

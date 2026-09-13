@@ -19,7 +19,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from chat.llm import llm, invoke_with_retry
 from chat.graph import generate_travel_plan
 from chat.formatter import _format_plan, plan_payload
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("chat")
 
@@ -155,7 +155,7 @@ def _normalize_travel_date(travel_date):
     予報ヒントがすべて機能しなくなる。日付が解析できない場合のみ、代表的な
     相対表現を今日基準で換算して「YYYY年M月D日」にする。換算できなければ原文のまま。
     """
-    import weather
+    from services import weather
     from datetime import date, timedelta
     s = (travel_date or "").strip()
     if not s or weather.parse_date(s):
@@ -249,7 +249,7 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 過去日付のガード: 旅行が完全に過去（終了日も過ぎている）なら生成せず日付を確認する。
     # 過去日付は天気もカレンダーも機能せず、意図しない生成になりやすい（「今旅行中」の
     # ケースは終了日が今日以降なので弾かれない）。
-    import weather as _wx
+    from services import weather as _wx
     _start = _wx.parse_date(state.travel_date)
     if _start is not None:
         from datetime import date as _date, timedelta as _td

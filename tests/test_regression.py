@@ -49,7 +49,7 @@ def test_progress_prefix_stripped_single_double_none():
 # ----------------------------------------------------------------------
 def test_normalize_relative_dates():
     from chat.chat import _normalize_travel_date as norm
-    import weather
+    from services import weather
     assert norm("明日") == _fmt(TODAY + timedelta(days=1))
     assert norm("明日から2泊") == _fmt(TODAY + timedelta(days=1))
     assert norm("あさって") == _fmt(TODAY + timedelta(days=2))
@@ -72,7 +72,7 @@ def test_normalize_leaves_absolute_and_vague_dates():
 # 天気: 年なし日付の解析 / 16日クランプ / 目的地フォールバック
 # ----------------------------------------------------------------------
 def test_weather_parse_date():
-    import weather
+    from services import weather
     assert weather.parse_date("2026年7月3日") == date(2026, 7, 3)
     d = weather.parse_date("7/2")
     assert d is not None and (d.month, d.day) == (7, 2)
@@ -81,8 +81,7 @@ def test_weather_parse_date():
 
 
 def test_forecast_clamps_end_within_16_days(monkeypatch):
-    import weather
-
+    from services import weather
     sent = {}
 
     class _Resp:
@@ -103,9 +102,8 @@ def test_forecast_clamps_end_within_16_days(monkeypatch):
 
 
 def test_plan_forecast_geocodes_destination_and_caches(monkeypatch):
-    import weather
-    import geocoding
-
+    from services import weather
+    from services import geocoding
     calls = []
     monkeypatch.setattr(geocoding, "geocode_one",
                         lambda d, **k: (calls.append(d), {"lat": 35.0, "lng": 138.4})[1])
@@ -347,8 +345,8 @@ def test_public_plan_link_renders(monkeypatch):
     """公開リンク（/s/<token>）でプランを開けること。ここが元の不具合。"""
     import app as app_mod
     import db
-    import geocoding
-    import weather
+    from services import geocoding
+    from services import weather
     import views.sharing as S
 
     plan = _sample_plan_state() | {"id": 7, "spot_coords": []}
@@ -377,7 +375,7 @@ def test_ics_advanced(monkeypatch):
     （実際に落ちた）。判断に使う「今日」を7/1に固定して、年をまたがない
     条件で確かめる。
     """
-    import weather
+    from services import weather
     from views.planner import _build_plan_ics
 
     class _July1(date):
@@ -572,7 +570,7 @@ def test_edit_ignores_invalid_people_and_budget(monkeypatch):
 # ----------------------------------------------------------------------
 def test_parse_duration_variants():
     """「N泊M日」以外の表記でも泊数・日数を正しく推定する。"""
-    import weather as wx
+    from services import weather as wx
     assert wx.parse_duration("2泊3日") == (2, 3)
     assert wx.parse_duration("1泊") == (1, 2)
     assert wx.parse_duration("0泊2日") == (0, 2)      # 夜行: 宿なし・2日行程

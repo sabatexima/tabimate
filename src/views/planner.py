@@ -19,7 +19,7 @@ from collections import defaultdict
 from flask import Blueprint, Response, abort, render_template, request, session, stream_with_context
 
 from chat.chat import chat as _ai_chat
-from chat.logger import get_logger
+from logger import get_logger
 from views.auth import login_required
 
 planner = Blueprint("planner", __name__)
@@ -213,7 +213,7 @@ def saved_plans():
 def _add_depart_iso(plan: dict) -> dict:
     """出発カウントダウン用に、自由文字列の travel_date を ISO 日付へ正規化して付与する。
     パースできない/日付未設定なら None（フロントは表示を出さない）。"""
-    from weather import parse_date
+    from services.weather import parse_date
     d = parse_date(plan.get("travel_date"))
     plan["depart_iso"] = d.isoformat() if d else None
     return plan
@@ -735,7 +735,7 @@ def _build_plan_ics(plan: dict) -> str:
 
     # 旅行日の抽出。年なし（7/2等）も含め weather.parse_date に一本化する
     # （独自の正規表現だと年なし日付が「今日」に化けて誤った予定が作られる）。
-    import weather
+    from services import weather
     start = weather.parse_date(plan.get('travel_date')) or date.today()
     # 期間 → 日数（「N泊」→ N+1日、それ以外は1日）
     nm = re.search(r'(\d+)\s*泊', str(plan.get('duration') or ''))
@@ -826,8 +826,7 @@ def export_plan_ics(plan_id):
 def plan_weather(plan_id):
     """保存プランの目的地・旅行日の天気予報を返す（Open-Meteo・APIキー不要・本人のみ）。"""
     from db import get_travel_plan_by_id
-    import weather
-
+    from services import weather
     plan = get_travel_plan_by_id(plan_id)
     if not plan or plan.get('google_user_id') != session.get('user_id'):
         return json.dumps({'status': 'OK', 'days': []}), 200, {'Content-Type': 'application/json'}
@@ -878,7 +877,7 @@ def save_plan_pins(plan_id):
 def plan_print(plan_id):
     """プランを「旅のしおり」として印刷／PDF保存できる専用ページ（本人のみ）。"""
     from db import get_travel_plan_by_id
-    import weather
+    from services import weather
     plan = get_travel_plan_by_id(plan_id)
     if not plan or plan.get('google_user_id') != session.get('user_id'):
         abort(404)
@@ -895,7 +894,7 @@ def plan_geo(plan_id):
     ジオコーディングする（以後はDBキャッシュを返すので即時）。本人のプランのみ。
     """
     from db import get_travel_plan_by_id
-    from geocoding import ensure_plan_coords
+    from services.geocoding import ensure_plan_coords
     empty = {'spot_coords': [], 'restaurant_coords': [], 'accommodation_coords': []}
     plan = get_travel_plan_by_id(plan_id)
     if not plan or plan.get('google_user_id') != session.get('user_id'):
@@ -937,7 +936,7 @@ def geocode():
     生成・編集時に座標を保存する方式に移行したため、新規プランは通常これを使わない。
     返り値はクライアント側の後方互換のため [{"lat","lon"}] 形式にする。
     """
-    from geocoding import geocode_one
+    from services.geocoding import geocode_one
     q = request.args.get('q', '').strip()
     if not q or _geo_rate_limited(session.get('user_id')):
         return json.dumps([]), 200, {'Content-Type': 'application/json'}

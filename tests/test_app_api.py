@@ -72,8 +72,7 @@ def env(monkeypatch):
     monkeypatch.setattr(db, "get_travel_plan_by_id",
                         lambda pid: {"id": pid, "google_user_id": OWNER, "spot_coords": []})
 
-    import geocoding
-
+    from services import geocoding
     def _ensure(plan):
         calls["geocode"] += 1
     monkeypatch.setattr(geocoding, "ensure_plan_coords", _ensure)

@@ -22,7 +22,7 @@ from views.planner import planner
 from views.auth import auth, init_oauth
 from views.reflection import reflection
 from views.sharing import share
-from chat.logger import get_logger
+from logger import get_logger
 
 # 起動時に外部連携の有効/無効を1行で残す（「キーが空で全機能が静かに無効」の調査用。値は出さない）
 _boot_log = get_logger("app")

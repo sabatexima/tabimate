@@ -13,7 +13,7 @@ import time
 from flask import request, session
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("api_auth")
 

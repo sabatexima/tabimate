@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 import requests
 
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("weather")
 
@@ -156,7 +156,7 @@ def _dest_center(destination: str) -> dict | None:
         hit = _DEST_CACHE.get(destination)
         if hit and now - hit[1] < _DEST_CACHE_TTL:
             return hit[0]
-    from geocoding import geocode_one
+    from services.geocoding import geocode_one
     loc = geocode_one(destination)  # {"lat","lng"} もしくは None
     with _dest_lock:
         _DEST_CACHE[destination] = (loc, now)
@@ -191,7 +191,7 @@ def generation_hint(destination: str, travel_date, duration) -> str:
     start = parse_date(travel_date)
     if not start or not destination:
         return ""
-    from geocoding import geocode_one
+    from services.geocoding import geocode_one
     center = geocode_one(destination)
     if not center:
         return ""

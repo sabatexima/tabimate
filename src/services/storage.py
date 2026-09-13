@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 
-from chat.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("services.storage")
 

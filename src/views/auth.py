@@ -11,7 +11,7 @@ import os
 from functools import wraps
 from flask import Blueprint, redirect, url_for, session, request
 from authlib.integrations.flask_client import OAuth
-from chat.logger import get_logger
+from logger import get_logger
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 oauth = OAuth()

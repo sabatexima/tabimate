@@ -1,7 +1,6 @@
 /* 年間ダイジェスト：その年の旅を絵本の1ページにまとめる。
    見出し・ポラロイド・付箋は他ページと同じデザイン言語を使う */
 .digest { max-width: 660px; margin: 0 auto; }
-.back { color: var(--primary-color); text-decoration: none; font-size: 0.9em; }
 
 /* 見出し・キッカー・波線の共通様式は layout.css に集約。ここは固有の余白だけ */
 .page-header { margin: 10px 0 4px; }

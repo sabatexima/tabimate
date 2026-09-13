@@ -1,0 +1,45 @@
+/* プランカードの芯。チャットの返事（home.html）と共有プラン（shared/plan.html）の
+   両方が読む。以前は home.css と shared-plan.css に同じ定義が写してあり、
+   チャット側だけ罫線が細い実線で、他のカードの点線と揃っていなかった。
+   表紙ヘッダー・折りたたみ・罫線はここ1か所で決める。
+   保存プラン詳細（saved-plans.css）は本棚の表紙つきで別物なので含めない。 */
+
+.plan-card {
+  background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+  overflow: hidden; box-shadow: var(--shadow-card);
+}
+/* クリーム紙の表紙ヘッダー（保存プラン詳細と同じ絵本トーン）*/
+.plan-summary-block {
+  background: linear-gradient(135deg, #fdf8ea 0%, #f4f0de 100%);
+  color: var(--text-main); padding: 14px 16px;
+  border-bottom: 2px dashed #f0e5c8;
+}
+.plan-summary-block .plan-title {
+  font-size: 1.1em; font-weight: 800; margin-bottom: 8px; letter-spacing: 0.02em; color: #45613a;
+  text-decoration: underline wavy rgba(122, 190, 96, 0.5) 2px;
+  text-underline-offset: 4px;
+}
+.plan-summary-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
+  font-size: 0.88em; color: #6b6046;
+}
+.plan-summary-grid span { display: block; }
+
+.plan-accordion { border-top: none; }
+.plan-accordion details { border-bottom: 2px dashed #f2e8cf; }
+.plan-accordion details:last-child { border-bottom: none; }
+.plan-accordion summary {
+  display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+  font-weight: 600; font-size: 0.95em; cursor: pointer; list-style: none;
+  user-select: none; color: var(--text-main); transition: background 0.15s;
+}
+.plan-accordion summary::-webkit-details-marker { display: none; }
+.plan-accordion summary:hover { background: #f3f8f1; }
+.plan-accordion summary::after {
+  content: '›'; margin-left: auto; font-size: 1.2em; color: var(--primary-color);
+  transition: transform 0.2s; display: inline-block;
+}
+.plan-accordion details[open] summary::after { transform: rotate(90deg); }
+.plan-accordion-body { padding: 4px 16px 14px 16px; font-size: 0.9em; color: var(--text-main); line-height: 1.6; }
+.plan-accordion-body ul { margin: 0; padding-left: 1.2em; }
+.plan-accordion-body li { margin: 5px 0; }

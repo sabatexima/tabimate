@@ -59,7 +59,7 @@ def test_read_local_rejects_traversal(tmp_path):
 # ----------------------------------------------------------------------
 # geocoding: 表記ゆらぎ候補・候補選択（ネットワークを呼ばない純粋関数）
 # ----------------------------------------------------------------------
-import geocoding  # noqa: E402
+from services import geocoding  # noqa: E402
 
 
 def test_geocode_normalize():

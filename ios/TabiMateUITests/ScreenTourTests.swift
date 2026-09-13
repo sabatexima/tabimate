@@ -119,7 +119,22 @@ final class ScreenTourTests: XCTestCase {
             field = app.textFields.firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 10), "相談の入力欄が見つからない")
         }
+        // タップしてもフォーカスが乗らないことがある（シミュレータが起動直後で重いとき。
+        // 実際に CI で「Neither element nor any descendant has keyboard focus」で落ちた）。
+        // フォーカスかキーボードが確認できるまで少し待ち、だめならもう一度だけタップする。
+        // ハードウェアキーボード接続のシミュレータでは画面のキーボードが出ないので、
+        // 出ないこと自体は失敗にしない
+        func focused() -> Bool {
+            ((field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) || app.keyboards.count > 0
+        }
         field.tap()
+        if !focused() {
+            _ = app.keyboards.firstMatch.waitForExistence(timeout: 3)
+            if !focused() {
+                field.tap()
+                _ = app.keyboards.firstMatch.waitForExistence(timeout: 5)
+            }
+        }
         field.typeText("熱海に行きたい")
 
         tapButton("送る")

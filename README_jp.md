@@ -35,12 +35,20 @@
 
 ## たびメイトって？
 
+**旅行の「計画」と「思い出づくり」を、AIとマスコットの「ちゃむ」に預けられる Web アプリです。**
+
+- 🗺️ 「金沢に2泊3日、2人で」と**話しかけるだけ**で、観光地・お店・宿・時間割・費用まで入った旅のしおりができます
+- 📸 帰ってきたら**写真を放り込むだけ**で、AIがその旅の空気を短い付箋にして、アルバムに貼ってくれます
+- 🤝 できたしおりも思い出も、リンクひとつで家族や友だちに見せられます
+
+旅行アプリはたくさんあるけれど、たびメイトがこだわったのは **旅の「前」と「後」**。予約サイトが引き受けないところを、絵本のようなやさしい画面で引き受けます。スマホのホーム画面に置けるPWAと、SwiftUI の iOS アプリがあります。
+
 > _「どこ行こう？」から「楽しかったね」まで。_<br>
 > _旅のぜんぶに、ちゃむがそっと寄り添います。_
 
-旅行アプリはたくさんあるけれど、たびメイトがこだわったのは **旅の「前」と「後」**。
-
-計画はAIとおしゃべりするだけ。帰ってきたら写真を放り込むだけ。あとはマスコットの **ちゃむ** が、しおりを綴じて、思い出を付箋にして、こっそり額に飾ってくれます。
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/02-journey.png" alt="そうだん → しおり → たび → ふりかえり" width="720">
+</p>
 
 <table>
 <tr>
@@ -66,7 +74,7 @@
 | 🗾 **水彩の地図** | 観光・食事・宿を色分けしたピンで、**まわる順**につなぎます。ピンから経路案内へ。 |
 | 🎒 **持ち物リスト** | 行き先と天気から提案。チェックすると四つ葉が咲きます。 |
 | 🍀 **出発カウントダウン** | 「あと12日」。棚を開けるたび、ちょっとうれしい。 |
-| 📅 **カレンダー書き出し** | スケジュールを `.ics` で持ち出せます。 |
+| 📅 **カレンダー書き出し** | スケジュールを `.ics` で持ち出せます。しおりは印刷・PDF保存もできます。 |
 | ✏️ **あとから調整** | 「2日目をゆっくりに」「宿を変えて」もチャットで。★をつけると次からの提案がそっと寄っていきます。 |
 
 ### 📸 旅の「あと」— 写真が、ひとりでに言葉になる
@@ -90,6 +98,22 @@
 
 ---
 
+## しくみ
+
+プランは1つのAIが一気に書くのではなく、**役割を分けた10のエージェント**が順に手を入れます。最後の「まとめ役」が納得しなければ、原因のノードだけに差し戻します。
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/03-agents.png" alt="10のエージェント" width="760">
+</p>
+
+サーバーは Cloud Run 上の Flask ひとつ。ブラウザも iOS アプリも同じサーバー・同じアカウント・同じしおりを見にいきます。
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/04-architecture.png" alt="構成" width="760">
+</p>
+
+---
+
 ## 📱 iOSアプリ
 
 SwiftUI のネイティブアプリが [`ios/`](ios/) にあります。同じサーバー・同じアカウント・同じしおり。
@@ -106,7 +130,7 @@ SwiftUI のネイティブアプリが [`ios/`](ios/) にあります。同じ�
 | ⚙️ **バックエンド** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **地図・位置** | Leaflet · Stadia Maps（水彩）· Google Places · OSM Nominatim · 国土地理院 |
 | ☁️ **インフラ** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
-| 🎨 **フロント** | Jinja2 · 素のJS · PWA · Zen Maru Gothic |
+| 🎨 **フロント** | Jinja2 · 素のJS · PWA · Zen Maru Gothic · OpenMoji |
 | 📱 **iOS** | SwiftUI（iOS 17+）· Swift 6 · XcodeGen |
 
 ---
@@ -159,6 +183,145 @@ python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.
 
 <br>
 
+### 設計
+
+3層に分けています。**上の層は下の層を呼び、下の層は上の層を知りません。**
+
+```
+  views/        入口。HTTP のことだけ（認可・入力の整形・レスポンス）。SQL は書かない
+    │
+    ├── chat/       AI（LangGraph のエージェント群・プロンプト・モデル呼び出し）
+    ├── services/   ロジック（写真・EXIF・保存先・天気・座標・持ち物・付箋づくり）
+    │
+  db*.py        永続化（SQLAlchemy Core・素の SQL）。Flask を知らない
+```
+
+| 決めごと | 中身 |
+|---|---|
+| **入口は Blueprint で機能ごと** | `planner`（チャットとプラン）· `auth` · `reflection`（旅の振り返り）· `sharing`。URL の接頭辞と権限の境界が一致する |
+| **永続化はテーブルの持ち主ごと** | `db.py`（プラン・チャット）· `db_reflection.py`（旅・写真・付箋）· `db_sharing.py`（共有）。エンジンは `db.get_engine()` の1つを使い回す |
+| **外部サービスは差し替えられる** | 保存先は `GCS_BUCKET` の有無で GCS / ローカル（`services/storage.py`）。座標は Google Places → Nominatim → 地理院の順に落ちる（`services/geocoding.py`）。AI・検索・DB はテストで丸ごと差し替える |
+| **入口は2つ、中は1つ** | ブラウザはセッション Cookie、アプリは `Authorization: Bearer …`。`api_auth.py` がその要求の間だけ同じセッションに読み替えるので、`login_required` は特別扱いを持たない |
+| **横断するものは `src/` 直下** | `logger.py`（全モジュール共通のロガー）· `api_auth.py`（トークン） |
+| **フロントはビルド無し** | ページごとに CSS と JS を1つずつ。色・角丸・影のトークンと共通部品（見出し・戻るリンク・共有バナー）は `layout.css`。複数ページで使う部品は `trip-detail.css` / `plan-card.css` に1か所だけ |
+| **テストは外に出ない** | AI・DB・ストレージ・天気を差し替え、APIキー無しで回る。画面まわりは本物の Chromium で触って確かめる |
+| **iOS は Feature 単位** | `Features/`（画面ごとに View と ViewModel）· `Networking/`（APIClient · Service · Models）· `Design/`（Theme · Components）。UIテストは `URLProtocol` で通信を差し替える |
+
+次に手を入れるなら、ここが候補です:
+
+- `views/planner.py`（約970行）はチャット・プラン・プラン用API が同居している。`chat` / `plans` / `plan_api` に分けると見通しがよくなる
+- `chat/formatter.py` はプランを HTML にする**表示の仕事**が AI の層に置かれている。`chat/` が状態を返し、`views/` 側で整形する形が筋がよい
+- `db.py` / `db_reflection.py` / `db_sharing.py` は `db/` パッケージにまとめられる
+
+### 置き場所
+
+```
+tabimate/
+├── LICENSE                      # 全ての権利を留保。読んでもらうための公開
+├── THIRD_PARTY_NOTICES.md       # 依存のライセンスと地図の帰属表示
+├── requirements.in              # 直接依存（直すのはこちら）
+├── requirements.txt             # 解決して固定した結果（生成物）
+├── deploy.sh                    # Cloud Run へのデプロイ（Secret / GCS / IAM）
+├── Dockerfile                   # python:3.13-slim · gunicorn、ワーカー1 × スレッド20
+├── .github/workflows/ci.yml     # 2ジョブ: ubuntu（サーバー＋ロジック）/ macOS（iOS）
+├── docs/
+│   ├── img/                     # README 用の画面
+│   └── presentation/            # 発表資料の図版と、AIへの指示書（PROMPT.md）
+├── scripts/
+│   ├── check_home_js.sh         # チャット画面を本物のブラウザで動かす
+│   ├── check_ios_logic.sh       # iOSのロジックを Linux の Swift で型検査
+│   ├── backfill_thumbnails.py
+│   └── setup_alerts.sh
+├── tests/                       # 「テストとCI」を参照
+├── ios/                         # SwiftUIアプリ（XcodeGen。ios/README.md 参照）
+└── src/
+    ├── app.py                   # Flaskアプリ · Blueprint 登録 · セキュリティヘッダ · テンプレートフィルタ
+    ├── api_auth.py              # ネイティブアプリ用の Bearer トークン
+    ├── logger.py                # 全モジュール共通のロガー
+    ├── db.py                    # travel_plans / chat_messages
+    ├── db_reflection.py         # trips / photos / stickers
+    ├── db_sharing.py            # 公開リンク / メール共有
+    ├── views/                   # planner · auth · reflection · sharing（Blueprint）
+    ├── chat/                    # プラン生成: agents · graph · chat · llm · models · formatter
+    ├── services/                # exif · features · images · storage · packing
+    │                            #   · trip_interpreter（付箋） · weather · geocoding
+    ├── templates/               # Jinja2（layout.html を継承。部品は _share_modal.html）
+    └── static/
+        ├── css/                 # layout.css（トークン・共通部品）＋ ページごと
+        │                        #   共有部品: trip-detail.css · plan-card.css · plan-map.css · share-modal.css
+        ├── js/                  # ページごと ＋ layout.js · openmoji.js · plan-map.js · footprint-map.js
+        └── img/                 # ちゃむ · PWA アイコン
+```
+
+### 全体の形
+
+```
+          ┌─────────── Flask app (app.py) ────────────┐
+ ブラウザ  │  ProxyFix · セキュリティヘッダ              │
+ ─────────┤  planner("/")        auth("/auth")         │
+ iOSアプリ │  reflection("/reflection")  sharing("/share")
+ ─────────┤                                            │
+  Bearer  └────┬───────────────┬──────────────┬────────┘
+               │               │              │
+        chat/ (LangGraph)   db*.py        services/
+        エージェント群      (SQLAlchemy)   exif · storage ·
+               │               │          interpreter · weather
+               ▼               ▼              ▼
+      Gemini + Tavily     MySQL / TiDB       GCS · Open-Meteo · Places
+```
+
+### プラン生成のエージェント
+
+`chat/graph.py` が `StateGraph` を組み、`chat/agents.py` の関数をノードとしてつなぎます。状態は `TravelPlanState`（TypedDict）で流れます。
+
+```
+（並列で先に）transport · sightseeing_candidates
+START
+  → sightseeing               観光2〜3件
+  → accommodation_candidates → accommodation   残予算の約40%（日帰りなら飛ばす）
+  → gourmet_candidates → gourmet               残予算の約25%
+  → timekeeper                 時系列のスケジュール
+  → cost_manager               費用の内訳
+  → balancer                   全体の見直し
+        ├─ approved / budget_infeasible → END
+        └─ fix_* → 該当ノードへ戻る   （上限: MAX_BALANCER_RETRIES = 5）
+```
+
+- **宿なし判定** — `parse_duration()` が (泊数, 日数) を返し、0泊なら宿のノードを飛ばします（夜行での「0泊2日」に対応）。
+- **実在チェック** — `GOOGLE_MAPS_API_KEY` があれば候補を Google Places で突き合わせ、架空の名前を落とします。
+- **好みの学習** — 過去の★と一言から `user_preferences` を作り、各エージェントにそっと渡します。
+- **部分的な編集** — 編集の依頼では、関係するノードだけ作り直します。
+- **再試行** — `invoke_with_retry()` が 429 / 503 / 通信エラーを最大5回、間隔を空けて再試行します。
+
+### 生成は接続より長生きする
+
+プラン生成は別スレッドで走り、**結果の保存もそのスレッドが行います**。ブラウザが繋がったままである必要はありません。
+
+生成には数分かかるので、ここが大事です。もし保存を SSE の送信側でやっていると、リロードで接続が切れた瞬間に generator が止まり、生成がまるごと捨てられてしまいます。
+
+`/chat` はページを出すときに「まだ返事待ちの生成があるか」を載せるので、リロード直後から「考えています」が戻ります。その判断はプロセス内のメモリではなく `chat_messages` の行から決めるため、Cloud Run が複数インスタンスでも食い違いません。
+
+| その `request_id` の行 | 意味 |
+|---|---|
+| `ai` の行がある | 終わった |
+| `user` の行だけ・最近 | まだ作っている |
+| `user` の行だけ・20分以上前 | あきらめる（ワーカーが落ちたとみられる） |
+| 行が無い | 失敗か中断。後片づけ済み |
+
+チャットに出すプランカードは画面側で `marked.parse()` を通ります。Markdown は空行で HTML の解釈を打ち切るので、`chat/formatter.py` は**空行を含まない HTML** を返します（含めると `<details>` が文字のまま出ます）。
+
+### データベース
+
+| テーブル | 役割 |
+|---|---|
+| `travel_plans` | 保存プラン（条件と結果をJSONで）。座標キャッシュ、カスタムピン、持ち物、実費、★も持ちます |
+| `chat_messages` | チャット履歴。プランの行には `plan_json`（編集時に使う「前のプラン」）も |
+| `trips` | 旅（名前・日付）、表紙写真、ベストショット、紐づけたプラン |
+| `photos` / `stickers` | 写真（パス・撮影時刻・GPS）/ 付箋（表示する言葉と内部の根拠） |
+| `share_links` / `share_grants` | 公開リンク / メールでの共有 |
+
+所有権は常に `user_id`（Google の `sub`）で確認します。旅を消すと、関連する行と実体の写真まで連鎖して消えます。
+
 ### 環境変数
 
 `src/.env`（ローカル）か Cloud Run の環境変数 / Secret Manager に設定します。`src/.env` は Git に含めません。
@@ -191,110 +354,6 @@ python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.
 います（Cookieのsecure化、`SECRET_KEY` 未設定なら起動しない、など）。
 自分で設定しないでください。
 
-### 置き場所
-
-```
-tabimate/
-├── LICENSE                      # 全ての権利を留保。読んでもらうための公開
-├── THIRD_PARTY_NOTICES.md       # 依存のライセンスと地図の帰属表示
-├── requirements.in              # 直接依存（直すのはこちら）
-├── requirements.txt             # 解決して固定した結果（生成物）
-├── deploy.sh                    # Cloud Run へのデプロイ（Secret / GCS / IAM）
-├── Dockerfile                   # python:3.13-slim · gunicorn、ワーカー1 × スレッド20
-├── .github/workflows/ci.yml     # 2ジョブ: ubuntu（サーバー＋ロジック）/ macOS（iOS）
-├── scripts/
-│   ├── check_home_js.sh         # チャット画面を本物のブラウザで動かす
-│   ├── check_ios_logic.sh       # iOSのロジックを Linux の Swift で型検査
-│   ├── backfill_thumbnails.py
-│   └── setup_alerts.sh
-├── tests/                       # 「テストとCI」を参照
-├── ios/                         # SwiftUIアプリ（XcodeGen。ios/README.md 参照）
-└── src/
-    ├── app.py                   # Flaskアプリ · Blueprint · セキュリティヘッダ
-    ├── api_auth.py              # ネイティブアプリ用の Bearer トークン
-    ├── db.py                    # travel_plans / chat_messages
-    ├── db_reflection.py         # trips / photos / stickers
-    ├── db_sharing.py            # 公開リンク / メール共有
-    ├── geocoding.py             # 地名 → 緯度経度（複数プロバイダ・キャッシュ付き）
-    ├── weather.py               # 旅の日の予報（Open-Meteo）
-    ├── chat/                    # プラン生成（LangGraph のエージェント群）
-    ├── services/                # exif · features · storage · interpreter · packing
-    ├── views/                   # planner · auth · reflection · sharing
-    ├── templates/               # Jinja2
-    └── static/                  # css / js / img
-```
-
-### 全体の形
-
-```
-          ┌─────────── Flask app (app.py) ────────────┐
- ブラウザ  │  ProxyFix · セキュリティヘッダ              │
- ─────────┤  planner("/")        auth("/auth")         │
- iOSアプリ │  reflection("/reflection")  sharing("/share")
- ─────────┤                                            │
-  Bearer  └────┬───────────────┬──────────────┬────────┘
-               │               │              │
-        chat/ (LangGraph)   db*.py        services/
-        エージェント群      (SQLAlchemy)   exif · storage ·
-               │               │          interpreter
-               ▼               ▼              ▼
-      Gemini + Tavily     MySQL / TiDB       GCS
-```
-
-- **エンジンは1つ** — `db.py` の `get_engine()`（QueuePool）を `db_reflection` / `db_sharing` が使い回します。テーブルは遅延作成。
-- **保存先は差し替え式** — `services/storage.py` が `GCS_BUCKET` の有無で GCS とローカルを切り替え。署名URLはキャッシュ＋並列生成。
-- **入口は2つ、中は1つ** — ブラウザはセッションCookie、アプリは `Authorization: Bearer …`。`api_auth.authenticate_app_token` がその要求の間だけ同じセッションに読み替えるので、`login_required` は特別扱いを持ちません。
-
-### プラン生成のエージェント
-
-`chat/graph.py` が `StateGraph` を組み、`chat/agents.py` の関数をノードとしてつなぎます。状態は `TravelPlanState`（TypedDict）で流れます。
-
-```
-START
-  → transport                  往復の交通費 · 残予算
-  → sightseeing_candidates → sightseeing       観光2〜3件
-  → accommodation_candidates → accommodation   残予算の約40%（日帰りなら飛ばす）
-  → gourmet_candidates → gourmet               残予算の約25%
-  → timekeeper                 時系列のスケジュール
-  → cost_manager               費用の内訳
-  → balancer                   全体の見直し
-        ├─ approved / budget_infeasible → END
-        └─ fix_* → 該当ノードへ戻る   （上限: MAX_BALANCER_RETRIES = 5）
-```
-
-- **宿なし判定** — `parse_duration()` が (泊数, 日数) を返し、0泊なら宿のノードを飛ばします（夜行での「0泊2日」に対応）。
-- **実在チェック** — `GOOGLE_MAPS_API_KEY` があれば候補を Google Places で突き合わせ、架空の名前を落とします。
-- **好みの学習** — 過去の★と一言から `user_preferences` を作り、各エージェントにそっと渡します。
-- **部分的な編集** — 編集の依頼では、関係するノードだけ作り直します。
-- **再試行** — `invoke_with_retry()` が 429 / 503 / 通信エラーを最大5回、間隔を空けて再試行します。
-
-### 生成は接続より長生きする
-
-プラン生成は別スレッドで走り、**結果の保存もそのスレッドが行います**。ブラウザが繋がったままである必要はありません。
-
-生成には数分かかるので、ここが大事です。もし保存を SSE の送信側でやっていると、リロードで接続が切れた瞬間に generator が止まり、生成がまるごと捨てられてしまいます。
-
-`/chat` はページを出すときに「まだ返事待ちの生成があるか」を載せるので、リロード直後から「考えています」が戻ります。その判断はプロセス内のメモリではなく `chat_messages` の行から決めるため、Cloud Run が複数インスタンスでも食い違いません。
-
-| その `request_id` の行 | 意味 |
-|---|---|
-| `ai` の行がある | 終わった |
-| `user` の行だけ・最近 | まだ作っている |
-| `user` の行だけ・20分以上前 | あきらめる（ワーカーが落ちたとみられる） |
-| 行が無い | 失敗か中断。後片づけ済み |
-
-### データベース
-
-| テーブル | 役割 |
-|---|---|
-| `travel_plans` | 保存プラン（条件と結果をJSONで）。座標キャッシュ、カスタムピン、持ち物、実費、★も持ちます |
-| `chat_messages` | チャット履歴。プランの行には `plan_json`（編集時に使う「前のプラン」）も |
-| `trips` | 旅（名前・日付）、表紙写真、ベストショット、紐づけたプラン |
-| `photos` / `stickers` | 写真（パス・撮影時刻・GPS）/ 付箋（表示する言葉と内部の根拠） |
-| `share_links` / `share_grants` | 公開リンク / メールでの共有 |
-
-所有権は常に `user_id`（Google の `sub`）で確認します。旅を消すと、関連する行と実体の写真まで連鎖して消えます。
-
 ### HTTP エンドポイント
 
 **画面** — `/`（ようこそ）· `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
@@ -311,12 +370,12 @@ START
 
 **認証** — `/auth/login` · `/auth/callback` · `/auth/logout`
 
-`/`・`/terms`・`/privacy`・`/api/ideas`・`/auth/*` と公開ビュー `/s/<token>` 以外は `@login_required` の内側です。未認証のとき、APIには `401 JSON` を返し、ブラウザはログイン画面へ送ります。
+`/`・`/terms`・`/privacy`・`/api/ideas`・`/auth/*` と公開ビュー `/s/<token>` 以外は `@login_required` の内側です。未認証のとき、APIには `401 JSON` を返し、ブラウザはログイン画面へ送ります。全部で67ルートあります。
 
 ### テストとCI
 
 ```bash
-pytest tests/ -k "not smoke"    # 139件のオフラインテスト（APIキーもDBも不要）
+pytest tests/ -k "not smoke"    # 145件のオフラインテスト（APIキーもDBも不要）
 scripts/check_home_js.sh        # チャット画面を本物のブラウザで動かす
 scripts/check_ios_logic.sh      # iOSのロジックを Linux の Swift で型検査
 python tests/test_smoke.py      # プラン生成の通し確認（APIキーが要ります）
@@ -326,7 +385,7 @@ python tests/test_smoke.py      # プラン生成の通し確認（APIキーが�
 |---|---|
 | `test_units.py`（29） | サムネイルのキー、URL生成、パストラバーサル、地名の表記ゆれ、アプリ用トークンの発行と検証 |
 | `test_ios_routes.py`（44） | iOSアプリが叩くURLが、そのメソッドでサーバーに実在すること |
-| `test_regression.py`（23） | 一度戻ってきたことのある不具合 |
+| `test_regression.py`（29） | 一度戻ってきたことのある不具合。テンプレートの `url_for` が実在の endpoint を指すこと、プランカードに空行が無いこと、公開リンクの旅で写真が枠に入ることなど |
 | `test_generation_status.py`（18） | リロード後の復元。pending / done / gone の判断と、ページが載せる情報 |
 | `test_app_api.py`（16） | ネイティブアプリ向けAPIの認可とJSONの形 |
 | `test_send_message_survives_disconnect.py`（7） | ブラウザが去っても生成が捨てられないこと |

@@ -37,12 +37,20 @@
 
 ## What is TabiMate?
 
+**A web app that hands the two hardest parts of a trip — planning it, and remembering it — to an AI and a mascot named Chamu.**
+
+- 🗺️ **Just talk** — say "Kanazawa, two nights, two of us" and you get a full itinerary: sights, restaurants, a place to stay, a timetable and a cost estimate
+- 📸 **Just drop in photos** — when you're back, the AI reads them and pins short sticky-note memories into an album
+- 🤝 **Share with one link** — plans and memories alike, with family or friends
+
+Plenty of apps help you book. TabiMate cares about the **before** and the **after** — the parts booking sites leave to you — inside a soft, picture-book interface. It installs as a PWA on your phone, and there is a native SwiftUI app for iOS.
+
 > _From "where should we go?" to "that was fun."_<br>
 > _Chamu is there for every part of the trip._
 
-Plenty of apps help you book a trip. TabiMate cares about the **before** and the **after**.
-
-Chat your way to an itinerary. Come home and drop in your photos. **Chamu**, the mascot, binds the itinerary, turns memories into sticky notes, and quietly frames your best shot.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/02-journey.png" alt="chat → itinerary → trip → look back" width="720">
+</p>
 
 <table>
 <tr>
@@ -68,7 +76,7 @@ Chat your way to an itinerary. Come home and drop in your photos. **Chamu**, the
 | 🗾 **Watercolor map** | Sights / food / stays as color-coded pins, connected **in visiting order**. Tap a pin for navigation. |
 | 🎒 **Packing list** | Suggested from your destination and the weather. Check an item and a clover blooms. |
 | 🍀 **Countdown** | "12 days to go." A little thrill every time you open the shelf. |
-| 📅 **Calendar export** | Download the schedule as `.ics`. |
+| 📅 **Calendar export** | Download the schedule as `.ics`; the itinerary also prints to PDF. |
 | ✏️ **Tweak later** | "Make Day 2 relaxed," "change the hotel" — all by chat. Rate with ★ and future suggestions quietly adapt. |
 
 ### 📸 After — photos turn into words on their own
@@ -92,6 +100,22 @@ Chat your way to an itinerary. Come home and drop in your photos. **Chamu**, the
 
 ---
 
+## How it works
+
+A plan is not written by one model in one go. **Ten agents with separate jobs** take turns on it, and a final reviewer sends the plan back — only to the node that caused the problem — when it isn't satisfied.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/03-agents.png" alt="ten agents" width="760">
+</p>
+
+The server is a single Flask app on Cloud Run. The browser and the iOS app talk to the same server, the same account and the same plans.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sabatexima/tabimate/main/docs/presentation/img/04-architecture.png" alt="architecture" width="760">
+</p>
+
+---
+
 ## 📱 The iOS app
 
 A native SwiftUI client lives in [`ios/`](ios/) — same server, same account, same trips.
@@ -108,7 +132,7 @@ It talks to the endpoints under `/auth/app/*` and `/api/*` listed below, authent
 | ⚙️ **Backend** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **Maps & Geo** | Leaflet · Stadia Maps (watercolor) · Google Places · OSM Nominatim · GSI |
 | ☁️ **Infra** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
-| 🎨 **Frontend** | Jinja2 · vanilla JS · PWA · Zen Maru Gothic |
+| 🎨 **Frontend** | Jinja2 · vanilla JS · PWA · Zen Maru Gothic · OpenMoji |
 | 📱 **iOS** | SwiftUI (iOS 17+) · Swift 6 · XcodeGen |
 
 ---
@@ -161,6 +185,145 @@ for it is in that file.
 
 <br>
 
+### Design
+
+Three layers. **Upper layers call lower ones; lower layers know nothing about the ones above.**
+
+```
+  views/        The entrance. HTTP only (authorization, input shaping, responses). No SQL here
+    │
+    ├── chat/       AI (the LangGraph agents, prompts, model calls)
+    ├── services/   Logic (photos, EXIF, storage, weather, geocoding, packing, sticky notes)
+    │
+  db*.py        Persistence (SQLAlchemy Core, plain SQL). Knows nothing about Flask
+```
+
+| Rule | What it means |
+|---|---|
+| **One Blueprint per feature** | `planner` (chat and plans) · `auth` · `reflection` (trip journal) · `sharing`. URL prefixes and permission boundaries line up |
+| **Persistence split by table owner** | `db.py` (plans, chat) · `db_reflection.py` (trips, photos, stickers) · `db_sharing.py` (sharing). All share the single engine from `db.get_engine()` |
+| **External services are swappable** | Storage is GCS or the local filesystem depending on `GCS_BUCKET` (`services/storage.py`). Geocoding falls through Google Places → Nominatim → GSI (`services/geocoding.py`). AI, search and the DB are stubbed wholesale in tests |
+| **One session, two doors** | The browser uses a session cookie; the app sends `Authorization: Bearer …`, which `api_auth.py` translates into the same session for that single request, so `login_required` needs no special case |
+| **Cross-cutting code sits at `src/`** | `logger.py` (the one logger factory) · `api_auth.py` (tokens) |
+| **Frontend has no build step** | One CSS and one JS file per page. Color/radius/shadow tokens and shared parts (page headings, back links, share banner) live in `layout.css`; parts used by more than one page live once, in `trip-detail.css` / `plan-card.css` |
+| **Tests never leave the machine** | AI, DB, storage and weather are stubbed; everything runs without API keys. The chat screen is additionally driven in a real Chromium |
+| **iOS is organized by feature** | `Features/` (a View and ViewModel per screen) · `Networking/` (APIClient, services, models) · `Design/` (theme, components). UI tests stub the network with `URLProtocol` |
+
+Good next steps, if you keep going:
+
+- `views/planner.py` (~970 lines) holds chat, plans and the plan APIs together; splitting it into `chat` / `plans` / `plan_api` would help
+- `chat/formatter.py` renders the plan to HTML — presentation work sitting in the AI layer. Cleaner for `chat/` to return state and `views/` to format it
+- `db.py` / `db_reflection.py` / `db_sharing.py` could become a `db/` package
+
+### Layout
+
+```
+tabimate/
+├── LICENSE                      # all rights reserved — published to be read
+├── THIRD_PARTY_NOTICES.md       # dependency licenses and map attribution
+├── requirements.in              # direct dependencies (edit this one)
+├── requirements.txt             # the resolved, pinned result (generated)
+├── deploy.sh                    # Cloud Run deploy (Secrets / GCS / IAM)
+├── Dockerfile                   # python:3.13-slim · gunicorn, 1 worker × 20 threads
+├── .github/workflows/ci.yml     # two jobs: ubuntu (server + logic) / macOS (iOS)
+├── docs/
+│   ├── img/                     # screenshots for the README
+│   └── presentation/            # slide figures and the AI brief (PROMPT.md)
+├── scripts/
+│   ├── check_home_js.sh         # drives the chat UI in a real browser
+│   ├── check_ios_logic.sh       # type-checks the iOS logic on Linux Swift
+│   ├── backfill_thumbnails.py
+│   └── setup_alerts.sh
+├── tests/                       # see "Tests & CI"
+├── ios/                         # SwiftUI app (XcodeGen; see ios/README.md)
+└── src/
+    ├── app.py                   # Flask app · Blueprint registration · security headers · template filters
+    ├── api_auth.py              # Bearer tokens for the native app
+    ├── logger.py                # the one logger factory
+    ├── db.py                    # travel_plans / chat_messages
+    ├── db_reflection.py         # trips / photos / stickers
+    ├── db_sharing.py            # share links / email grants
+    ├── views/                   # planner · auth · reflection · sharing (Blueprints)
+    ├── chat/                    # plan generation: agents · graph · chat · llm · models · formatter
+    ├── services/                # exif · features · images · storage · packing
+    │                            #   · trip_interpreter (sticky notes) · weather · geocoding
+    ├── templates/               # Jinja2 (extends layout.html; partial: _share_modal.html)
+    └── static/
+        ├── css/                 # layout.css (tokens, shared parts) + one per page
+        │                        #   shared parts: trip-detail.css · plan-card.css · plan-map.css · share-modal.css
+        ├── js/                  # one per page + layout.js · openmoji.js · plan-map.js · footprint-map.js
+        └── img/                 # Chamu · PWA icons
+```
+
+### Architecture
+
+```
+          ┌─────────── Flask app (app.py) ────────────┐
+ Browser  │  ProxyFix · security headers               │
+ ─────────┤  planner("/")        auth("/auth")         │
+ iOS app  │  reflection("/reflection")  sharing("/share")
+ ─────────┤                                            │
+  Bearer  └────┬───────────────┬──────────────┬────────┘
+               │               │              │
+        chat/ (LangGraph)   db*.py        services/
+        multi-agent flow  (SQLAlchemy)   exif · storage ·
+               │               │         interpreter · weather
+               ▼               ▼              ▼
+      Gemini + Tavily     MySQL / TiDB    GCS · Open-Meteo · Places
+```
+
+### Plan-generation agents
+
+`chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them.
+
+```
+(in parallel, ahead of the graph) transport · sightseeing_candidates
+START
+  → sightseeing               2–3 spots
+  → accommodation_candidates → accommodation   ~40% of remaining (skipped for day trips)
+  → gourmet_candidates → gourmet               ~25% of remaining
+  → timekeeper                 chronological schedule
+  → cost_manager               budget breakdown
+  → balancer                   whole-plan review
+        ├─ approved / budget_infeasible → END
+        └─ fix_* → back to the relevant node   (cap: MAX_BALANCER_RETRIES = 5)
+```
+
+- **Lodging-free check** — `parse_duration()` yields (nights, days); zero nights skips the lodging nodes, which covers overnight-transit trips.
+- **Existence check** — with `GOOGLE_MAPS_API_KEY`, candidates are verified against Google Places and invented names are dropped.
+- **Preference learning** — past ★ ratings and comments become `user_preferences`, softly injected into the agents.
+- **Partial editing** — an edit request regenerates only the nodes it touches.
+- **Retries** — `invoke_with_retry()` backs off on 429 / 503 / network errors, up to 5 attempts.
+
+### Generation outlives the connection
+
+Plan generation runs in a background thread that **also writes the result to the database**. Nothing about it depends on the browser staying connected.
+
+That matters because generation takes minutes. If the reply were saved by the SSE responder instead, reloading the page would kill the generator mid-flight and throw the whole generation away.
+
+On page load, `/chat` reports whether a reply is still pending, so the "thinking" state comes back immediately after a reload. That state is derived from the rows in `chat_messages` rather than from process memory, so it stays correct across Cloud Run instances:
+
+| Rows for that `request_id` | Meaning |
+|---|---|
+| an `ai` row exists | finished |
+| only the `user` row, recent | still generating |
+| only the `user` row, 20+ min old | gave up (the worker probably died) |
+| no rows | failed or aborted — already cleaned up |
+
+The plan card shown in the chat goes through `marked.parse()` in the browser. Markdown ends an HTML block at a blank line, so `chat/formatter.py` returns HTML **with no blank lines** (otherwise a literal `<details>` shows up on screen).
+
+### Database
+
+| Table | Purpose |
+|---|---|
+| `travel_plans` | Saved plans (conditions and results as JSON) plus coordinate cache, custom pins, packing list, actual cost, ★ rating |
+| `chat_messages` | Chat history; plan rows also carry `plan_json` (the "previous plan" used when editing) |
+| `trips` | Trips (title, dates), cover photo, best shots, linked plan |
+| `photos` / `stickers` | Photos (path, shoot time, GPS) / sticky notes (display text + internal basis) |
+| `share_links` / `share_grants` | Public links / email-based sharing |
+
+Ownership is always checked against `user_id` (the Google `sub`). Deleting a trip cascades to its rows and its physical photos.
+
 ### Environment variables
 
 Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-ignored.
@@ -192,110 +355,6 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 `K_SERVICE` is set by Cloud Run itself and is read to detect production (secure
 cookies, refusing to start without `SECRET_KEY`). Do not set it by hand.
 
-### Layout
-
-```
-tabimate/
-├── LICENSE                      # all rights reserved — published to be read
-├── THIRD_PARTY_NOTICES.md       # dependency licenses and map attribution
-├── requirements.in              # direct dependencies (edit this one)
-├── requirements.txt             # the resolved, pinned result (generated)
-├── deploy.sh                    # Cloud Run deploy (Secrets / GCS / IAM)
-├── Dockerfile                   # python:3.13-slim · gunicorn, 1 worker × 20 threads
-├── .github/workflows/ci.yml     # two jobs: ubuntu (server + logic) / macOS (iOS)
-├── scripts/
-│   ├── check_home_js.sh         # drives the chat UI in a real browser
-│   ├── check_ios_logic.sh       # type-checks the iOS logic on Linux Swift
-│   ├── backfill_thumbnails.py
-│   └── setup_alerts.sh
-├── tests/                       # see "Tests & CI"
-├── ios/                         # SwiftUI app (XcodeGen; see ios/README.md)
-└── src/
-    ├── app.py                   # Flask app · Blueprints · security headers
-    ├── api_auth.py              # Bearer tokens for the native app
-    ├── db.py                    # travel_plans / chat_messages
-    ├── db_reflection.py         # trips / photos / stickers
-    ├── db_sharing.py            # share links / email grants
-    ├── geocoding.py             # spot name → lat/lng (multi-provider, cached)
-    ├── weather.py               # forecast for the travel dates (Open-Meteo)
-    ├── chat/                    # plan generation (LangGraph agents)
-    ├── services/                # exif · features · storage · interpreter · packing
-    ├── views/                   # planner · auth · reflection · sharing
-    ├── templates/               # Jinja2
-    └── static/                  # css / js / img
-```
-
-### Architecture
-
-```
-          ┌─────────── Flask app (app.py) ────────────┐
- Browser  │  ProxyFix · security headers               │
- ─────────┤  planner("/")        auth("/auth")         │
- iOS app  │  reflection("/reflection")  sharing("/share")
- ─────────┤                                            │
-  Bearer  └────┬───────────────┬──────────────┬────────┘
-               │               │              │
-        chat/ (LangGraph)   db*.py        services/
-        multi-agent flow  (SQLAlchemy)   exif · storage ·
-               │               │         interpreter
-               ▼               ▼              ▼
-      Gemini + Tavily     MySQL / TiDB       GCS
-```
-
-- **One engine, shared** — `get_engine()` (QueuePool) in `db.py` is reused by `db_reflection` / `db_sharing`. Tables are created lazily.
-- **Storage is swappable** — `services/storage.py` picks GCS or the local filesystem by `GCS_BUCKET`. Signed URLs are cached and generated in parallel.
-- **One session, two doors** — the browser uses a session cookie; the app sends `Authorization: Bearer …`, which `api_auth.authenticate_app_token` translates into the same session for that single request. `login_required` therefore needs no special case.
-
-### Plan-generation agents
-
-`chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them.
-
-```
-START
-  → transport                  round-trip cost · remaining budget
-  → sightseeing_candidates → sightseeing       2–3 spots
-  → accommodation_candidates → accommodation   ~40% of remaining (skipped for day trips)
-  → gourmet_candidates → gourmet               ~25% of remaining
-  → timekeeper                 chronological schedule
-  → cost_manager               budget breakdown
-  → balancer                   whole-plan review
-        ├─ approved / budget_infeasible → END
-        └─ fix_* → back to the relevant node   (cap: MAX_BALANCER_RETRIES = 5)
-```
-
-- **Lodging-free check** — `parse_duration()` yields (nights, days); zero nights skips the lodging nodes, which covers overnight-transit trips.
-- **Existence check** — with `GOOGLE_MAPS_API_KEY`, candidates are verified against Google Places and invented names are dropped.
-- **Preference learning** — past ★ ratings and comments become `user_preferences`, softly injected into the agents.
-- **Partial editing** — an edit request regenerates only the nodes it touches.
-- **Retries** — `invoke_with_retry()` backs off on 429 / 503 / network errors, up to 5 attempts.
-
-### Generation outlives the connection
-
-Plan generation runs in a background thread that **also writes the result to the database**. Nothing about it depends on the browser staying connected.
-
-That matters because generation takes minutes. If the reply were saved by the SSE responder instead, reloading the page would kill the generator mid-flight and throw the whole generation away.
-
-On page load, `/chat` reports whether a reply is still pending, so the "thinking" state comes back immediately after a reload. That state is derived from the rows in `chat_messages` rather than from process memory, so it stays correct across Cloud Run instances:
-
-| Rows for that `request_id` | Meaning |
-|---|---|
-| an `ai` row exists | finished |
-| only the `user` row, recent | still generating |
-| only the `user` row, 20+ min old | gave up (the worker probably died) |
-| no rows | failed or aborted — already cleaned up |
-
-### Database
-
-| Table | Purpose |
-|---|---|
-| `travel_plans` | Saved plans (conditions and results as JSON) plus coordinate cache, custom pins, packing list, actual cost, ★ rating |
-| `chat_messages` | Chat history; plan rows also carry `plan_json` (the "previous plan" used when editing) |
-| `trips` | Trips (title, dates), cover photo, best shots, linked plan |
-| `photos` / `stickers` | Photos (path, shoot time, GPS) / sticky notes (display text + internal basis) |
-| `share_links` / `share_grants` | Public links / email-based sharing |
-
-Ownership is always checked against `user_id` (the Google `sub`). Deleting a trip cascades to its rows and its physical photos.
-
 ### HTTP endpoints
 
 **Pages** — `/` (welcome) · `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
@@ -312,12 +371,12 @@ Ownership is always checked against `user_id` (the Google `sub`). Deleting a tri
 
 **Auth** — `/auth/login` · `/auth/callback` · `/auth/logout`
 
-Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the public `/s/<token>` view sits behind `@login_required`, which answers `401 JSON` to API clients and redirects browsers to the login page.
+Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the public `/s/<token>` view sits behind `@login_required`, which answers `401 JSON` to API clients and redirects browsers to the login page. 67 routes in total.
 
 ### Tests & CI
 
 ```bash
-pytest tests/ -k "not smoke"    # 139 offline tests — no API keys, no DB
+pytest tests/ -k "not smoke"    # 145 offline tests — no API keys, no DB
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
@@ -327,7 +386,7 @@ python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 |---|---|
 | `test_units.py` (29) | Thumbnail keys, URL generation, path traversal, geocoding variants, app-token issue/verify |
 | `test_ios_routes.py` (44) | Every URL the iOS app calls exists on the server, with the right method |
-| `test_regression.py` (23) | Bugs that came back once already |
+| `test_regression.py` (29) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, … |
 | `test_generation_status.py` (18) | Reload restore — the pending/done/gone decision, and what the page carries |
 | `test_app_api.py` (16) | Authorization and JSON shape for the native-app endpoints |
 | `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |

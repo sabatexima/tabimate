@@ -272,10 +272,80 @@ def test_history_capped():
 
 
 # ----------------------------------------------------------------------
+# テンプレートの url_for（存在しない endpoint はその画面を丸ごと 500 にする）
+# ----------------------------------------------------------------------
+def test_every_url_for_in_templates_points_to_a_real_endpoint():
+    """テンプレートが url_for で指す endpoint が、すべて登録済みであること。
+
+    Jinja のコンパイル検査では見つからない（url_for は描画時に解決される）。
+    shared/plan.html が Blueprint 名を 'share.' と書いていて、公開リンクで
+    プランを開くと BuildError で 500 になっていた。ブループリントの登録名は
+    'sharing' なので、この一か所だけが食い違っていた。
+    """
+    import re
+    from pathlib import Path
+
+    import app as app_mod
+
+    endpoints = {r.endpoint for r in app_mod.app.url_map.iter_rules()}
+    # template_folder は相対パス。カレントディレクトリ基準で探すと1件も見つからず、
+    # 何も検査しないまま通ってしまう（実際それで壊れた状態を素通りした）
+    templates = list((Path(app_mod.app.root_path) / app_mod.app.template_folder).rglob("*.html"))
+    assert len(templates) >= 10, "テンプレートが見つかっていない（探し方が壊れている）"
+
+    found, bad = 0, []
+    for f in templates:
+        for m in re.finditer(r"url_for\(\s*['\"]([\w.]+)['\"]", f.read_text()):
+            found += 1
+            if m.group(1) not in endpoints:
+                bad.append(f"{f.name}: {m.group(1)}")
+    assert found >= 20, "url_for を1つも拾えていない（正規表現が壊れている）"
+    assert not bad, f"存在しない endpoint を参照している: {bad}"
+
+
+def test_public_plan_link_renders(monkeypatch):
+    """公開リンク（/s/<token>）でプランを開けること。ここが元の不具合。"""
+    import app as app_mod
+    import db
+    import geocoding
+    import weather
+    import views.sharing as S
+
+    plan = _sample_plan_state() | {"id": 7, "spot_coords": []}
+    monkeypatch.setattr(S.sharing, "get_link_by_token",
+                        lambda t: {"resource_type": "plan", "resource_id": 7, "permission": "view"})
+    monkeypatch.setattr(db, "get_travel_plan_by_id", lambda i: dict(plan))
+    monkeypatch.setattr(geocoding, "ensure_plan_coords", lambda p: None)
+    monkeypatch.setattr(weather, "plan_forecast", lambda p: [])
+    app_mod.app.config["TESTING"] = True
+
+    with app_mod.app.test_client() as c:
+        res = c.get("/s/abc")
+    assert res.status_code == 200, res.status_code
+    html = res.get_data(as_text=True)
+    assert "/shared/plan/7/ics?token=abc" in html, "カレンダーのリンクが公開トークン付きで出ること"
+
+
+# ----------------------------------------------------------------------
 # ICS カレンダー書き出し（年なし日付 / 日別イベント / TZ / 折りたたみ）
 # ----------------------------------------------------------------------
-def test_ics_advanced():
+def test_ics_advanced(monkeypatch):
+    """年なし日付「7/10」が、その年の7/10になること。
+
+    parse_date は「60日以上前なら翌年」と推定するので、実行日が9月以降だと
+    翌年の7/10になり、TODAY.year を前提にしたこのテストは9月〜12月に落ちる
+    （実際に落ちた）。判断に使う「今日」を7/1に固定して、年をまたがない
+    条件で確かめる。
+    """
+    import weather
     from views.planner import _build_plan_ics
+
+    class _July1(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 1)
+
+    monkeypatch.setattr(weather, "date", _July1)
     plan = {
         "id": 7, "destination": "静岡", "travel_date": "7/10", "duration": "1泊2日",
         "spots": ["三保松原"], "restaurants": [], "accommodation": ["ホテルA"],
@@ -285,8 +355,7 @@ def test_ics_advanced():
     }
     ics = _build_plan_ics(plan)
     # 年なし日付でも「今日」に化けず7/10になる
-    yr = TODAY.year
-    assert f"DTSTART;VALUE=DATE:{yr}0710" in ics
+    assert "DTSTART;VALUE=DATE:20260710" in ics
     # RFC 5545: 全行75オクテット以内
     for line in ics.split("\r\n"):
         assert len(line.encode("utf-8")) <= 75

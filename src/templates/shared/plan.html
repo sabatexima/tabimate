@@ -60,7 +60,7 @@
     {% if plan.spots %}
     <button class="plan-map-btn" type="button" id="shared-map-btn">🗺 地図で見る</button>
     {% endif %}
-    <a class="plan-map-btn" href="{{ url_for('share.shared_plan_ics', resource_id=plan.id) }}{% if share_token %}?token={{ share_token }}{% endif %}">📅 カレンダーに追加</a>
+    <a class="plan-map-btn" href="{{ url_for('sharing.shared_plan_ics', resource_id=plan.id) }}{% if share_token %}?token={{ share_token }}{% endif %}">📅 カレンダーに追加</a>
     <div class="plan-map-container" id="shared-plan-map" hidden></div>
   </div>
 </div>

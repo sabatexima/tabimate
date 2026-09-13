@@ -1,4 +1,17 @@
+/* 共有モーダル（_share_modal.html）。旅とプランで共通に使う。
+   window.openShareModal('trip'|'plan', id) で開き、中身はそのつどサーバーから
+   取り直す（/share/<type>/<id>）。開くまで何も読まないので、共有を使わない人には
+   通信が発生しない。
+
+   扱うのは2種類の共有:
+     公開リンク  リンクを知っていれば誰でも見られる（ログイン不要）
+     メール指定  そのメールでログインした本人だけ
+
+   このファイルを読み込むページは、どちらも同じモーダルを include している。 */
 (function () {
+  // 今どのリソースの共有を編集しているか。openShareModal() で入る。
+  // editableSupported は「編集権限を渡せる種類か」で、サーバーが答える
+  // （旅は編集を渡せるが、プランは閲覧のみ）
   let rtype = null, rid = null, editableSupported = true;
   const overlay = document.getElementById('sm-overlay');
   const linkPerm = document.getElementById('sm-link-perm');
@@ -9,14 +22,18 @@
   const grantEmpty = document.getElementById('sm-grant-empty');
   const grantEmail = document.getElementById('sm-grant-email');
 
+  // URL とメールアドレスを innerHTML で組み立てるので、先に無害化する
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+  // 権限を色つきの小さなラベルに（編集可＝緑 / 閲覧＝ベージュ）
   function permBadge(p) {
     return p === 'edit'
       ? '<span class="sm-badge edit">編集可</span>'
       : '<span class="sm-badge">閲覧</span>';
   }
+  // プランのように編集を渡せない種類のときは、選択肢から「編集も可」を隠す。
+  // 選べてしまうと、追加したのに閲覧になる、という分かりにくい結果になる
   function setEditOptionVisible(visible) {
     [linkPerm, grantPerm].forEach(sel => {
       const opt = sel.querySelector('option[value=edit]');
@@ -25,6 +42,8 @@
     });
   }
 
+  // 発行済みの公開リンクを並べる。作成・取消のたびに丸ごと描き直す
+  // （件数が数個なので、差分を取るより読みやすさを優先）
   function renderLinks(links) {
     linkList.innerHTML = '';
     linkEmpty.style.display = links.length ? 'none' : '';
@@ -53,6 +72,7 @@
     });
   }
 
+  // メール共有の一覧。こちらは権限をその場で変えられる
   function renderGrants(grants) {
     grantList.innerHTML = '';
     grantEmpty.style.display = grants.length ? 'none' : '';
@@ -98,6 +118,8 @@
     });
   }
 
+  // サーバーから今の共有状態を取り直して描き直す。
+  // 作成・変更・取消のあと、必ずこれを呼んで画面とサーバーを合わせる
   async function refresh() {
     try {
       const res = await fetch(`/share/${rtype}/${rid}`);
@@ -139,8 +161,11 @@
 
   function close() { overlay.style.display = 'none'; }
   document.getElementById('sm-close').addEventListener('click', close);
+  // 背景（オーバーレイそのもの）をクリックしたときだけ閉じる。
+  // e.target を見ないと、中のボタンを押しても閉じてしまう
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
+  // 各ページの「🔗 共有」ボタンから呼ばれる入口
   window.openShareModal = function (resourceType, resourceId) {
     rtype = resourceType; rid = resourceId;
     grantEmail.value = '';

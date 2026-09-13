@@ -184,6 +184,7 @@ struct DigestView: View {
     }
 }
 
+/// 年間ダイジェストの状態。年を切り替えるたびに取り直す。
 @MainActor
 final class DigestViewModel: ObservableObject {
     @Published private(set) var digest: Digest?

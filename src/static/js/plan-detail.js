@@ -1,32 +1,58 @@
-/* 保存プランの詳細ページ。#plan-data に埋め込まれた1件を描画し、
-   修正・評価・共有・削除・地図・天気をこのページで完結させる。 */
+/* 保存プランの詳細ページ（plan_detail.html）。このアプリで一番機能が多い画面。
+
+   ■ データの受け取り方
+     プラン1件ぶんは、サーバーがテンプレートで #plan-data に JSON として埋めてある。
+     開いた時点で全部そろっているので、描画のための通信は無い（一覧から来て
+     すぐ中身が出る）。あとから取りに行くのは、天気・地図の座標・AI が作る
+     持ち物リストだけ。
+
+   ■ 作りの型: 「HTMLを作る関数」と「動きを付ける関数」を対にする
+     xxxHtml(plan)      … 文字列で HTML を組む（状態は持たない）
+     mountXxx(card, …)  … その HTML に addEventListener を付ける
+     更新が要るときは、部分的に触らず xxxHtml() で作り直して差し替え、mount し直す。
+     持ち物・会計・評価がこの形。素の JS で状態を持ちすぎないための割り切り。
+
+   ■ 保存先の使い分け
+     持ち物の**チェック状態**だけ localStorage（その端末の付箋という扱い。
+     サーバーに送るほどのものではない）。ほかは全部サーバー。 */
 const PLAN = JSON.parse(document.getElementById('plan-data').textContent);
 const CFG = JSON.parse(document.getElementById('page-config').textContent);
 const root = document.getElementById('plan-root');
 
+// 画面は文字列テンプレートで組み立てるので、行き先や店名は先に無害化する
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// 金額を3桁区切りに。未設定は「—」（0円と区別する）
 function fmt(n) {
   return n != null ? Number(n).toLocaleString() : '—';
 }
 
 // 目的地の宿を Google マップで探すリンク（公式の Maps URLs 形式・スマホはアプリが開く）。
+// 「◯◯の宿を探す」の行き先。サーバー側（chat/formatter.py の booking_url）と
+// 同じ形にそろえてある。片方だけ変えると、チャットと詳細で飛び先が食い違う
 function bookingUrl(destination) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((destination || '') + ' 宿')}`;
 }
 
 // 持ち物リスト: 未生成なら「作る」ボタン、生成済みならチェックリスト。
 // チェック状態は自分用アプリなので localStorage に保存（DBはリストだけ持つ）。
+// 持ち物のチェックは、その端末の中だけに置く（サーバーには送らない）。
+// 「傘を入れた」は本人のその場のメモで、共有相手には関係ないため
 function packingKey(planId) { return `tabimate_pack_${planId}`; }
+// localStorage は使えないことがある（プライベートウィンドウ・設定で拒否）。
+// 読めなくても持ち物リストは出したいので、失敗したら空として扱う
 function loadChecked(planId) {
   try { return new Set(JSON.parse(localStorage.getItem(packingKey(planId)) || '[]')); }
   catch (e) { return new Set(); }
 }
+// チェック状態を書き戻す。localStorage が使えない環境では黙って諦める
+// （持ち物リスト自体は出せるので、機能全体を止めるほどではない）
 function saveChecked(planId, set) {
   try { localStorage.setItem(packingKey(planId), JSON.stringify([...set])); } catch (e) {}
 }
+// 持ち物リスト。まだ作っていないプランには「作る」ボタンだけを出す
 function packingHtml(plan) {
   const items = plan.packing_list;
   if (!items || !items.length) {
@@ -54,6 +80,7 @@ function packingHtml(plan) {
       <ul class="pack-list">${lis}</ul>
     </div>`;
 }
+// 持ち物リストに動きを付ける。チェックの付け外し・全部消し・AIでの作り直し
 function mountPacking(card, plan) {
   const box = card.querySelector('.plan-packing');
   if (!box) return;
@@ -94,6 +121,8 @@ function mountPacking(card, plan) {
 
 // 旅の会計（おこづかい帳）: 見積もりと実績を並べて差額を出す。見積もりが無い
 // プランには出さない。実績が入力済みなら比較表示、未入力なら記録フォーム。
+// 旅のおこづかい帳。見つもりと実際を並べ、浮いたぶんを褒める。
+// editing=true のときは入力欄つきの姿になる（同じ関数で2つの見た目を作る）
 function accountingHtml(plan, editing = false) {
   const est = plan.total_per_person || plan.budget_limit || null;
   if (!est) return '';  // 費用の目安が無いプランでは会計を出さない
@@ -136,6 +165,7 @@ function accountingHtml(plan, editing = false) {
 }
 
 // 会計フォーム/表示のイベントを配線。記録・修正で /save_actual_total を叩き再描画。
+// おこづかい帳に動きを付ける。保存したら描き直して mount し直す（上の「型」参照）
 function mountAccounting(card, plan, editing = false) {
   const box = card.querySelector('.plan-account');
   if (!box) return;
@@ -180,6 +210,7 @@ function mountAccounting(card, plan, editing = false) {
 }
 
 // HTML文字列 → 最初の要素ノード（差し替え用の小ヘルパ）
+// HTML文字列 → DOM要素。作り直した部品を replaceWith で差し替えるために使う
 function buildFromHtml(html) {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
@@ -187,6 +218,7 @@ function buildFromHtml(html) {
 }
 
 // 評価済みの表示（1プラン1評価・上書き式）。「修正」で再編集できる（誤入力の救済）。
+// 評価済みの表示（★と一言）。この★は次のプラン生成の好みにも効く
 function ratedRateHtml(rating, comment) {
   const stars = [1, 2, 3, 4, 5]
     .map(n => `<span class="rate-star-static${rating >= n ? ' on' : ''}">★</span>`)
@@ -202,6 +234,7 @@ function ratedRateHtml(rating, comment) {
 }
 
 // 編集可能な評価ウィジェット（既存の評価があれば★とコメントを引き継ぐ）。
+// まだ評価していないときの入力欄（★を選んで一言を書く）
 function editableRateHtml(plan) {
   const r = plan.rating || 0;
   const stars = [1, 2, 3, 4, 5]
@@ -220,6 +253,7 @@ function editableRateHtml(plan) {
 }
 
 // 評価エリアのイベントを結線する。記録/更新で読み取り表示へ、「修正」で編集へ戻る（相互再結線）。
+// ★の選択に動きを付ける。ホバーと選択で塗り分けるので、mouseover と click の両方を見る
 function mountRate(card, plan) {
   const box = card.querySelector('.plan-rate');
   if (!box) return;
@@ -281,6 +315,8 @@ function mountRate(card, plan) {
 }
 
 // セクションは閉じた状態が既定（見出しだけで全体を見渡し、気になる所だけひらく）
+// 折りたたみ1つ。中身が空なら丸ごと出さない（日帰りの「宿泊施設」など）。
+// チャットのプランカード（chat/formatter.py）と同じ形・同じCSS（plan-card.css）
 function accordion(icon, label, items) {
   if (!items || items.length === 0) return '';
   const lis = items.map(i => `<li>${esc(i)}</li>`).join('');
@@ -291,6 +327,7 @@ function accordion(icon, label, items) {
 }
 
 // 表紙ヘッダー（目的地・チップ・保存日）。詳細ページでは静的な見出し。
+// カード上部の表紙（行き先・カウントダウン・出発地/期間/人数/費用のチップ）
 function heroHtml(plan) {
   const saved = plan.created_at
     ? new Date(plan.created_at).toLocaleDateString('ja-JP')
@@ -318,6 +355,8 @@ function heroHtml(plan) {
 }
 
 // 出発日(ISO)まであと何日か。過去は null。
+// 出発日まであと何日か。過去は null。時刻を切り落としてから引くので、
+// 「明日」は時間帯によらず必ず1になる（saved-plans.js と同じ計算）
 function daysUntilDepart(iso) {
   if (!iso) return null;
   const dep = new Date(iso + 'T00:00:00');
@@ -328,6 +367,7 @@ function daysUntilDepart(iso) {
 }
 
 // 出発カウントダウンの絵本トーンなラベル（四つ葉スタンプ風）。過去は空文字。
+// カウントダウンの言い回し。旅が終わっていれば空文字（何も出さない）
 function countdownLabel(iso) {
   const d = daysUntilDepart(iso);
   if (d === null) return '';
@@ -337,6 +377,7 @@ function countdownLabel(iso) {
 }
 
 // 詳細（天気・アコーディオン・宿・地図）
+// 観光・グルメ・宿・スケジュール・費用の折りたたみをまとめて作る
 function sectionsHtml(plan) {
   const mapId = `plan-map-${esc(plan.id)}`;
   const hasSpots = plan.spots && plan.spots.length > 0;
@@ -362,6 +403,8 @@ function sectionsHtml(plan) {
 }
 
 // 地図ボタン：クリックでコンテナを開閉し、初回のみ地図を初期化
+// 地図は押されたときに初めて作る。Leaflet の初期化とタイル取得が重いので、
+// 開かない人には走らせない（footprint-map.js と同じ考え方）
 function mountMap(card, plan) {
   const mapBtn = card.querySelector('.plan-map-btn');
   if (!mapBtn) return;
@@ -384,6 +427,8 @@ function mountMap(card, plan) {
 }
 
 // 修正案のプレビュー（未保存）。確定するまで元プランは変更しない。
+// 「チャットで修正」で作り直した案を、元のプランと並べて見せる確認画面。
+// ここで「適用」を押すまで保存しない（作り直しが気に入らないこともあるため）
 function renderPreview(proposed, origPlan) {
   const card = document.createElement('div');
   card.className = 'plan-card plan-preview open';
@@ -431,6 +476,7 @@ function renderPreview(proposed, origPlan) {
   mountMap(card, proposed);
 }
 
+// 画面全体を組み立てる入口。ページを開いたときと、修正を適用したあとに呼ぶ
 function renderDetail(plan) {
   const card = document.createElement('div');
   card.className = 'plan-card open';
@@ -472,12 +518,15 @@ function renderDetail(plan) {
     if (!editBox.hidden) editInput.focus();
   });
 
+  // 「チャットで修正」の入力欄を、また打てる状態に戻す
   const resetEdit = () => {
     editInput.disabled = false;
     editSend.disabled = false;
     editSend.textContent = '修正する';
   };
 
+  // 修正の指示を送る。返ってくるのは保存済みのプランではなく「修正案」なので、
+  // renderPreview で見比べてもらい、適用を押されて初めて保存する
   const submitEdit = async () => {
     const message = editInput.value.trim();
     if (!message) return;
@@ -563,11 +612,15 @@ function renderDetail(plan) {
 }
 
 // ---- 旅行日の天気（保存一覧と同じ判定・表示） ----
+// 天気の日付キー（YYYY-MM-DD）に揃える
 function wxDate(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
   return m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}` : esc(s);
 }
 // 旅行日をDateに。西暦つきはそのまま、年なし（7/2・7月2日）は直近の該当日を推定。
+// 「2026-10-10」「10/10」「10月10日」など自由に書かれた旅行日を Date に。
+// サーバー側（services/weather.py の parse_date）と同じ推定（年が無ければ
+// 直近の該当日）をブラウザでもやる
 function parseTravelDate(travelDate) {
   const s = travelDate || '';
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -583,6 +636,8 @@ function parseTravelDate(travelDate) {
   }
   return null;
 }
+// 旅行日の天気。予報が届くのは16日先までなので、遠い旅では
+// 「出発が近づくと表示されます」とだけ出して問い合わせない
 async function loadWeather(plan) {
   const el = document.getElementById(`weather-${plan.id}`);
   if (!el) return;

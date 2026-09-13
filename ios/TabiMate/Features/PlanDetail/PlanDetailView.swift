@@ -220,6 +220,7 @@ private struct LedgerCard: View {
 
 // MARK: - 持ち物リスト
 
+/// 持ち物リスト。チェックの状態はこの端末にだけ残す（Web版と同じ扱い）。
 private struct PackingCard: View {
     let items: [String]
     let isWorking: Bool
@@ -363,6 +364,7 @@ private struct RatingCard: View {
 
 // MARK: - 状態
 
+/// しおり1件の状態。持ち物・会計・評価の更新をまとめて受け持つ。
 @MainActor
 final class PlanDetailViewModel: ObservableObject {
     @Published var plan: TravelPlan

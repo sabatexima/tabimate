@@ -164,6 +164,7 @@ def _normalize_travel_date(travel_date):
     today = date.today()
 
     def _fmt(d):
+        """date → 「2026年7月10日」。あとで parse_date が読み直せる形にそろえる。"""
         return f"{d.year}年{d.month}月{d.day}日"
 
     # 単純な相対語（発話時点でのみ意味を持つため、抽出直後のここで確定させる）
@@ -328,6 +329,7 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 破綻する。例:「100万円で10泊したい」に1泊2日の行程を流用）ため全体を作り直す。
     if prev and targets and "all" not in targets:
         def _changed(key, new):
+            """前回の条件から変わったか。数値と文字列が混ざるので型をそろえて比べる。"""
             old = prev.get(key)
             if isinstance(new, int) or isinstance(old, int):
                 return (old or 0) != (new or 0)

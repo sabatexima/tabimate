@@ -146,6 +146,7 @@ struct ChatView: View {
 
 // MARK: - 1件ぶんの表示
 
+/// 吹き出し1つ。自分の発言は右、ちゃむは左にアイコン付きで。
 private struct MessageRow: View {
     let message: ChatMessage
     let onSave: (DraftPlan) async -> Bool

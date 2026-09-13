@@ -94,6 +94,10 @@ def generate_travel_plan(inputs: dict):
     inputs.setdefault("weather", "")
 
     def _compute_weather():
+        """旅行日の天気予報を、プロンプトに添えるヒント文にする。
+
+        取れなくてもプランは作れるので、失敗したら空文字を返して先へ進む。
+        """
         # 旅行日の天気予報を取得して屋内/屋外調整のヒントにする（取得不可なら空）。
         try:
             from services import weather as wx
@@ -160,6 +164,10 @@ if __name__ == "__main__":
     }
 
     def display_plan(state: dict) -> None:
+        """できたプランを端末に印字する（このファイルを直接実行したときの確認用）。
+
+        Webから使うときは通らない。エージェントを1本だけ試したいときに便利なので残してある。
+        """
         print("\n" + "=" * 60)
         print(f"📍 目的地: {state['destination']}（出発地: {state['departure_location']}）")
         print(f"⏱️ 期間: {state['duration']}")

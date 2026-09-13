@@ -163,6 +163,7 @@ def _digest_data(requested_year: str) -> dict:
     all_trips = repo.get_trips(_uid())
 
     def trip_year(t: dict) -> str:
+        """その旅の「年」。出発日が無ければ作成日で代用する。"""
         d = t.get("start_date") or t.get("created_at") or ""
         return str(d)[:4]
 

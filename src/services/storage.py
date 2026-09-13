@@ -206,6 +206,7 @@ def get_urls(storage_paths) -> dict:
         _get_signing_info()  # 認証情報を先に初期化し、並列時のトークン更新競合を避ける
 
         def _work(p):
+            """1枚ぶんの署名URLを作ってキャッシュする（並列で呼ばれる）。"""
             url = _sign_url(p)
             _store_url(p, url)
             return p, url

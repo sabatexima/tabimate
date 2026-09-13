@@ -1,3 +1,13 @@
+"""AI と Web 検索の呼び出し口。プロンプトや旅の知識はここには置かない。
+
+このモジュールが持つのは「どのモデルを、どう呼ぶか」だけ:
+  ・使うモデル（環境変数で差し替え可。新モデルで問題が出たら .env の1行で戻せる）
+  ・失敗したときの再試行（invoke_with_retry）
+  ・Tavily の検索と、結果の切り詰め（モデルに渡す量を抑える）
+
+旅のプランをどう組むかは chat/agents.py の役目。ここを薄く保つことで、
+モデルを替えるときに触る場所が1か所で済む。
+"""
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor

@@ -1,3 +1,12 @@
+"""全モジュール共通のロガー。get_logger("名前") でどこからでも同じ設定を使う。
+
+出し先は2つ:
+  標準出力  INFO以上。Cloud Run ではこれがそのままログとして拾われる
+  src/logs/app.log  DEBUG以上。手元で細かく追いたいとき用
+
+ここが src/ 直下にあるのは、views も db も services も chat も使う横断的なものだから。
+以前は chat/logger.py にいて、DB層まで「AIの層」に依存する形になっていた。
+"""
 import logging
 import sys
 from pathlib import Path

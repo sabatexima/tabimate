@@ -5,6 +5,12 @@ import Foundation
 
 // MARK: - 旅行プラン
 
+/// 保存済みのしおり1件。サーバーの travel_plans 表と1対1で対応する。
+///
+/// JSON のキーはスネークケースなので CodingKeys で読み替える。
+/// デコードは `id` 以外すべて decodeIfPresent（欠けても落とさない）にしてある。
+/// サーバーに列が増えたり、古いプランに新しい項目が無かったりしても、
+/// アプリが起動しなくなることを避けるため。
 struct TravelPlan: Codable, Identifiable, Hashable {
     var id: Int
     var destination: String
@@ -103,6 +109,7 @@ struct TravelPlan: Codable, Identifiable, Hashable {
     var isOwner: Bool { !isShared }
 }
 
+/// 画面に出すための派生値（サーバーからは来ない、ここで組み立てるもの）。
 extension TravelPlan {
     /// 「1泊2日・2人」のような一行の要約。
     var summaryLine: String {
@@ -135,6 +142,7 @@ extension TravelPlan {
     }
 }
 
+/// 日付の整形をひとまとめに（各画面で作り直さないように）。
 extension DateFormatter {
     /// "2026-08-14" のような日付だけの文字列を読むための整形器。
     /// 端末のタイムゾーンで解釈する（「あと何日」は生活時間で数えたいので）。
@@ -149,12 +157,14 @@ extension DateFormatter {
 
 // MARK: - 地図
 
+/// 地図に置く1点（名前つき）。観光・グルメ・宿で共通。
 struct PlaceCoordinate: Codable, Hashable {
     let name: String
     let lat: Double
     let lng: Double
 }
 
+/// しおりの座標一式。地図を開いたときに /api/plan_geo/<id> から取り直す。
 struct PlanGeo: Codable {
     var spotCoords: [PlaceCoordinate]
     var restaurantCoords: [PlaceCoordinate]
@@ -189,6 +199,8 @@ struct PlanGeo: Codable {
 
 /// チャットでちゃむが提示した、保存前のプラン（src/chat/formatter.py の plan_payload）。
 /// 保存するときはそのまま /save_plan に送り返す。
+/// 相談中にちゃむが出してくる「まだ保存していないプラン案」。
+/// TravelPlan と似ているが id を持たず、保存して初めて TravelPlan になる。
 struct DraftPlan: Codable, Hashable {
     var destination: String?
     var travelDate: String?
@@ -236,6 +248,10 @@ struct DraftPlan: Codable, Hashable {
 
 // MARK: - チャット
 
+/// 相談の1発言。ai の発言にはプラン案が添えられることがある。
+///
+/// Web版は content に HTML が入るが、アプリはその HTML を使わない。
+/// 代わりに plan（構造化データ）を受け取り、SwiftUI で組み直して描く。
 struct ChatMessage: Codable, Identifiable, Hashable {
     /// サーバーは id を返さないので、表示のために手元で採番する。
     var id = UUID()
@@ -255,11 +271,13 @@ struct ChatMessage: Codable, Identifiable, Hashable {
 
 // MARK: - サインイン
 
+/// サインインした人。表示に使うぶんだけ持つ。
 struct AppUser: Codable, Hashable {
     let email: String
     let name: String
 }
 
+/// /auth/app/signin の返事。token を Keychain に保管して以降 Bearer で使う。
 struct SignInResponse: Codable {
     let status: String
     let token: String

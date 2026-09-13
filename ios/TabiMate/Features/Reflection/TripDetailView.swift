@@ -278,6 +278,7 @@ struct TripDetailView: View {
 
 // MARK: - 写真を大きく見る
 
+/// 写真の拡大表示。ピンチで拡大、ドラッグで送る。
 private struct PhotoZoomView: View {
     let photo: TripPhoto
     let canDelete: Bool
@@ -341,6 +342,7 @@ private struct PhotoZoomView: View {
 
 // MARK: - 状態
 
+/// 旅1つの状態。写真の追加・削除、付箋の生成、ベストショット選びを受け持つ。
 @MainActor
 final class TripDetailViewModel: ObservableObject {
     @Published private(set) var trip: Trip

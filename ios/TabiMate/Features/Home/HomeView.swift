@@ -123,6 +123,8 @@ struct HomeView: View {
     }
 }
 
+/// ホームの状態。季節の「こんな旅はどう？」をサーバーから取ってくる
+/// （Web版と同じ提案を出すため、アプリ側では持たない）。
 @MainActor
 final class HomeViewModel: ObservableObject {
     @Published private(set) var ideas: [TravelIdea] = []

@@ -1,17 +1,24 @@
-/* 保存プラン一覧。表紙カード（本棚）だけを描画し、
-   クリックで詳細ページ（自分: /plan/<id> ・共有: /shared/plan/<id>）へ移動する。 */
+/* 保存プラン一覧（saved_plans.html）＝「本棚」。
+   表紙カードだけを描き、中身はクリック先の詳細ページ（plan-detail.js）に任せる。
+   一覧に全部の情報を載せると重くなるうえ、絵本の背表紙が並ぶ見立てが崩れるため。
+
+   自分のプランと、共有されたプランを同じ棚に混ぜて並べる。取得元は別のAPIだが、
+   カードの作り方は共通で、opts.shared で見た目とメニューだけ変える。 */
+
+// カードは文字列テンプレートで組み立てるので、行き先などは先に無害化する
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// 金額を3桁区切りに。未設定は「—」（0円と区別する）
 function fmt(n) {
   return n != null ? Number(n).toLocaleString() : '—';
 }
 
 const container = document.getElementById('plans-container');
 
-// 表紙カード（絵本の背表紙＋タイトル＋ちいさなチップ）
 // 出発日(ISO)まであと何日か。過去は null（旅は終わっている）。
+// 時刻を切り落としてから引くので、「明日」は時間帯によらず必ず1になる
 function daysUntilDepart(iso) {
   if (!iso) return null;
   const dep = new Date(iso + 'T00:00:00');
@@ -30,6 +37,8 @@ function countdownLabel(iso) {
   return `🍀 旅まであと${d}日`;
 }
 
+// 表紙カード1枚を組み立てる（絵本の背表紙＋行き先＋ちいさなチップ）。
+// opts.shared = true なら、共有されたプラン（削除ではなく共有解除、★は出さない）
 function coverCard(plan, opts = {}) {
   const shared = !!opts.shared;
   const item = document.createElement('div');
@@ -71,6 +80,7 @@ function coverCard(plan, opts = {}) {
       </div>
     </div>`;
 
+  // ⋯ メニュー。開く前に他を閉じるので、同時に複数開かない
   const menu = item.querySelector('.menu');
   item.querySelector('.kebab').addEventListener('click', () => {
     const willOpen = menu.hidden;
@@ -116,10 +126,12 @@ function coverCard(plan, opts = {}) {
 function closeAllMenus() {
   container.querySelectorAll('.menu').forEach(m => m.hidden = true);
 }
+// カードの外をどこか押したらメニューを閉じる（メニュー自身の中は除く）
 document.addEventListener('click', (ev) => {
   if (!ev.target.closest('.card-menu')) closeAllMenus();
 });
 
+// 1枚も無いときの案内。ここから直接チャットへ送る
 function showEmpty() {
   container.style.display = 'block';
   container.innerHTML = `<div class="empty-state">
@@ -129,6 +141,7 @@ function showEmpty() {
   </div>`;
 }
 
+// 起動時に一度だけ。2つのAPIを並列で叩き、同じ棚に並べる
 async function loadPlans() {
   const loading = document.getElementById('loading');
   try {
@@ -138,6 +151,8 @@ async function loadPlans() {
       fetch('/get_shared_plans'),
     ]);
     const mine = await mineRes.json();
+    // 共有プランの取得に失敗しても、自分のプランは見せたい。
+    // ここで throw させないことで、片方が落ちても本棚は開く
     let shared = { plans: [] };
     try { shared = await sharedRes.json(); } catch (e) { /* 共有取得失敗は無視 */ }
 

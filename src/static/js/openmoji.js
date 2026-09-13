@@ -1,6 +1,15 @@
-/* 装飾的な絵文字を OpenMoji（手書き風）の画像に差し替える。
-   ★☆（お気に入り）・☰（メニュー）・✓・✎ などの機能アイコンは対象外。
-   静的・動的どちらの絵文字にも対応（MutationObserverで後から挿入された分も置換）。 */
+/* 装飾的な絵文字を OpenMoji（手書き風）の画像に差し替える（全ページ共通）。
+
+   なぜ要るか: 絵文字の見た目は OS 任せで、Windows・Mac・Android でまるで違う。
+   絵本のトーンで統一したいので、手書き風の OpenMoji に置き換えて揃える。
+
+   置き換えるのは ALLOWED に挙げた**装飾用の絵文字だけ**。★☆（お気に入り）・
+   ☰（メニュー）・✓・✎ のような、押せる／状態を表すアイコンは対象外にしている。
+   これらは JS が textContent を読み書きして状態を切り替えるので、<img> に
+   変えられると比較が壊れる。
+
+   後から追加された絵文字（チャットの返事など）にも効くよう、MutationObserver で
+   DOM の変化を見張る。 */
 (function () {
   const BASE = 'https://cdn.jsdelivr.net/npm/openmoji@15.0.0/color/svg/';
 
@@ -12,6 +21,8 @@
 
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION', 'CODE', 'PRE']);
 
+  // 絵文字 → OpenMoji のファイル名。異体字セレクタ(FE0F)は付いていたり
+  // いなかったりするので落とす。付いたままだとファイルが見つからない
   function toUrl(emoji) {
     const cps = Array.from(emoji)
       .map(c => c.codePointAt(0))
@@ -21,12 +32,15 @@
     return BASE + cps + '.svg';
   }
 
+  // 絵文字の中には正規表現の特殊文字と重なるものがあるので、逃がしてから並べる
   function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   const RE = new RegExp(
     '(' + ALLOWED.slice().sort((a, b) => b.length - a.length).map(escapeRe).join('|') + ')',
     'gu'
   );
 
+  // テキストノード1つを走査し、絵文字の箇所だけ <img> に差し替える。
+  // 要素ごと作り直さないのは、周りのテキストや状態を壊さないため
   function replaceInTextNode(node) {
     const text = node.nodeValue;
     if (!text) return;
@@ -49,11 +63,16 @@
     if (node.parentNode) node.parentNode.replaceChild(frag, node);
   }
 
+  // root 以下のテキストを全部たどって置き換える。
+  // 先に対象を配列へ集めてから差し替えるのが要点。走査しながらDOMを
+  // 書き換えると TreeWalker の位置がずれて、置き残しが出る
   function openmojify(root) {
     if (!root) return;
     if (root.nodeType === Node.TEXT_NODE) { replaceInTextNode(root); return; }
     if (root.nodeType !== Node.ELEMENT_NODE || SKIP_TAGS.has(root.tagName)) return;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      // <script> や <input> の中のテキストは触らない。
+      // REJECT はその枝ごと飛ばすので、まとめて除外できる
       acceptNode(n) {
         if (!n.nodeValue || !n.parentNode || SKIP_TAGS.has(n.parentNode.tagName)) {
           return NodeFilter.FILTER_REJECT;
@@ -69,6 +88,11 @@
 
   window.openmojify = openmojify;
 
+  // 後から挿入された絵文字も置き換える。ただし自分の差し替えもまた
+  // DOM の変化として飛んでくるので、そのまま処理すると無限に回る。
+  //   1. 変化をいったん pending に溜める
+  //   2. 次の描画のタイミングで observer を止めてから置き換える
+  //   3. 終わってから見張りを再開する
   const pending = new Set();
   let scheduled = false;
   const observer = new MutationObserver(muts => {
@@ -88,8 +112,10 @@
       });
     }
   });
+  // 見張りを（再）開始する。置き換えの前後で止める／再開するために関数にしてある
   function observe() { observer.observe(document.body, { childList: true, subtree: true }); }
 
+  // 最初に今あるぶんを置き換えてから、見張りを始める
   function init() {
     openmojify(document.body);
     observe();

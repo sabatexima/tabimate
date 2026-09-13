@@ -1,12 +1,29 @@
+/* 共有された旅のページ（shared/trip.html）。
+   自分の旅のページ（reflection-trip.js）と似ているが、別ファイルにしてある。
+   見ている人が「所有者ではない」ため、できることが2つの軸で変わるから:
+
+     canEdit  … 編集権限つきで共有された人だけ。写真・付箋・旅の削除ができる
+     loggedIn … ログインしている人だけ。自分のお気に入りに入れられる
+
+   公開リンク（ログイン不要）で来た人は両方 false になり、何も操作できない。
+   権限の判定はサーバー（views/sharing.py）が済ませていて、その結果が
+   テンプレートから #page-config に JSON で載ってくる。ここでは受け取るだけ。 */
+
 const CFG = JSON.parse(document.getElementById('page-config').textContent);
 
-// 編集権限がある場合のみ: 付箋/写真/旅の編集・削除
+// ここから先は編集権限つきで共有された人だけ。権限の無い人には
+// テンプレート側がボタン自体を出していないので、ここも丸ごと動かさない
 if (CFG.canEdit) {
   const TRIP_ID = CFG.tripId;
   const SHARE_TOKEN = CFG.shareToken;
+  // 公開リンク（/s/<token>）から来た場合、その先の操作でもトークンを
+  // 引き継がないとサーバーに「誰だか分からない」と断られる。
+  // ログイン中の人は SHARE_TOKEN が空なので、URL はそのまま
   function withToken(url) {
     return SHARE_TOKEN ? url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(SHARE_TOKEN) : url;
   }
+  // 付箋の文字をそのまま innerHTML に入れる場所があるので、HTMLとして
+  // 解釈されうる文字を潰す（AIの出力にも記号は混じる）
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -60,7 +77,9 @@ if (CFG.canEdit) {
     stickerBtn.disabled = false; stickerBtn.textContent = '付箋を作り直す';
   });
 
-  // アップロード直後の写真も削除できるよう figure を組み立てる
+  // アップロード直後の写真も削除できるよう figure を組み立てる。
+  // テンプレート側と同じ形（figure.photo > img + button.photo-del）にしないと
+  // ポラロイドの CSS が当たらず、その写真だけ枠なしで並ぶ
   function makePhotoFigure(p) {
     const fig = document.createElement('figure');
     fig.className = 'photo';
@@ -69,6 +88,8 @@ if (CFG.canEdit) {
     img.src = p.thumb_url || p.url;
     img.dataset.full = p.url;
     img.alt = 'photo'; img.loading = 'lazy'; img.decoding = 'async';
+    // サムネイルがまだ無い写真（生成前・古いもの）は原寸に落とす。
+    // onerror を null にしてから差し替えないと、原寸も失敗したとき無限に回る
     img.onerror = () => { img.onerror = null; img.src = img.dataset.full; };
     const del = document.createElement('button');
     del.className = 'photo-del'; del.setAttribute('aria-label', '写真を削除'); del.textContent = '×';
@@ -76,13 +97,15 @@ if (CFG.canEdit) {
     return fig;
   }
 
-  // 写真を1枚削除（編集権限）
+  // 写真を1枚削除（編集権限）。写真は後から増えるので、1枚ずつに
+  // イベントを付けず、親のグリッドで受けて .photo-del かどうかを見る
   const photoGrid = document.getElementById('photo-grid');
   if (photoGrid) photoGrid.addEventListener('click', async (ev) => {
     const del = ev.target.closest('.photo-del');
     if (!del) return;
     const fig = del.closest('.photo');
     const id = fig.dataset.id;
+    // id が無い＝まだサーバーに送られていない見た目だけの要素。消すだけでよい
     if (!id) { fig.remove(); return; }
     if (!confirm('この写真を削除しますか？元に戻せません。')) return;
     del.disabled = true;
@@ -108,7 +131,7 @@ if (CFG.canEdit) {
       const res = await fetch(withToken(`/shared/trip/${TRIP_ID}/stickers/${id}`), { method: 'DELETE' });
       const data = await res.json();
       if (res.ok && data.deleted) card.remove();
-    } catch (e) { /* 失敗時は次の生成で整合する */ }
+    } catch (e) { /* 失敗時は次の生成で整合する（付箋は作り直せる） */ }
   });
 
   // 旅ごと削除（編集権限）
@@ -133,7 +156,8 @@ if (CFG.canEdit) {
   });
 }
 
-// ログイン済みの場合のみ: 閲覧者自身のお気に入り登録
+// ここからはログインしている人だけ。共有された旅でも「自分の」お気に入りに
+// 入れられる（★は旅ではなく、見ている人ごとに持つ。DBは trip_favorites 表）
 if (CFG.loggedIn) {
   // 共有された旅を、閲覧者自身のお気に入りとして登録/解除する
   (function () {

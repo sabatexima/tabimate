@@ -4,6 +4,8 @@ import SwiftUI
 import GoogleSignIn
 #endif
 
+/// アプリの入口。サインイン状態（AuthStore）だけをここで持ち、
+/// 画面の出し分けは RootView に任せる。
 @main
 struct TabiMateApp: App {
     @StateObject private var auth = AuthStore.shared

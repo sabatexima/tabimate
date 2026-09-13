@@ -1,11 +1,27 @@
+/* 旅の振り返り一覧（reflection/index.html）＝アルバムの表紙が並ぶページ。
+
+   カードそのものはサーバー（Jinja2）が描いて返す。ここがやるのは、
+   その並びを触る操作だけ:
+     ・新しい旅を作る
+     ・★ / 削除 / 共有解除
+     ・検索・並び替え・お気に入り絞り込み
+
+   検索と並び替えは**サーバーに問い合わせない**。旅の件数はせいぜい数十で、
+   全カードが最初からDOMにあるため、hidden の付け外しと並べ替えで足りる。
+   通信が無いぶん、打った瞬間に絞り込まれる。
+
+   カードが持つ情報は data-* 属性（data-title / data-created / data-favorite …）に
+   載せてあり、JS はそこだけを見る。テンプレートを直すときはこの属性も一緒に。 */
+
 const CFG = JSON.parse(document.getElementById('page-config').textContent);
   // --- 新しい旅フォームの開閉 ---
   const toggleBtn = document.getElementById('new-trip-toggle');
   const form = document.getElementById('new-trip-form');
   const ntClose = document.getElementById('nt-close');
+  // 既定はボタン1つだけ。押して初めてフォームが開く（一覧を主役にするため）
   function openForm() {
     form.hidden = false; toggleBtn.hidden = true;
-    document.getElementById('f-title').focus();
+    document.getElementById('f-title').focus();   // 開いたらすぐ打てるように
   }
   function closeForm() { form.hidden = true; toggleBtn.hidden = false; }
   toggleBtn.addEventListener('click', openForm);
@@ -37,7 +53,9 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     }
   });
 
-  // --- 「…」メニュー：開閉と削除 ---
+  // --- カード上の操作（★・⋯メニュー・削除・共有解除）---
+  // カードは数十枚あるので、1枚ずつイベントを付けず、親の #trips で
+  // まとめて受けて「何が押されたか」を closest() で判定する
   const tripsEl = document.getElementById('trips');
 
   function closeAllMenus() {
@@ -70,7 +88,8 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
       return;
     }
 
-    // お気に入りトグル（カードリンク内にあるので遷移を止める）
+    // お気に入りトグル。★はカード全体を覆う <a> の中にあるので、
+    // preventDefault() しないと詳細ページへ飛んでしまう
     const fav = ev.target.closest('.fav-btn');
     if (fav) {
       ev.preventDefault();
@@ -86,6 +105,8 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
         });
         const data = await res.json();
         if (res.ok) {
+          // 見た目だけでなく data 属性も更新する。並び替え（お気に入り順）と
+          // 絞り込みはこの属性を見るので、片方だけ変えるとずれる
           const on = !!data.is_favorite;
           card.dataset.favorite = on ? '1' : '0';
           fav.classList.toggle('on', on);
@@ -139,7 +160,7 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     if (!ev.target.closest('.card-menu')) closeAllMenus();
   });
 
-  // --- 検索・並び替え・お気に入り絞り込み（クライアントサイド）---
+  // --- 検索・並び替え・お気に入り絞り込み（すべて手元で・通信なし）---
   const searchEl = document.getElementById('album-search');
   const sortEl = document.getElementById('album-sort');
   const noResults = document.getElementById('no-results');
@@ -152,7 +173,9 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   // 全角/半角・大文字小文字・カナ種別を正規化して比較しやすくする
   const norm = (s) => kataToHira((s || '').toString().normalize('NFKC').toLowerCase());
 
+  // 並び替えの比較関数。日付は ISO 文字列なので、そのまま文字列比較でよい
   function compareCards(a, b, mode) {
+    // カードの data-* から、比較しやすい形で取り出す小道具
     const txt = (c) => norm(c.dataset.title);
     const num = (c, k) => parseInt(c.dataset[k] || '0', 10) || 0;
     const str = (c, k) => c.dataset[k] || '';
@@ -171,8 +194,9 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     }
   }
 
+  // 絞り込みと並び替えをまとめてかけ直す。★の付け外しや共有解除のあとにも呼ぶ
   function applyFilterSort() {
-    if (!searchEl) return;
+    if (!searchEl) return;   // 旅が0件のときは検索欄自体が無い
     // スペース区切りは AND 検索（各語をすべて含むものだけ表示）
     const terms = norm(searchEl.value).trim().split(/\s+/).filter(Boolean);
     const cards = Array.from(tripsEl.querySelectorAll('.trip-card'));
@@ -185,6 +209,8 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
       c.hidden = !show;
       if (show) visible++;
     });
+    // 並べ替えは appendChild で末尾へ動かすだけ。既にDOMにある要素を
+    // append すると「移動」になるので、作り直さずに順番だけ変えられる
     cards.slice().sort((a, b) => compareCards(a, b, sortEl.value))
          .forEach((c) => tripsEl.appendChild(c));
     if (noResults) noResults.hidden = visible !== 0;

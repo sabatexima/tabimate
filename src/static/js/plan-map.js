@@ -1,4 +1,27 @@
+/* プランの地図（プラン詳細・共有プラン）。観光・グルメ・宿を色分けしたピンで、
+   **まわる順**につないで見せる。JS の中で一番長いファイル。
+
+   ■ 「まわる順」がこのファイルの主題
+     地図に点を打つだけなら簡単だが、それでは「どこにあるか」しか分からない。
+     知りたいのは「どう歩くか」なので、スケジュール（"09:00 兼六園を散策"）の
+     文章からスポット名を探して、出てくる順に番号を振る（orderByItinerary）。
+     ここが一番むずかしく、地名の表記ゆれ・部分一致・一般的すぎる語の除外を
+     normText / isGenericFragment / findInSchedule で処理している。
+
+   ■ 座標はできるだけ取りに行かない
+     ジオコーディングは外部APIで、遅くて回数制限もある。そこで3段構え:
+       1. プランに保存済みの座標（spot_coords）をまず使う
+       2. localStorage のキャッシュ（CACHE_PREFIX）
+       3. どちらにも無いものだけ /api/geocode へ問い合わせ、結果を保存する
+
+   ■ 自分でピンを足せる（addPinEditor）
+     AIが出さなかった場所を「メモ」として置ける。編集モードの間だけ地図の
+     クリックを拾い、保存でまとめて /save_plan_pins/<id> に送る。
+
+   window.initPlanMap() を公開し、「地図で見る」で初めて呼ばれる。 */
 (() => {
+  // Stadia のキーはタイル取得のためブラウザに出る（仕組み上避けられない）。
+  // 無ければ通常の OSM タイルに落ちるので、キー無しでも地図は出る
   const STADIA_KEY = document.querySelector('meta[name="stadia-key"]')?.content || '';
   // v2: 旧版で焼き付いた空配列([])キャッシュを無効化するためキーを更新
   const CACHE_PREFIX = 'tabimate_geo_v2_';
@@ -11,11 +34,14 @@
     custom:        { fill: '#9b6dd6', text: '#5e3a99', clover: false, label: 'メモ' },
   };
 
+  // ピン・吹き出しは文字列で HTML を組むので、店名などは先に無害化する
   function esc(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // 地名 → 座標。同じ場所を何度も引かないよう localStorage に貯める。
+  // 見つからなかった場合も「無い」ことを覚える（毎回聞きに行かないため）
   async function geocode(name) {
     // destination（「関西」「浅草」等）を付けると Nominatim のヒット率が下がるため、
     // スポット名のみで検索する（国の絞り込みはサーバー側の countrycodes=jp で担保）。
@@ -31,6 +57,7 @@
   }
 
   // 保存済み座標 [{name,lat,lng}] を地図用の点に変換する。
+  // プランに保存済みの座標配列を、名前で引ける形に直す
   function mapStored(coords) {
     if (!Array.isArray(coords)) return [];
     return coords
@@ -40,6 +67,8 @@
 
   // 観光スポットの点を解決する。保存済み座標があれば即利用、無ければ（旧プラン）
   // 従来どおりオンデマンドでジオコーディングする。
+  // スポット名の並びから、地図に置ける点の並びを作る。
+  // 保存済み → キャッシュ → 問い合わせ、の順に落ちていく
   async function resolveSpotPoints(planId, spots, coords) {
     if (Array.isArray(coords) && coords.length > 0) return mapStored(coords);
 
@@ -59,6 +88,7 @@
     return results;
   }
 
+  // 水彩タイル（有料キーが要る）か、通常の OSM タイルか
   function tileUrl() {
     if (STADIA_KEY) {
       return `https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg?api_key=${STADIA_KEY}`;
@@ -66,6 +96,7 @@
     return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   }
 
+  // タイルの帰属表示は提供元の条件。地図の右下に必ず出す
   function tileAttrib() {
     if (STADIA_KEY) {
       return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://stamen.com">Stamen Design</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
@@ -74,6 +105,8 @@
   }
 
   // しずく型ピン。label は番号 or グリフ（食/宿）。観光だけ四つ葉アクセント付き。
+  // しずく型ピンを SVG で描く。Leaflet の既定ピン（青い画像）は世界観に合わない。
+  // 観光だけ四つ葉、グルメと宿は「食」「宿」の字を入れて、色が見えなくても分かるように
   function makeIcon(label, cat) {
     const s = String(label);
     const fs = s.length > 1 ? 11 : 13;
@@ -93,6 +126,8 @@
 
   // 観光地名から Wikipedia(日本語) の代表画像サムネを取得（無ければ null）。結果はキャッシュ。
   const _thumbCache = {};
+  // 吹き出しに出す写真を Wikipedia から借りる。無くても地図は成立するので、
+  // 失敗したら黙って諦める（このためにローディングを出したりはしない）
   async function wikiThumb(name) {
     if (!name) return null;
     if (name in _thumbCache) return _thumbCache[name];
@@ -113,6 +148,8 @@
   }
 
   // ポップアップが開いたら写真サムネを遅延読み込みして差し込む。
+  // 吹き出しを開いた**あと**で写真を差し込む。先に取りに行くと、
+  // 開かないピンのぶんまで通信してしまう
   async function loadThumb(popup, name) {
     const el = popup.getElement();
     if (!el) return;
@@ -128,6 +165,7 @@
     popup.update();
   }
 
+  // ピンの吹き出し。名前＋Googleマップの経路案内へのリンク
   function popupHtml(p) {
     // 各ピンから Google マップの経路ナビへ飛べるようにする。写真は開いたとき遅延読込。
     const dest = encodeURIComponent(`${p.lat},${p.lng}`);
@@ -136,6 +174,7 @@
       + `<a href="${url}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
   }
 
+  // 1カテゴリぶんのピンを地図に置く
   function addMarkers(map, points, cat, labelFor) {
     points.forEach((p, i) => {
       const label = labelFor ? labelFor(p) : (cat.glyph || (i + 1));
@@ -146,6 +185,8 @@
   }
 
   // 表記ゆれ吸収（全角/半角・空白差でスケジュールとの照合を落とさない）
+  // 突き合わせ用に文字をそろえる（全角半角・大小・カナ・記号・空白）。
+  // スケジュールの文とスポット名は、同じ場所でも書き方が微妙に違うため
   function normText(s) {
     return String(s || '').normalize('NFKC').replace(/\s+/g, '');
   }
@@ -157,6 +198,8 @@
   const GENERIC_WORDS = ['レストラン', 'ラーメン', 'ビュッフェ', 'カフェテリア'];
   // 一般語の「断片」（レスト・ストラン等）も情報を持たないため除外する。
   // 一般語＋固有部分を含む長い断片（ガーデンレストラン等）は有効なまま。
+  // 「公園」「駅」のような一般的すぎる語は、部分一致に使うと何にでも当たる。
+  // これらだけで一致したことにはしない
   function isGenericFragment(w) {
     return GENERIC_WORDS.some((g) => g.indexOf(w) >= 0);
   }
@@ -167,6 +210,9 @@
   //  省略されがちなため）。誤マッチ対策の二段ガード:
   //   1. 一般語そのもの（レストラン等）は断片として使わない
   //   2. 他のピン名にも含まれる断片は使わない（別ピンの記述位置を拾わない）
+  // スケジュールの文の中に、そのスポットが出てくる位置を探す。
+  // まず名前まるごとで探し、見つからなければ意味のある断片で探す。
+  // ほかのスポット名のほうが長く一致する場合は、そちらを優先して取り違えを防ぐ
   function findInSchedule(text, name, otherNames) {
     const n = normText(name);
     if (!n) return -1;
@@ -189,6 +235,8 @@
   // 観光・グルメ・宿を横断した通し番号を振る。照合できない分は末尾に続番。
   // 線（route）は番号と完全に同じ順で全ピンをつなぐ（番号＝線の順序を保証）。
   // 照合できた点が2つ未満なら null を返し、従来表示に落とす。
+  // ★このファイルの肝。スケジュールに出てくる順にスポットを並べ替える。
+  // 見つからなかったものは元の順のまま後ろに置く（消さない）
   function orderByItinerary(points, schedule) {
     const text = normText(Array.isArray(schedule) ? schedule.join('\n') : '');
     if (!text || points.length === 0) return null;
@@ -207,6 +255,7 @@
     return { orderOf, route: ordered };
   }
 
+  // 凡例。実際に地図にあるカテゴリだけ載せる
   function addLegend(map, present) {
     const legend = L.control({ position: 'topright' });
     legend.onAdd = function () {
@@ -222,12 +271,14 @@
   // ピンの種類 → カテゴリ（色）。memo/未指定は紫。
   const PIN_TYPES = ['memo', 'spot', 'restaurant', 'accommodation'];
   const _TYPE_CAT = { spot: 'spot', restaurant: 'restaurant', accommodation: 'accommodation', memo: 'custom' };
+  // 自分で足したピンの種類 → 見た目のカテゴリ。知らない種類は「メモ」に落とす
   function _typeCat(type) { return CATEGORIES[_TYPE_CAT[type] || 'custom'] || CATEGORIES.custom; }
 
   // ユーザーが選べるピンの色パレット（選ばなければ種類の色）
   const PIN_COLORS = ['#4fa83a', '#e8883a', '#4a90d9', '#9b6dd6', '#f08ba0', '#f4607a', '#2bb3a3', '#e0a93b'];
 
   // しずく型ピン（中央の丸）。color 指定があればその色、なければ種類の色。
+  // 自分で足したピン。種類ごとの色と、好きな色の指定にも対応する
   function customIcon(type, color) {
     const fill = color || _typeCat(type).fill;
     const svg = `<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">`
@@ -236,6 +287,7 @@
     return L.divIcon({ className: 'plan-map-pin', html: `<span class="pin-i">${svg}</span>`, iconSize: [32, 42], iconAnchor: [16, 39], popupAnchor: [0, -36] });
   }
 
+  // 自分で足したピンの吹き出し。編集モードのときだけ削除ボタンを出す
   function customPopup(p, editing) {
     const dest = encodeURIComponent(`${p.lat},${p.lng}`);
     const nav = `<a href="https://www.google.com/maps/dir/?api=1&destination=${dest}" target="_blank" rel="noopener" class="plan-map-nav">🧭 Googleマップで経路</a>`;
@@ -246,6 +298,7 @@
   }
 
   // カスタムピンを描き直す。編集モードではドラッグ移動＋ポップアップに削除を出す。
+  // 自分で足したピンをまとめて置き直す。編集モードでは drag で動かせる
   function renderCustomMarkers(map, pins, markers, editing, onDelete, onMove) {
     markers.forEach(m => map.removeLayer(m));
     markers.length = 0;
@@ -264,6 +317,8 @@
 
   // 地図クリックで名前＋種類付きピンを追加・ドラッグ移動・削除・保存できる編集UI。
   // 未配置スポット（自動で立たなかった観光/グルメ/宿）をワンタップで配置もできる。
+  // ピンの編集モード一式（「ピンを編集」ボタン → 地図クリックで追加 → 保存/取消）。
+  // 保存を押すまでサーバーには送らない。取消で元に戻せるよう、入る時点の状態を控えておく
   function addPinEditor(map, planId, plan, pins, markers) {
     let editing = false;
     let backup = null;
@@ -290,12 +345,15 @@
       return out;
     }
 
+    // ピンの配列が変わったら、地図の上と操作パネルの両方を作り直す。
+    // 編集中は削除・移動が起きるたびに呼ばれる
     function rerender() {
       renderCustomMarkers(map, pins, markers, editing,
         (i) => { pins.splice(i, 1); rerender(); },
         (i, ll) => { pins[i].lat = ll.lat; pins[i].lng = ll.lng; });
       paint();
     }
+    // 操作パネル（左下）を今の状態に描き直す。編集中かどうかでボタンが変わる
     function paint() {
       const div = ctl._div;
       if (!div) return;
@@ -319,22 +377,27 @@
         if (a === 'enter') enter(); else if (a === 'save') save(); else if (a === 'cancel') cancel();
       });
     }
+    // 編集モードに入る。取消で戻せるよう、この時点のピンを控えておく
     function enter() {
       editing = true; pending = null;
       backup = JSON.parse(JSON.stringify(pins));
       map.getContainer().style.cursor = 'crosshair';
       rerender();
     }
+    // 編集モードを抜ける（保存でも取消でも通る共通の後始末）
     function exit() {
       editing = false; pending = null;
       map.getContainer().style.cursor = '';
       rerender();
     }
+    // 取消。控えておいた状態に戻す。pins は外から参照されている同じ配列なので、
+    // 新しい配列に差し替えず、中身を入れ替える
     function cancel() {
       pins.length = 0;
       (backup || []).forEach(p => pins.push(p));  // 未保存の変更を破棄
       exit();
     }
+    // 保存。ここで初めてサーバーに送る（編集中の追加・移動・削除はすべて手元だけ）
     function save() {
       fetch(`/save_plan_pins/${planId}`, {
         method: 'POST',
@@ -399,6 +462,8 @@
   // 北東へずらして、全部のピンが見えるようにする。
   // fixed には動かしたくない点（ユーザーが置いたカスタムピン）を渡す。
   // 自動ピン側が避けることで、カスタムピンの位置は尊重しつつ番号の隠れを防ぐ。
+  // 同じ場所に複数のピンが重なると、下のピンが押せなくなる。
+  // ほんの少しずつずらして、全部触れるようにする（座標そのものは変えない）
   function spreadOverlaps(points, fixed) {
     const seen = (fixed || []).slice();
     points.forEach((p) => {
@@ -420,6 +485,8 @@
   // plan: { spots, spot_coords, restaurants, restaurant_coords, accommodation,
   //         accommodation_coords, custom_pins }
   // opts: { editable }  自分のプランなら editable=true でピン編集UIを出す
+  // 「地図で見る」から呼ばれる入口。座標を集める → 順番に並べる →
+  // ピンを置く → 全部が収まる範囲に合わせる
   window.initPlanMap = async function (containerId, planId, plan, opts) {
     opts = opts || {};
     const el = document.getElementById(containerId);

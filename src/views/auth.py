@@ -27,6 +27,7 @@ def login_required(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
+        """セッションを見て、通すか断るかを決める。"""
         if session.get('user_id'):
             return f(*args, **kwargs)
 

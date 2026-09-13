@@ -141,6 +141,8 @@ struct PlanStickyCard: View {
     }
 }
 
+/// しおり一覧の状態。自分のぶんと共有されたぶんを並べて持つ。
+/// .plansChanged の通知で読み直す（相談で保存したものがすぐ出るように）。
 @MainActor
 final class PlanListViewModel: ObservableObject {
     @Published private(set) var plans: [TravelPlan] = []

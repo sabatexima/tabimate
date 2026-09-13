@@ -37,6 +37,12 @@ class _ActiveRequests:
     _TTL = 600  # seconds
 
     def __init__(self):
+        """Redis があればそれを使い、無ければプロセス内の set に落とす。
+
+        Cloud Run は複数インスタンスで動くので、本来この情報は共有したい。
+        ただし Redis が無くても動かないと困る（手元・Redis未設定の本番）ので、
+        繋がらなければ黙ってプロセス内に落とす。単一インスタンスならそれで足りる。
+        """
         self._local: set = set()
         self._lock = threading.Lock()
         self._redis = None
@@ -53,6 +59,11 @@ class _ActiveRequests:
                 logger.warning("Redis接続失敗: active_requestsはプロセス内setにフォールバックします")
 
     def add(self, request_id: str) -> None:
+        """生成中として登録する。Redis 側には TTL を付ける。
+
+        TTL があるのは、ワーカーが落ちて discard に到達できなかったときに、
+        その id が永久に「生成中」で残らないようにするため。
+        """
         if self._redis:
             self._redis.setex(f"{self._PREFIX}{request_id}", self._TTL, "1")
         else:
@@ -60,6 +71,7 @@ class _ActiveRequests:
                 self._local.add(request_id)
 
     def discard(self, request_id: str) -> None:
+        """生成が終わった（成功・失敗・中断のいずれでも）ことを記録する。"""
         if self._redis:
             self._redis.delete(f"{self._PREFIX}{request_id}")
         else:
@@ -67,6 +79,10 @@ class _ActiveRequests:
                 self._local.discard(request_id)
 
     def __contains__(self, request_id: str) -> bool:
+        """`rid in active_requests` で聞けるようにする。
+
+        set と同じ書き味にしてあるので、呼ぶ側は Redis の有無を意識しない。
+        """
         if self._redis:
             return self._redis.exists(f"{self._PREFIX}{request_id}") > 0
         with self._lock:
@@ -541,6 +557,12 @@ def edit_saved_plan(plan_id):
     done_event = threading.Event()
 
     def run_edit():
+        """AIに修正案を作らせる（別スレッド）。ここではまだ保存しない。
+
+        保存プランの修正は、結果を見てから適用したい（気に入らないこともある）ので、
+        いったん「修正案」として返し、ユーザーが適用を押したときに保存する。
+        新規のプラン生成（send_message の run_chat）が即保存するのとは別扱い。
+        """
         try:
             final_state = run_plan_edit(plan, message)
             # まだ保存しない。修正案（プレビュー）として返す
@@ -556,6 +578,10 @@ def edit_saved_plan(plan_id):
     threading.Thread(target=run_edit, daemon=True).start()
 
     def generate():
+        """待っている間 thinking を流し、終わったら結果を1回だけ送る（SSE）。
+
+        3秒ごとに何か送るのは、長い無音で proxy に切られるのを防ぐため。
+        """
         while not done_event.wait(timeout=3):
             yield 'data: {"status": "thinking"}\n\n'
         if result.get('plan') is not None:
@@ -730,6 +756,8 @@ def _build_plan_ics(plan: dict) -> str:
     from datetime import date, datetime, timedelta, timezone
 
     def esc(s):
+        """iCalendar の予約文字を逃がす（RFC 5545）。順番が大事で、
+        バックスラッシュを最初にやらないと二重に逃がしてしまう。"""
         return (str(s or '').replace('\\', '\\\\').replace(';', '\\;')
                 .replace(',', '\\,').replace('\n', '\\n'))
 
@@ -747,7 +775,9 @@ def _build_plan_ics(plan: dict) -> str:
     dtstamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
     lines = []
+
     def add(label, items):
+        """中身があるときだけ「ラベル: A、B、C」の1行を足す。"""
         if items:
             lines.append(f"{label}: " + "、".join(items))
     add('✨観光', plan.get('spots'))

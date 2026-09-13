@@ -5,6 +5,10 @@ import Foundation
 
 // MARK: - 旅
 
+/// 旅ひとつ（アルバムの1冊）。一覧のカードにも詳細にも同じ型を使う。
+///
+/// permission が入っていれば「自分のではなく、共有された旅」。
+/// 誰の目線かで ★ とできることが変わるので、isShared / canEditPhotos で判定する。
 struct Trip: Codable, Identifiable, Hashable {
     var id: Int
     var title: String
@@ -72,6 +76,7 @@ struct Trip: Codable, Identifiable, Hashable {
 
 // MARK: - 写真
 
+/// 旅の写真1枚。一覧ではサムネイル、拡大では原寸を使う（displayURL / fullURL）。
 struct TripPhoto: Codable, Identifiable, Hashable {
     var id: Int
     var url: String?
@@ -103,11 +108,13 @@ struct TripPhoto: Codable, Identifiable, Hashable {
 
 // MARK: - 付箋・ベストショット
 
+/// 写真から生まれた付箋のことば。
 struct Sticker: Codable, Identifiable, Hashable {
     var id: Int
     var text: String
 }
 
+/// ちゃむが選んだ一枚と、その理由。
 struct BestShot: Codable, Hashable {
     var url: String?
     var thumbURL: String?
@@ -126,6 +133,7 @@ struct BestShot: Codable, Hashable {
     }
 }
 
+/// 写真のGPSから作った足あとの1点（撮影順に並んでいる）。
 struct Footprint: Codable, Hashable {
     var lat: Double
     var lng: Double
@@ -134,6 +142,7 @@ struct Footprint: Codable, Hashable {
 }
 
 /// 旅の中身ひとまとめ。
+/// 旅の詳細ページに要るものを1回のリクエストでまとめて受け取る。
 struct TripDetail: Codable {
     var trip: Trip
     var photos: [TripPhoto]
@@ -158,6 +167,7 @@ struct TripDetail: Codable {
 
 // MARK: - 年間ダイジェスト
 
+/// 年間ダイジェスト。その年の旅・写真の枚数・付箋をまとめたもの。
 struct Digest: Codable {
     var year: String
     var years: [String]
@@ -204,6 +214,7 @@ struct Digest: Codable {
 
 // MARK: - 共有
 
+/// 公開リンク（トークンを知っていれば誰でも見られる）。
 struct PublicLink: Codable, Identifiable, Hashable {
     var id: Int
     var token: String
@@ -211,6 +222,7 @@ struct PublicLink: Codable, Identifiable, Hashable {
     var permission: String?
 }
 
+/// メール指定の共有（そのメールでログインした本人だけ）。
 struct ShareGrant: Codable, Identifiable, Hashable {
     var id: Int
     var email: String
@@ -230,6 +242,8 @@ struct ShareGrant: Codable, Identifiable, Hashable {
     }
 }
 
+/// 共有シートに出す今の状態。editableSupported が false の種類（プラン）では
+/// 編集権限を渡せないので、UI から「編集も可」を隠す。
 struct ShareState: Codable {
     var links: [PublicLink]
     var grants: [ShareGrant]

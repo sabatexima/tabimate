@@ -1,5 +1,18 @@
+/* 旅の詳細ページ（reflection/trip.html）＝1つの旅のアルバム。
+
+   ここでできること: タイトルと日程の編集・写真のアップロードと削除・表紙の指定・
+   付箋の生成と削除・ベストショット選び・写真の拡大表示（ライトボックス）。
+
+   共有された旅のページ（shared-trip.js）と見た目は同じだが、あちらは
+   「所有者ではない人」向けで、できることが権限で変わる。共通部分は
+   CSS（trip-detail.css）だけまとめ、JS は別にしてある。
+
+   最初の描画はサーバー（Jinja2）が済ませてある。ここは操作を足すだけなので、
+   ページを開いた時点では通信しない。 */
+
 const CFG = JSON.parse(document.getElementById('page-config').textContent);
   const TRIP_ID = CFG.tripId;
+  // 付箋の文字を innerHTML で入れる場所があるので、先に無害化する
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -38,6 +51,7 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   const titleSave = document.getElementById('title-save');
   const titleCancel = document.getElementById('title-cancel');
 
+  // タイトルの編集。表示と入力欄を差し替えるだけ（保存は下の title-save）
   function openTitleEdit() {
     titleInput.value = titleEl.textContent.trim();
     titleRow.hidden = true; titleEditor.hidden = false;
@@ -88,7 +102,11 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     datesEditor.hidden = true; datesRow.hidden = false;
   });
   // サーバ側の tripdates フィルターと同じ和文表記にする
+  // 「2025年6月12日〜13日」の形に。同じ年・同じ月なら後ろを省く。
+  // サーバー側のテンプレートフィルタ（app.py の tripdates）と同じ規則にそろえてある。
+  // 日程を編集したあと、リロードせずに同じ見た目へ戻すためにこちらにも要る
   function fmtTripDates(start, end) {
+    // "2025-06-12" → {y,m,d}。読めなければ null
     const p = (v) => {
       if (!v) return null;
       const [y, m, d] = String(v).slice(0, 10).split('-').map(Number);
@@ -161,6 +179,8 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   });
 
   // アップロード直後の写真も削除できるよう figure を組み立てる
+  // アップロード直後の写真も、テンプレートが描くものと同じ形で作る。
+  // 形が違うとポラロイドの CSS が当たらず、その写真だけ枠なしで並ぶ
   function makePhotoFigure(p) {
     const fig = document.createElement('figure');
     fig.className = 'photo';
@@ -232,9 +252,11 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
   let lbIndex = 0;
   let lbCount = 0;
 
+  // ライトボックスで送り見できる写真の並び（隠れているものは除く）
   function lbFigures() {
     return Array.from(photoGrid.querySelectorAll('.photo'));
   }
+  // i 番目の写真を出す。端で止めずに巻き戻す（最後の次は最初）
   function lbShow(i) {
     const figs = lbFigures();
     lbCount = figs.length;
@@ -244,12 +266,14 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     lbImg.src = img ? (img.dataset.full || img.src) : '';
     lbCounter.textContent = `${lbIndex + 1} / ${lbCount}`;
   }
+  // 拡大表示を開く。背後のページがスクロールしないよう body を固定する
   function lbOpen(i) {
     lbShow(i);
     lightbox.hidden = false;
     lightbox.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
+  // 閉じる。body の固定も戻す（戻し忘れるとページが動かなくなる）
   function lbClose() {
     lightbox.hidden = true;
     lightbox.setAttribute('aria-hidden', 'true');
@@ -289,6 +313,7 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
 
   // --- 付箋生成 ---
   const board = document.getElementById('sticker-board');
+  // 付箋ボードを描き直す。生成しなおすと全部入れ替わるので、丸ごと作る
   function renderStickers(items) {
     board.innerHTML = items.map(s =>
       `<div class="sticker">${esc(s.text)}<button class="del" aria-label="削除">×</button></div>`

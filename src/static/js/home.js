@@ -1,3 +1,31 @@
+/* プラン作成チャット（home.html）。このアプリで一番こみいったファイル。
+
+   ■ 送信の流れ
+     フォーム送信 → POST /send_message → サーバーは SSE（data: 行）を流す
+     → 最後に OK / ABORTED / ERROR のどれかが来たら、履歴を読み直して描き直す
+
+   ■ ここで一番大事なこと: 生成はこの接続より長生きする
+     プラン生成には数分かかる。サーバーは別スレッドで作り、**保存もそのスレッドが
+     行う**ので、途中でブラウザを閉じてもリロードしても結果は残る。
+     （以前は SSE の送信側で保存していて、リロードした瞬間に生成が捨てられていた）
+
+   ■ だから、リロード後の復元がある（resumeIfGenerating）
+     まだ返事待ちの生成があるかどうかは**サーバーが知っている**。ページを出すとき
+     .chat-container の data-pending-request / data-pending-message に載せてくるので、
+     それを読むだけでよい。localStorage に控えは持たない（端末とサーバーがずれるため）。
+     SSE には繋ぎ直せないので、完了は /generation_status に問い合わせて知る。
+
+   ■ 状態はこの3つだけ
+     currentRequestId  いま走っている生成の id（null なら何も走っていない）
+     abortController   受信を打ち切るためのもの
+     resumePoll        復元中の定期確認。**止め忘れると前の回の結果が割り込む**
+     この3つは resetGenerationState() で必ずまとめて戻す。
+
+   ■ 注意
+     このファイルは関数で囲っていないので、ここの const / let はページ全体で共有される。
+     テンプレート側に同じ名前があるとスクリプトごと SyntaxError で死ぬ（実際に起きた。
+     tests/test_static_js.py が見張っている）。 */
+
 const chatBox = document.getElementById('chat-box');
   const messageForm = document.getElementById('message-form');
   const messageInput = document.getElementById('message-input');
@@ -24,6 +52,7 @@ const chatBox = document.getElementById('chat-box');
   ];
   let thinkingTimer = null;
 
+  // 「考えています」を出し、段階表示を進め始める
   function startThinking() {
     const el = document.getElementById('thinking-text');
     let i = 0;
@@ -54,6 +83,8 @@ const chatBox = document.getElementById('chat-box');
     + '行き先・日程・人数・ご予算・やってみたいことなど、わかる範囲で教えてくださいね。ぴったりの旅行プランをご提案します。\n\n'
     + 'まずは、**どちらへ行ってみたいですか？**';
 
+  // 挨拶はDBに保存せず、毎回この場で先頭に足す。保存すると履歴が1件増えて
+  // 「新しいチャット」の確認や件数の比較がずれる
   function renderGreeting() {
     const el = createMessageElement('ai', GREETING);
     el.classList.add('greeting');
@@ -85,6 +116,8 @@ const chatBox = document.getElementById('chat-box');
     if (!messageInput.value) messageInput.value = message;
   }
 
+  // フォームの submit を programmatic に起こす（?q= からの自動送信・再送で使う）。
+  // requestSubmit があればそちらを使い、無いブラウザには Event で代替する
   function submitForm() {
     if (messageForm.requestSubmit) messageForm.requestSubmit();
     else messageForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -181,10 +214,15 @@ const chatBox = document.getElementById('chat-box');
     submitForm();
   }
 
+  // 生成1回ぶんの id。サーバーはこれで「どの生成か」を追い、中断や状態問い合わせに使う。
+  // 時刻＋乱数で、同じ人が連続で送っても衝突しない程度あれば足りる
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
+  // 吹き出し1つを組み立てる。自分の発言は textContent（そのまま文字として）、
+  // ちゃむの返事は Markdown → HTML に変換してから DOMPurify で洗う。
+  // プランカードは <details> と data-plan を使うので、消されないよう許可を足している
   function createMessageElement(role, content) {
     const wrapper = document.createElement('div');
     wrapper.classList.add('message-wrapper');
@@ -217,6 +255,9 @@ const chatBox = document.getElementById('chat-box');
     return wrapper;
   }
 
+  // サーバーの履歴で会話を描き直す（差分ではなく、毎回まるごと作り直す）。
+  // 件数が同じなら何もしないのは、無駄な再描画でスクロール位置が飛ばないため。
+  // 生成が終わった直後は中身が変わっているので forceScroll=true で必ず描き直す
   async function loadMessages(forceScroll = false) {
     try {
       const response = await fetch('/get_messages');
@@ -235,7 +276,8 @@ const chatBox = document.getElementById('chat-box');
     }
   }
 
-  // 停止ボタンが押された時の処理
+  // 停止ボタン。サーバーに「やめて」とだけ伝え、受信は切らない。
+  // ここで abort すると ABORTED イベントを受け取れず、画面が中途半端に残る
   stopButton.addEventListener('click', async () => {
     if (currentRequestId) {
       // サーバーに中断を通知（SSEストリームはそのまま維持し、ABORTEDイベントを待つ）
@@ -247,6 +289,7 @@ const chatBox = document.getElementById('chat-box');
     }
   });
 
+  // 送信。ここが本体
   messageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const message = messageInput.value.trim();
@@ -293,8 +336,11 @@ const chatBox = document.getElementById('chat-box');
         return; // finally で入力欄は復帰する
       }
 
+      // SSE を手で読む。EventSource を使わないのは、あれが GET しか投げられず、
+      // 本文（メッセージ）を POST で送れないため
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      // 受信は行の途中で切れる。末尾の不完全な行を次の chunk まで持ち越す
       let buffer = '';
       let settled = false; // OK/ABORTED/ERROR のいずれかを受け取ったか
 
@@ -419,7 +465,9 @@ const chatBox = document.getElementById('chat-box');
     }, 2500);
   }
 
-  // 保存ボタンのクリック処理（動的に追加される要素に対応）
+  // 「このプランを保存する」。ボタンは返事が届くたびに作られるので、
+  // ボタン自体ではなく chatBox で受ける（動的に増える要素への定石）。
+  // 送る中身は、サーバーが data-plan にJSONで埋めておいたものをそのまま返すだけ
   chatBox.addEventListener('click', async (e) => {
     const btn = e.target.closest('.plan-save-btn');
     if (!btn || btn.disabled) return;

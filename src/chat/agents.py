@@ -664,6 +664,7 @@ def timekeeper(state: TravelPlanState):
     if not day_trip:
         total_days = num_days
         def _days_in(schedule):
+            """スケジュールの行から「N日目」を拾って、揃っている日の集合を返す。"""
             found = set()
             for line in schedule or []:
                 dm = re.match(r'[【\[]?\s*(\d+)\s*日目', str(line).strip())

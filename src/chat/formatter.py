@@ -23,6 +23,7 @@ def booking_url(destination: str) -> str:
 #   1) data-plan 埋め込み（フロントの「保存する」ボタンが読む）
 #   2) チャット編集時の「前回プラン」としてDBへ保存（chat.py）
 def plan_payload(state: dict) -> dict:
+    """保存・再編集に必要なフィールドだけを取り出す（上のコメントの用途2つで共用）。"""
     return {
         "destination":          state.get("destination"),
         "travel_date":          state.get("travel_date"),

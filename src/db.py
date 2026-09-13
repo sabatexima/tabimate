@@ -64,6 +64,7 @@ def _get_engine():
 
     if _CLOUD_SQL_INSTANCE:
         def getconn():
+            """Cloud SQL Connector 経由の接続を1本作る（SQLAlchemy が必要に応じて呼ぶ）。"""
             return _get_connector().connect(
                 _CLOUD_SQL_INSTANCE,
                 "pymysql",

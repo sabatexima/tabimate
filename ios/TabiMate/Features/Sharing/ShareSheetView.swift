@@ -165,6 +165,8 @@ struct ShareSheetView: View {
 
 // MARK: - 状態
 
+/// 共有シートの状態。公開リンクとメール共有の一覧を持ち、
+/// 変更のたびにサーバーから取り直して画面と合わせる。
 @MainActor
 final class ShareViewModel: ObservableObject {
     @Published private(set) var links: [PublicLink] = []

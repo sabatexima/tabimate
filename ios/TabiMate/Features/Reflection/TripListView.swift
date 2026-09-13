@@ -203,6 +203,7 @@ struct TripCard: View {
 
 // MARK: - 状態
 
+/// おもいで一覧の状態。.tripsChanged の通知で読み直す。
 @MainActor
 final class TripListViewModel: ObservableObject {
     @Published private(set) var trips: [Trip] = []

@@ -250,6 +250,7 @@ def _variants(query: str) -> list:
     out = []
 
     def add(q):
+        """重複と空文字を避けて候補に足す（試す順番は保つ）。"""
         q = q.strip()
         if q and q not in out:
             out.append(q)
@@ -302,6 +303,7 @@ _neg_cache: dict = {}
 
 
 def _neg_key(query: str, context: str | None) -> str:
+    """「見つからなかった」を覚えるキー。同じ地名でも文脈が違えば別扱いにする。"""
     return f"{query}\x00{context or ''}"
 
 
@@ -398,10 +400,12 @@ def ensure_plan_coords(plan: dict) -> dict:
     # （「グルメ3軒中1軒だけ当たった」プランの残り2軒を救済できるように、
     #  カテゴリ単位ではなく名前単位で判定する）。
     def _existing(coord_field):
+        """すでに座標が付いている名前 → その座標。"""
         return {c["name"]: c for c in (plan.get(coord_field) or [])
                 if c and c.get("name") and c.get("lat") is not None}
 
     def _missing(coord_field, name_field):
+        """まだ座標が無い名前だけを返す（ここが問い合わせの対象）。"""
         done = _existing(coord_field)
         return [n for n in (plan.get(name_field) or []) if n and n not in done]
 
@@ -423,6 +427,11 @@ def ensure_plan_coords(plan: dict) -> dict:
             viewbox = _viewbox_around(c["lat"], c["lng"], pad=max(0.4, max_km / 100))
 
     def fill(coord_field, name_field, context=None):
+        """1カテゴリぶん（観光・グルメ・宿）の座標を埋める。
+
+        足りない名前だけを問い合わせ、取れたものを plan に書き戻す。
+        1件も取れなくても他のカテゴリは続ける。
+        """
         nonlocal changed
         missing = _missing(coord_field, name_field)
         if not missing:

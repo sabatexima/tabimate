@@ -98,6 +98,14 @@ def _strip_progress(text):
 
 
 class ConversationState(BaseModel):
+    """会話履歴から読み取った旅行条件。毎ターン履歴全体から作り直す。
+
+    必須7項目が欠けていれば next_question で聞き直し、揃えば生成に進む。
+    任意項目（transport_mode / no_car / schedule_pref / special_requirements）は
+    軽量モデルが取りこぼすことがあるため、None なら前回プランの控えで補う
+    （chat() の _kept）。None は「今回は読み取れなかった」、空や False は
+    「今回そう答えた」の意味で使い分けている。
+    """
     destination: Optional[str] = Field(None, description="旅行先（例：京都）。会話から読み取れない場合はNull")
     travel_date: Optional[str] = Field(None, description="旅行日程。「明日」「来週末」等の相対表現は本日の日付から換算し、必ず年を含む絶対日付（例：2025年8月13日〜14日）にする。読み取れない場合はNull")
     duration: Optional[str] = Field(None, description="期間（例：1泊2日）。読み取れない場合はNull")
@@ -388,6 +396,11 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
 
 
 class _PlanEditIntent(BaseModel):
+    """保存プランへの修正指示を分類した結果（しおりからのチャット修正で使う）。
+
+    どの領域を作り直すか（edit_targets）と、基本条件そのものの変更（new_*）を分ける。
+    new_* が入ると前回の行程は流用できないので、呼び出し側が全体作り直しに切り替える。
+    """
     edit_targets: List[str] = Field(
         default_factory=list,
         description=(

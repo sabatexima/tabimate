@@ -137,7 +137,7 @@ SwiftUI のネイティブアプリが [`ios/`](ios/) にあります。同じ�
 |---|---|
 | 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
 | ⚙️ **バックエンド** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
-| 🗺️ **地図・位置** | Leaflet · Stadia Maps（水彩）· Google Places · OSM Nominatim · 国土地理院 |
+| 🗺️ **地図・位置** | Leaflet · Stadia Maps（水彩）· Google Places · OSM Nominatim · 国土地理院（日本のみ） |
 | ☁️ **インフラ** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
 | 🎨 **フロント** | Jinja2 · 素のJS · PWA · Zen Maru Gothic · OpenMoji |
 | 📱 **iOS** | SwiftUI（iOS 17+）· Swift 6 · XcodeGen |
@@ -209,7 +209,7 @@ python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.
 |---|---|
 | **入口は Blueprint で機能ごと** | `planner`（チャットとプラン）· `auth` · `reflection`（旅の振り返り）· `sharing`。URL の接頭辞と権限の境界が一致する |
 | **永続化はテーブルの持ち主ごと** | `db.py`（プラン・チャット）· `db_reflection.py`（旅・写真・付箋）· `db_sharing.py`（共有）。エンジンは `db.get_engine()` の1つを使い回す |
-| **外部サービスは差し替えられる** | 保存先は `GCS_BUCKET` の有無で GCS / ローカル（`services/storage.py`）。座標は Google Places → Nominatim → 地理院の順に落ちる（`services/geocoding.py`）。AI・検索・DB はテストで丸ごと差し替える |
+| **外部サービスは差し替えられる** | 保存先は `GCS_BUCKET` の有無で GCS / ローカル（`services/storage.py`）。座標は Google Places → Nominatim → 地理院の順に落ちる（`services/geocoding.py`。探す国は行き先から決まり、地理院は日本のときだけ）。AI・検索・DB はテストで丸ごと差し替える |
 | **入口は2つ、中は1つ** | ブラウザはセッション Cookie、アプリは `Authorization: Bearer …`。`api_auth.py` がその要求の間だけ同じセッションに読み替えるので、`login_required` は特別扱いを持たない |
 | **横断するものは `src/` 直下** | `logger.py`（全モジュール共通のロガー）· `api_auth.py`（トークン） |
 | **フロントはビルド無し** | ページごとに CSS と JS を1つずつ。色・角丸・影のトークンと共通部品（見出し・戻るリンク・共有バナー）は `layout.css`。複数ページで使う部品は `trip-detail.css` / `plan-card.css` に1か所だけ |
@@ -285,7 +285,8 @@ tabimate/
 `chat/graph.py` が `StateGraph` を組み、`chat/agents.py` の関数をノードとしてつなぎます。状態は `TravelPlanState`（TypedDict）で流れます。
 
 ```
-（並列で先に）transport · sightseeing_candidates
+（生成の前に）行き先の国と座標を1回だけ引く → 海外なら各エージェントに指示を足す
+（並列で先に）transport · sightseeing_candidates · 天気予報
 START
   → sightseeing               観光2〜3件
   → accommodation_candidates → accommodation   残予算の約40%（日帰りなら飛ばす）
@@ -299,7 +300,9 @@ START
 
 - **宿なし判定** — `parse_duration()` が (泊数, 日数) を返し、0泊なら宿のノードを飛ばします（夜行での「0泊2日」に対応）。
 - **実在チェック** — `GOOGLE_MAPS_API_KEY` があれば候補を Google Places で突き合わせ、架空の名前を落とします。
+- **海外の行き先** — 生成の前に行き先の国を決め、海外なら全エージェントに指示を足します。金額は円に換算してレートを明記、往復は航空便、行程は現地時刻と時差・入出国の待ち時間つき、費用に保険と通信費、持ち物にパスポート。スポット名は「日本語名（現地語名）」で書かせ、地図はその現地語名で探します。
 - **好みの学習** — 過去の★と一言から `user_preferences` を作り、各エージェントにそっと渡します。
+- **地図は日ごとに** — スケジュールの「N日目」の見出しで各ピンがどの日に出るかを決め、複数日なら日ごとに絞れます（宿は前後の2日に属します）。照合できたピンが半分に満たないときは、押すとピンが消えて壊れて見えるので切り替えを出しません。
 - **部分的な編集** — 編集の依頼では、関係するノードだけ作り直します。
 - **再試行** — `invoke_with_retry()` が 429 / 503 / 通信エラーを最大5回、間隔を空けて再試行します。
 
@@ -324,7 +327,7 @@ START
 
 | テーブル | 役割 |
 |---|---|
-| `travel_plans` | 保存プラン（条件と結果をJSONで）。座標キャッシュ、カスタムピン、持ち物、実費、★も持ちます |
+| `travel_plans` | 保存プラン（条件と結果をJSONで）。ご希望（交通手段・運転の可否・時間）、座標キャッシュ、カスタムピン、持ち物、実費、★も持ちます |
 | `chat_messages` | チャット履歴。プランの行には `plan_json`（編集時に使う「前のプラン」）も |
 | `trips` | 旅（名前・日付）、表紙写真、ベストショット、紐づけたプラン |
 | `photos` / `stickers` | 写真（パス・撮影時刻・GPS）/ 付箋（表示する言葉と内部の根拠） |
@@ -385,7 +388,7 @@ START
 ### テストとCI
 
 ```bash
-pytest tests/ -k "not smoke"    # 145件のオフラインテスト（APIキーもDBも不要）
+pytest tests/ -k "not smoke"    # 179件のオフラインテスト（APIキーもDBも不要）
 scripts/check_home_js.sh        # チャット画面を本物のブラウザで動かす
 scripts/check_ios_logic.sh      # iOSのロジックを Linux の Swift で型検査
 python tests/test_smoke.py      # プラン生成の通し確認（APIキーが要ります）
@@ -393,13 +396,13 @@ python tests/test_smoke.py      # プラン生成の通し確認（APIキーが�
 
 | 検査 | 見ているもの |
 |---|---|
-| `test_units.py`（29） | サムネイルのキー、URL生成、パストラバーサル、地名の表記ゆれ、アプリ用トークンの発行と検証 |
+| `test_units.py`（38） | サムネイルのキー、URL生成、パストラバーサル、地名の表記ゆれ、行き先の国の判定、アプリ用トークンの発行と検証 |
 | `test_ios_routes.py`（44） | iOSアプリが叩くURLが、そのメソッドでサーバーに実在すること |
-| `test_regression.py`（29） | 一度戻ってきたことのある不具合。テンプレートの `url_for` が実在の endpoint を指すこと、プランカードに空行が無いこと、公開リンクの旅で写真が枠に入ることなど |
+| `test_regression.py`（50） | 一度戻ってきたことのある不具合。テンプレートの `url_for` が実在の endpoint を指すこと、プランカードに空行が無いこと、公開リンクの旅で写真が枠に入ること、「運転しない」が保存と修正の往復で消えないことなど |
 | `test_generation_status.py`（18） | リロード後の復元。pending / done / gone の判断と、ページが載せる情報 |
 | `test_app_api.py`（16） | ネイティブアプリ向けAPIの認可とJSONの形 |
 | `test_send_message_survives_disconnect.py`（7） | ブラウザが去っても生成が捨てられないこと |
-| `test_static_js.py`（2） | JSとテンプレートが噛み合っていること（名前・要素のid） |
+| `test_static_js.py`（6） | JSとテンプレートが噛み合っていること（名前・要素のid）と、地図が各ピンをどの日に割り当てるか |
 | `tests/js/home_chat.html`（11場面） | チャット画面をヘッドレスChromiumで実際に動かす |
 
 ブラウザでの検査があるのは、この部分が**構文検査では見つからない壊れ方**をするからです。実際、テンプレート内のスクリプトが `home.js` と同じ名前を宣言していたためスクリプト全体が動かず、季節のチップを押しても無反応になっていました。

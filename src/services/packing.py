@@ -14,6 +14,7 @@ logger = get_logger("packing")
 
 
 class PackingListOutput(BaseModel):
+    """持ち物リスト生成の出力。短い名詞の並びだけを受け取る。"""
     items: List[str] = Field(description="持ち物の名前のリスト（10〜16個・短い名詞）")
 
 

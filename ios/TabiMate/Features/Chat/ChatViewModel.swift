@@ -47,6 +47,7 @@ final class ChatViewModel: ObservableObject {
         draft = pending
     }
 
+    /// 履歴をサーバーから読み直す（画面の内容はサーバーが持つ控えが正）。
     private func reloadMessages() async {
         do {
             messages = try await ChatService.messages()
@@ -123,6 +124,8 @@ final class ChatViewModel: ObservableObject {
         draft = text
     }
 
+    /// 生成が終わったときの後始末。状態と控えを戻し、必要なら履歴を読み直す。
+    /// エラー文を履歴の読み直しより後に入れるのは、読み直しで消さないため。
     private func finish(reload: Bool, error: String? = nil) async {
         isGenerating = false
         isAborting = false
@@ -221,6 +224,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    /// 会話をまっさらにする（サーバーの履歴も消える）。
     func resetConversation() async {
         do {
             try await ChatService.resetHistory()

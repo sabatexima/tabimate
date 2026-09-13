@@ -282,7 +282,13 @@
   // 宿は初日にチェックインして翌朝に出るので、複数の日に属する（だから集合）。
   // どの日にも見つからないピンは空集合（「すべて」のときだけ出る）。
   // 返り値: { days: ピンが1本でもある日（昇順）, daysOf: Map(点 → Set(日)) }。
-  // ピンのある日が2つ未満なら null（切り替える意味が無い）
+  //
+  // null を返す（＝切り替えを出さない）のは次の2つ:
+  //   ・ピンのある日が2つ未満（切り替える意味が無い）
+  //   ・日が付いたピンが半分に満たない（スケジュールとの照合が効いていない）。
+  //     日を選ぶと日の付かないピンは消えるので、照合が弱いまま切り替えを出すと
+  //     「押したら地図から店が消えた」という壊れて見える状態になる。
+  //     並べ替え（orderByItinerary）と違い、こちらは見えなくなるぶん基準を厳しくする。
   function daysByItinerary(points, schedule) {
     const blocks = splitDays(schedule);
     if (!points.length) return null;
@@ -293,6 +299,8 @@
       blocks.forEach((b) => { if (findInSchedule(b.text, p.name, allNames) >= 0) set.add(b.day); });
       daysOf.set(p, set);
     });
+    const placed = points.filter(p => daysOf.get(p).size).length;
+    if (placed * 2 < points.length) return null;
     const days = [...new Set(blocks.map(b => b.day))].sort((a, b) => a - b)
       .filter(d => points.some(p => daysOf.get(p).has(d)));
     return days.length >= 2 ? { days, daysOf } : null;

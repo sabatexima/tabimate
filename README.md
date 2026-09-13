@@ -139,7 +139,7 @@ It talks to the endpoints under `/auth/app/*` and `/api/*` listed below, authent
 |---|---|
 | 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
 | ⚙️ **Backend** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
-| 🗺️ **Maps & Geo** | Leaflet · Stadia Maps (watercolor) · Google Places · OSM Nominatim · GSI |
+| 🗺️ **Maps & Geo** | Leaflet · Stadia Maps (watercolor) · Google Places · OSM Nominatim · GSI (domestic only) |
 | ☁️ **Infra** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
 | 🎨 **Frontend** | Jinja2 · vanilla JS · PWA · Zen Maru Gothic · OpenMoji |
 | 📱 **iOS** | SwiftUI (iOS 17+) · Swift 6 · XcodeGen |
@@ -211,7 +211,7 @@ Three layers. **Upper layers call lower ones; lower layers know nothing about th
 |---|---|
 | **One Blueprint per feature** | `planner` (chat and plans) · `auth` · `reflection` (trip journal) · `sharing`. URL prefixes and permission boundaries line up |
 | **Persistence split by table owner** | `db.py` (plans, chat) · `db_reflection.py` (trips, photos, stickers) · `db_sharing.py` (sharing). All share the single engine from `db.get_engine()` |
-| **External services are swappable** | Storage is GCS or the local filesystem depending on `GCS_BUCKET` (`services/storage.py`). Geocoding falls through Google Places → Nominatim → GSI (`services/geocoding.py`). AI, search and the DB are stubbed wholesale in tests |
+| **External services are swappable** | Storage is GCS or the local filesystem depending on `GCS_BUCKET` (`services/storage.py`). Geocoding falls through Google Places → Nominatim → GSI (`services/geocoding.py`; the country to search comes from the destination, and GSI is Japan-only). AI, search and the DB are stubbed wholesale in tests |
 | **One session, two doors** | The browser uses a session cookie; the app sends `Authorization: Bearer …`, which `api_auth.py` translates into the same session for that single request, so `login_required` needs no special case |
 | **Cross-cutting code sits at `src/`** | `logger.py` (the one logger factory) · `api_auth.py` (tokens) |
 | **Frontend has no build step** | One CSS and one JS file per page. Color/radius/shadow tokens and shared parts (page headings, back links, share banner) live in `layout.css`; parts used by more than one page live once, in `trip-detail.css` / `plan-card.css` |
@@ -287,7 +287,8 @@ tabimate/
 `chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them.
 
 ```
-(in parallel, ahead of the graph) transport · sightseeing_candidates
+(before generating) look up the destination's country and centre once — overseas adds instructions to every agent
+(in parallel, ahead of the graph) transport · sightseeing_candidates · weather
 START
   → sightseeing               2–3 spots
   → accommodation_candidates → accommodation   ~40% of remaining (skipped for day trips)
@@ -301,7 +302,9 @@ START
 
 - **Lodging-free check** — `parse_duration()` yields (nights, days); zero nights skips the lodging nodes, which covers overnight-transit trips.
 - **Existence check** — with `GOOGLE_MAPS_API_KEY`, candidates are verified against Google Places and invented names are dropped.
+- **Overseas destinations** — the country is resolved before generation; abroad, every agent gains instructions: costs converted to yen with the rate stated, flights for the round trip, local time with the offset and border-crossing waits, insurance and connectivity in the budget, a passport in the packing list. Place names are written as "Japanese name (local name)", and the map searches on that local name.
 - **Preference learning** — past ★ ratings and comments become `user_preferences`, softly injected into the agents.
+- **Day-by-day map** — the `N日目` headings in the schedule decide which day each pin belongs to, so multi-day trips can be filtered one day at a time (a hotel belongs to both surrounding days). If fewer than half the pins could be dated, the filter is withheld — picking a day would make pins vanish and look broken.
 - **Partial editing** — an edit request regenerates only the nodes it touches.
 - **Retries** — `invoke_with_retry()` backs off on 429 / 503 / network errors, up to 5 attempts.
 
@@ -326,7 +329,7 @@ The plan card shown in the chat goes through `marked.parse()` in the browser. Ma
 
 | Table | Purpose |
 |---|---|
-| `travel_plans` | Saved plans (conditions and results as JSON) plus coordinate cache, custom pins, packing list, actual cost, ★ rating |
+| `travel_plans` | Saved plans (conditions and results as JSON) plus stated preferences (transport, whether they drive, timing), coordinate cache, custom pins, packing list, actual cost, ★ rating |
 | `chat_messages` | Chat history; plan rows also carry `plan_json` (the "previous plan" used when editing) |
 | `trips` | Trips (title, dates), cover photo, best shots, linked plan |
 | `photos` / `stickers` | Photos (path, shoot time, GPS) / sticky notes (display text + internal basis) |
@@ -386,7 +389,7 @@ Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the pub
 ### Tests & CI
 
 ```bash
-pytest tests/ -k "not smoke"    # 145 offline tests — no API keys, no DB
+pytest tests/ -k "not smoke"    # 179 offline tests — no API keys, no DB
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
@@ -394,13 +397,13 @@ python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 
 | Suite | What it guards |
 |---|---|
-| `test_units.py` (29) | Thumbnail keys, URL generation, path traversal, geocoding variants, app-token issue/verify |
+| `test_units.py` (38) | Thumbnail keys, URL generation, path traversal, geocoding variants, destination-country resolution, app-token issue/verify |
 | `test_ios_routes.py` (44) | Every URL the iOS app calls exists on the server, with the right method |
-| `test_regression.py` (29) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, … |
+| `test_regression.py` (50) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, "I don't drive" survives a save-and-edit round trip, … |
 | `test_generation_status.py` (18) | Reload restore — the pending/done/gone decision, and what the page carries |
 | `test_app_api.py` (16) | Authorization and JSON shape for the native-app endpoints |
 | `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |
-| `test_static_js.py` (2) | The JS and the template still fit together (names, element ids) |
+| `test_static_js.py` (6) | The JS and the template still fit together (names, element ids), and which day the map assigns each pin to |
 | `tests/js/home_chat.html` (11 scenarios) | The chat screen, driven in headless Chromium |
 
 The browser suite exists because this code breaks in ways a linter cannot see. An inline script once declared a name that `home.js` already held; that killed the entire script silently, and the seasonal-idea chips simply did nothing.

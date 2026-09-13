@@ -34,16 +34,19 @@ enum ChatService {
         return try await APIClient.shared.send(req, as: SavedPlanResponse.self).id
     }
 
+    /// /api/chat_messages の応答。
     private struct MessagesResponse: Codable {
         let status: String
         let messages: [ChatMessage]
     }
 
+    /// /save_plan の応答（保存された plan_id が返る）。
     private struct SavedPlanResponse: Codable {
         let status: String
         let id: Int
     }
 
+    /// 会話をまっさらにする（「新しいチャット」）。
     static func resetHistory() async throws {
         let req = APIClient.request("reset_chat", method: "POST")
         try await APIClient.shared.send(req)
@@ -112,6 +115,8 @@ enum ChatService {
         }
     }
 
+    /// 通信の失敗を、画面にそのまま出せる APIError にそろえる。
+    /// 取り消しだけは区別する（「やめる」を押したときにエラーを出さないため）。
     private static func normalize(_ error: Error) -> Error {
         if error is APIError { return error }
         if let urlError = error as? URLError {
@@ -160,6 +165,7 @@ enum ChatService {
         return (active ?? false) ? .pending : .gone
     }
 
+    /// /generation_status の応答。state が本命で、active は古いサーバー向けの保険。
     private struct GenerationStatus: Codable {
         let active: Bool?
         let state: String?

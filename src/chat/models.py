@@ -63,54 +63,82 @@ class TravelPlanState(TypedDict):
 
 
 class TransportOutput(BaseModel):
+    """交通エージェントの出力。往復交通費（1人あたり・円）だけを受け取る。
+
+    金額1つに絞ってあるのは、残予算＝予算上限−交通費 をコード側で確実に計算するため。
+    """
     transport_cost: int = Field(
         description="出発地から目的地までの往復交通費の1人あたり概算金額（円）。0以上999999以下の整数"
     )
 
 
 class SightseeingCandidatesOutput(BaseModel):
+    """観光候補の抽出（1段目）の出力。名前だけを多めに集める。
+
+    ここでは絞り込まない。選ぶのは SightseeingOutput の段で、差し戻しのときも
+    この候補プールから選び直す。
+    """
     candidates: List[str] = Field(
         description="厳密に5個以上8個以下の名称のみ。説明なし。"
     )
 
 
 class SightseeingOutput(BaseModel):
+    """観光スポット選定（2段目）の出力。候補から実際に回る分だけを選ぶ。"""
     spots: List[str] = Field(
         description="2個以上6個以下の観光スポット名称のみのリスト。説明なし。重複なし。日帰りでも1日を充実させられる件数を選ぶこと。"
     )
 
 
 class GourmetCandidatesOutput(BaseModel):
+    """飲食店候補の抽出（1段目）の出力。名前だけを多めに集める。"""
     restaurants: List[str] = Field(
         description="厳密に4個以上6個以下の飲食店名のみのリスト。説明なし。重複なし。"
     )
 
 
 class GourmetOutput(BaseModel):
+    """飲食店選定（2段目）の出力。候補から食事回数分だけを選ぶ。"""
     restaurants: List[str] = Field(
         description="厳密に2個以上3個以下の飲食店名のみのリスト。説明なし。重複なし。"
     )
 
 
 class AccommodationCandidatesOutput(BaseModel):
+    """宿泊候補の抽出（1段目）の出力。価格帯の違う宿を混ぜて集める。"""
     accommodation: List[str] = Field(
         description="厳密に3個以上5個以下の宿泊施設名のみのリスト。説明なし。重複なし。"
     )
 
 
 class AccommodationOutput(BaseModel):
+    """宿泊施設選定（2段目）の出力。実際に泊まる1軒だけを受け取る。
+
+    「A旅館かBホテル」と併記されると費用も行程も二重になるので、
+    スキーマの説明文の側でも1個に絞るよう強く指示している。
+    """
     accommodation: List[str] = Field(
         description="実際に宿泊する施設名のみ。原則1個（全員同一施設）。宿泊エリアが変わる連泊のときだけ最大2個。代替候補の併記は禁止。説明なし。重複なし。"
     )
 
 
 class TimekeeperOutput(BaseModel):
+    """タイムキーパーの出力。時系列のスケジュール行。
+
+    複数日なら「N日目」の見出し行を挟む。この見出しは後段でも使う
+    （agents._days_in の日数検証、地図の日ごとの絞り込み）。
+    """
     schedule: List[str] = Field(
         description="時系列の行動指示。各要素は先頭に時刻を付け、1行1予定。重複なし。"
     )
 
 
 class CostOutput(BaseModel):
+    """費用マネージャーの出力。内訳の行と、1人あたり合計。
+
+    合計を別項目として持たせるのは、コード側の予算ガードが数値で比較するため
+    （文章から金額を読み取らずに済む）。
+    """
     budget_estimate: List[str] = Field(
         description="各費用項目と金額を箇条書きにしたリスト。日別に分けて記載し、最後に合計行を含めること。"
     )
@@ -120,6 +148,9 @@ class CostOutput(BaseModel):
 
 
 class BalancerOutput(BaseModel):
+    """バランサーの審査結果。差し戻し先はこの status から決まる
+    （agents.route_after_balancer）。
+    """
     status: Literal[
         "approved",
         "fix_sightseeing",

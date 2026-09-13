@@ -1030,3 +1030,27 @@ def test_plan_geo_returns_the_center_only_when_there_are_no_pins(monkeypatch, cl
         pinned = c.get("/api/plan_geo/2").get_json()
     assert empty["center"] == {"lat": 48.86, "lng": 2.35}   # ピンが無い → 行き先の街を出す
     assert "center" not in pinned                            # ピンがあれば fitBounds に任せる
+
+
+def test_dest_center_falls_back_when_nominatim_misses(monkeypatch):
+    """OSMに載っていない地名でも、天気の座標を諦めないこと。
+
+    geocode_center は Nominatim しか見ない。以前ここは geocode_one を使っており、
+    Google Places・表記ゆらぎ・国土地理院まで試していた。切り替えたときに
+    その到達範囲を落としてしまうと、一部の行き先で天気が出なくなる。
+    """
+    from services import weather, geocoding
+    weather._DEST_CACHE.clear()
+    monkeypatch.setattr(geocoding, "geocode_center", lambda q: None)
+    monkeypatch.setattr(geocoding, "geocode_one", lambda q, **kw: {"lat": 36.0, "lng": 137.0})
+    loc = weather.dest_center("OSMに無い温泉郷")
+    assert loc["lat"] == 36.0 and loc["country_code"] == "jp"
+    assert loc["radius_km"] == geocoding._MAX_DIST_KM
+
+    # 中心が取れるときは、そちらを使って国コードも返す（フォールバックは呼ばない）
+    weather._DEST_CACHE.clear()
+    monkeypatch.setattr(geocoding, "geocode_center",
+                        lambda q: {"lat": 48.86, "lng": 2.35, "radius_km": 80.0, "country_code": "fr"})
+    monkeypatch.setattr(geocoding, "geocode_one",
+                        lambda q, **kw: pytest.fail("中心が取れているのにフォールバックした"))
+    assert weather.dest_center("パリ")["country_code"] == "fr"

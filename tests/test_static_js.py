@@ -127,6 +127,23 @@ def test_plan_map_has_no_day_filter_for_single_day_plans():
     assert _run_plan_map_days([], ["1日目", "2日目"]) is None
 
 
+def test_plan_map_needs_most_pins_dated_before_offering_the_filter():
+    """照合できたピンが半分に満たなければ、切り替えを出さないこと。
+
+    日を選ぶと日の付かないピンは消える。照合が弱いまま切り替えを出すと、
+    押した瞬間に地図から店が消えて壊れて見える。
+    """
+    dated = ["1日目", "10:00 熱海城", "2日目", "10:00 起雲閣"]
+    # 4件中2件（ちょうど半分）は出す
+    r = _run_plan_map_days(
+        [{"name": "熱海城"}, {"name": "起雲閣"}, {"name": "謎の店A"}, {"name": "謎の店B"}], dated)
+    assert r is not None and r["days"] == [1, 2]
+    # 5件中2件（半分未満）は出さない
+    assert _run_plan_map_days(
+        [{"name": "熱海城"}, {"name": "起雲閣"},
+         {"name": "謎の店A"}, {"name": "謎の店B"}, {"name": "謎の店C"}], dated) is None
+
+
 def test_plan_map_day_headers_match_the_agent_rule():
     """全角数字・角括弧・「N日目：地名」も見出しとして扱うこと（agents.py の _days_in と同じ）。"""
     points = [{"name": "熱海城"}, {"name": "起雲閣"}]

@@ -2,9 +2,11 @@ import Foundation
 
 /// 地図に立てる1本のピン。
 struct PlanPin: Identifiable, Hashable {
+    /// ピンの種類。色と凡例の見出しがこれで決まる。
     enum Category: Hashable {
         case spot, restaurant, accommodation
 
+        /// 凡例に出す名前。
         var label: String {
             switch self {
             case .spot:          return "観光"
@@ -102,9 +104,17 @@ enum PlanItinerary {
         }
     }
 
-    /// 切り替えに出す日。ピンが1本でもある日だけを昇順で返し、2日未満なら空
-    /// （切り替える意味が無い）。
+    /// 切り替えに出す日。ピンが1本でもある日だけを昇順で返す。
+    ///
+    /// 空（＝切り替えを出さない）にするのは次の2つ:
+    ///   ・ピンのある日が2日未満（切り替える意味が無い）
+    ///   ・日が付いたピンが半分に満たない（スケジュールとの照合が効いていない）。
+    ///     日を選ぶと日の付かないピンは消えるので、照合が弱いまま切り替えを出すと
+    ///     「押したら地図から店が消えた」という壊れて見える状態になる。
     static func selectableDays(_ pins: [PlanPin]) -> [Int] {
+        guard !pins.isEmpty else { return [] }
+        let placed = pins.filter { !$0.days.isEmpty }.count
+        guard placed * 2 >= pins.count else { return [] }
         let days = Set(pins.flatMap { $0.days }).sorted()
         return days.count >= 2 ? days : []
     }
@@ -142,6 +152,7 @@ enum PlanItinerary {
         return numbered(hits.map(\.pin) + misses)
     }
 
+    /// 並んだ順に1から通し番号を振る（観光・グルメ・宿を横断した1本の番号）。
     private static func numbered(_ pins: [PlanPin]) -> [PlanPin] {
         pins.enumerated().map { index, pin in
             var pin = pin

@@ -78,6 +78,7 @@ _llm = ChatGoogleGenerativeAI(
 # 出力スキーマ
 # ----------------------------------------------------------------------
 class StickerItem(BaseModel):
+    """写真1枚から起こした付箋1枚（短い言葉＋その写真のid）。"""
     text: str = Field(
         description="短い付箋の言葉（目安6〜14字）。説明文・旅レポートの見出しにしないこと。"
     )
@@ -87,6 +88,7 @@ class StickerItem(BaseModel):
 
 
 class StickersOutput(BaseModel):
+    """写真から付箋を起こす処理の出力。まとめて複数枚返る。"""
     stickers: List[StickerItem] = Field(
         description="3〜6枚。旅全体の空気感を少しズラして切り取る付箋。"
     )
@@ -187,11 +189,13 @@ basis はユーザーには見せない内部メモなので、率直に書い�
 # ベストショット選出 ― 旅の写真から「飾りたい一枚」を選ぶ
 # ----------------------------------------------------------------------
 class _BestShot(BaseModel):
+    """ベストショット1枚の選定結果（写真のidと、選んだ理由の一言）。"""
     index: int = Field(description="選んだ写真の番号（0から始まる整数）")
     reason: str = Field(description="その写真を選んだ理由（15〜35字のあたたかい一言）")
 
 
 class _BestShotsOutput(BaseModel):
+    """ベストショット選定の出力。旅の中から数枚を選んで返す。"""
     # 型付きの List[_BestShot] にすること（素の list だと items 定義が欠け、
     # 構造化出力のスキーマが正しく伝わらない）。要素は1件だけ入れる。
     best: List[_BestShot] = Field(

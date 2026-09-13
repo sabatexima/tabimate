@@ -154,14 +154,24 @@ def dest_center(destination: str) -> dict | None:
 
     返り値は geocoding.geocode_center と同じ {"lat","lng","radius_km","country_code"}。
     天気だけでなく、プラン生成（海外かどうか）と持ち物リストも同じ答えを使い回す。
+
+    geocode_center は Nominatim しか見ないので、OSMに載っていない地名では空振りする。
+    その場合は geocode_one（Google Places・表記ゆらぎ・国土地理院まで試す）で座標だけ
+    でも取りに行く。ここで諦めると天気が出なくなるため。国土地理院は日本の地名しか
+    持たず、この経路に来る時点で海外は geocode_center の世界検索で拾えているので、
+    救済できた分は日本の地名として扱う。
     """
     now = time.time()
     with _dest_lock:
         hit = _DEST_CACHE.get(destination)
         if hit and now - hit[1] < _DEST_CACHE_TTL:
             return hit[0]
-    from services.geocoding import geocode_center
+    from services.geocoding import geocode_center, geocode_one, _MAX_DIST_KM
     loc = geocode_center(destination)
+    if not loc:
+        fallback = geocode_one(destination)
+        if fallback:
+            loc = {**fallback, "radius_km": _MAX_DIST_KM, "country_code": "jp"}
     with _dest_lock:
         _DEST_CACHE[destination] = (loc, now)
     return loc

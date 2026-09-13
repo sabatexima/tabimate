@@ -13,6 +13,7 @@ struct PlanMapCard: View {
     /// 絞り込んでいる日（nil なら「すべて」）。複数日のプランだけ切り替えが出る
     @State private var selectedDay: Int?
 
+    /// 地図カードの状態。座標が1つも取れなければ empty（エラーではない）。
     enum LoadState { case loading, ready, empty, failed(String) }
 
     var body: some View {
@@ -43,6 +44,7 @@ struct PlanMapCard: View {
         .task { await load() }
     }
 
+    /// カードの見出し。
     private var header: some View {
         Text("🗺 地図")
             .font(.cardTitle)
@@ -62,6 +64,7 @@ struct PlanMapCard: View {
         return pins.filter { $0.days.contains(day) }
     }
 
+    /// 「すべて / N日目」の切り替え。日数が増えても崩れないよう横スクロールにする。
     private var dayPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -75,6 +78,7 @@ struct PlanMapCard: View {
         }
     }
 
+    /// 切り替えのボタン1つ。選択中はクローバーの緑で塗る。
     private func dayChip(_ label: String, day: Int?) -> some View {
         let on = selectedDay == day
         return Button {
@@ -130,6 +134,7 @@ struct PlanMapCard: View {
         }
     }
 
+    /// 凡例。実際に立っている種類だけを並べ、番号の意味を添える。
     private var legend: some View {
         HStack(spacing: 14) {
             ForEach(presentCategories, id: \.self) { category in
@@ -149,12 +154,14 @@ struct PlanMapCard: View {
         .padding(.vertical, 12)
     }
 
+    /// いま地図にある種類だけ（無い種類を凡例に出さないため）。
     private var presentCategories: [PlanPin.Category] {
         [.spot, .restaurant, .accommodation].filter { category in
             pins.contains { $0.category == category }
         }
     }
 
+    /// 座標を用意してピンを組み立てる。取れなければ empty か failed にする。
     @MainActor
     private func load() async {
         // 座標は一覧の応答に入ってくる。取得済みならそれをそのまま使い、
@@ -224,6 +231,7 @@ private struct NumberedPin: View {
 }
 
 extension PlanPin {
+    /// MapKit に渡す形。
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }

@@ -148,6 +148,18 @@ final class PlanItineraryTests: XCTestCase {
         XCTAssertEqual(PlanItinerary.selectableDays(built), [1, 2])
     }
 
+    func testNeedsMostPinsDatedBeforeOfferingTheFilter() {
+        // 日を選ぶと日の付かないピンは消えるので、照合が弱いときは切り替えを出さない
+        func days(_ names: [String]) -> [Int] {
+            var built = names.map { PlanPin(name: $0, category: .spot, lat: 35, lng: 139) }
+            PlanItinerary.assignDays(&built, schedule: ["1日目", "10:00 熱海城", "2日目", "10:00 起雲閣"])
+            return PlanItinerary.selectableDays(built)
+        }
+        XCTAssertEqual(days(["熱海城", "起雲閣", "謎の店A", "謎の店B"]), [1, 2])       // ちょうど半分
+        XCTAssertEqual(days(["熱海城", "起雲閣", "謎の店A", "謎の店B", "謎の店C"]), [])  // 半分未満
+        XCTAssertEqual(PlanItinerary.selectableDays([]), [])
+    }
+
     func testSingleDayPlansHaveNoDayFilter() {
         var built = [PlanPin(name: "熱海城", category: .spot, lat: 35, lng: 139)]
         PlanItinerary.assignDays(&built, schedule: ["09:00 熱海城", "12:00 昼食"])

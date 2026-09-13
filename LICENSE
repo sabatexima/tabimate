@@ -22,9 +22,10 @@ SOFTWARE.
 
 --------------------------------------------------------------------------
 
-The mascot "Chamu" (ちゃむ) and the artwork under src/static/img/ and
-docs/img/ are original work by the copyright holder and are covered by the
-same MIT License above.
+The MIT License above covers the code. The mascot "Chamu" (ちゃむ) and the
+images under src/static/img/, docs/img/ and docs/presentation/img/ are NOT
+covered by it: they are licensed separately under CC BY-NC 4.0
+(attribution, non-commercial). See LICENSE-ARTWORK.
 
 Third-party components bundled or depended upon keep their own licenses and
 attribution requirements (OpenMoji, fonts, map data, Python packages).
@@ -39,8 +40,9 @@ See THIRD_PARTY_NOTICES.md.
 できること: 利用・複製・改変・再配布・商用利用のすべて。条件は、上の著作権表示と
 許諾表示を、複製や実質的な部分に残すことだけです。保証はありません。
 
-マスコット「ちゃむ」と src/static/img/・docs/img/ 以下の画像は著作権者の自作で、
-同じ MIT ライセンスに含まれます。
+上の MIT ライセンスはコードに対するものです。マスコット「ちゃむ」と
+src/static/img/・docs/img/・docs/presentation/img/ 以下の画像は含まれず、
+別に CC BY-NC 4.0（表示・非営利）です。LICENSE-ARTWORK を参照。
 
 同梱・依存している第三者の成果物（OpenMoji、書体、地図データ、Python パッケージ）
 は、それぞれのライセンスと帰属表示の条件に従ってください。

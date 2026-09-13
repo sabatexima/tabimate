@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS travel_plans (
     num_people       INT,
     budget_limit     INT,
     departure_location VARCHAR(255),
+    transport_mode   VARCHAR(255),
+    no_car           TINYINT NOT NULL DEFAULT 0,
+    schedule_pref    TEXT,
     transport_cost   INT,
     remaining_budget INT,
     total_per_person INT,
@@ -155,7 +158,12 @@ def _ensure_plan_columns(conn) -> None:
                      ("geo_done", "TINYINT NOT NULL DEFAULT 0"),
                      ("total_per_person", "INT NULL"),
                      ("actual_total", "INT NULL"),
-                     ("packing_list", "JSON NULL")):
+                     ("packing_list", "JSON NULL"),
+                     # 「車は運転しない」「夕方までに帰りたい」等のご希望。
+                     # 保存していなかったため、しおりからのチャット修正で失われていた
+                     ("transport_mode", "VARCHAR(255) NULL"),
+                     ("no_car", "TINYINT NOT NULL DEFAULT 0"),
+                     ("schedule_pref", "TEXT NULL")):
         exists = conn.execute(
             text(
                 "SELECT COUNT(*) FROM information_schema.columns "
@@ -225,7 +233,8 @@ _PLAN_JSON_COLS = (
 # 取得時に SELECT する列（id / google_user_id は呼び出し側で付け足す）
 _PLAN_SELECT_COLS = (
     "destination, travel_date, duration, num_people, budget_limit, "
-    "departure_location, transport_cost, remaining_budget, total_per_person, status, feedback, "
+    "departure_location, transport_mode, no_car, schedule_pref, "
+    "transport_cost, remaining_budget, total_per_person, status, feedback, "
     "themes, special_requirements, spots, spot_coords, restaurants, restaurant_coords, "
     "schedule_items, accommodation, accommodation_coords, budget_estimate, custom_pins, "
     "geo_done, rating, rating_comment, actual_total, packing_list, created_at"
@@ -369,6 +378,7 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
     """既存の保存プランを上書き更新する（本人のプランのみ）。チャット修正で使用。"""
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
         result = conn.execute(
             text("""
                 UPDATE travel_plans SET
@@ -378,6 +388,9 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                     num_people = :num_people,
                     budget_limit = :budget_limit,
                     departure_location = :departure_location,
+                    transport_mode = :transport_mode,
+                    no_car = :no_car,
+                    schedule_pref = :schedule_pref,
                     transport_cost = :transport_cost,
                     remaining_budget = :remaining_budget,
                     total_per_person = :total_per_person,
@@ -405,6 +418,9 @@ def update_travel_plan(plan_id: int, google_user_id: str, state: dict) -> bool:
                 "num_people":           state.get("num_people"),
                 "budget_limit":         state.get("budget_limit"),
                 "departure_location":   state.get("departure_location"),
+                "transport_mode":       state.get("transport_mode") or "おまかせ",
+                "no_car":               1 if state.get("no_car") else 0,
+                "schedule_pref":        state.get("schedule_pref") or "",
                 "transport_cost":       state.get("transport_cost"),
                 "remaining_budget":     state.get("remaining_budget"),
                 "total_per_person":     state.get("total_per_person"),
@@ -636,12 +652,14 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
     """プラン状態を travel_plans に保存し、新規行の id を返す。"""
     with _get_engine().begin() as conn:
         conn.execute(text(_CREATE_PLANS_TABLE))
+        _ensure_plan_columns(conn)
         result = conn.execute(
             text("""
                 INSERT INTO travel_plans (
                     google_user_id, user_email,
                     destination, travel_date, duration, num_people,
-                    budget_limit, departure_location, transport_cost,
+                    budget_limit, departure_location,
+                    transport_mode, no_car, schedule_pref, transport_cost,
                     remaining_budget, total_per_person, status, feedback,
                     themes, special_requirements, spots, spot_coords,
                     restaurants, restaurant_coords,
@@ -649,7 +667,8 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                 ) VALUES (
                     :google_user_id, :user_email,
                     :destination, :travel_date, :duration, :num_people,
-                    :budget_limit, :departure_location, :transport_cost,
+                    :budget_limit, :departure_location,
+                    :transport_mode, :no_car, :schedule_pref, :transport_cost,
                     :remaining_budget, :total_per_person, :status, :feedback,
                     :themes, :special_requirements, :spots, :spot_coords,
                     :restaurants, :restaurant_coords,
@@ -665,6 +684,9 @@ def save_travel_plan(state: dict, google_user_id: str = None, user_email: str = 
                 "num_people":           state.get("num_people"),
                 "budget_limit":         state.get("budget_limit"),
                 "departure_location":   state.get("departure_location"),
+                "transport_mode":       state.get("transport_mode") or "おまかせ",
+                "no_car":               1 if state.get("no_car") else 0,
+                "schedule_pref":        state.get("schedule_pref") or "",
                 "transport_cost":       state.get("transport_cost"),
                 "remaining_budget":     state.get("remaining_budget"),
                 "total_per_person":     state.get("total_per_person"),

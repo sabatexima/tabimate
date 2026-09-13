@@ -401,11 +401,13 @@ def _as_list(value) -> list:
     return [value]
 
 
-def edit_saved_plan(plan: dict, message: str) -> dict:
+def edit_saved_plan(plan: dict, message: str, user_id: str = None) -> dict:
     """保存プランに対するチャット修正を実行し、更新後の最終状態を返す。
 
     変更要望から対象領域を判定し、対象だけを再生成する（指定外は前回値を維持）。
     予算超過時は generate_travel_plan が ValueError を送出する。
+
+    user_id を渡すと、過去の★評価から得た好みも参考として反映する。
     """
     from datetime import date as _date
     intent_messages = [
@@ -478,10 +480,15 @@ def edit_saved_plan(plan: dict, message: str) -> dict:
         "num_people":           plan.get("num_people"),
         "budget_limit":         plan.get("budget_limit"),
         "departure_location":   plan.get("departure_location"),
-        "transport_mode":       "おまかせ",
-        "no_car":               False,
+        # 決め打ちにすると「運転しない」「夕方までに帰りたい」といった前提が
+        # 修正のたびに消えてしまう。保存してあるご希望をそのまま引き継ぐ
+        "transport_mode":       plan.get("transport_mode") or "おまかせ",
+        "no_car":               bool(plan.get("no_car")),
+        "schedule_pref":        plan.get("schedule_pref") or "",
         "special_requirements": _as_list(plan.get("special_requirements")),
         "user_feedback":        message,
+        # ★評価から得た好みも、しおりからの修正時に反映されていなかった
+        "user_preferences":     _build_user_preferences(user_id),
     }
     inputs.update(overrides)  # 「10泊にして」「予算100万で」等の新しい基本条件を反映
     # 対象が限定されていれば、前回プランの成果物を引き継いで対象だけ再生成（部分編集）

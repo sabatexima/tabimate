@@ -16,6 +16,7 @@ invoke_with_retry でリトライしながら実行する。
 """
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from services.weather import parse_duration
 from chat.models import TravelPlanState
@@ -112,14 +113,21 @@ def _filter_real_places(names: list, destination: str, min_keep: int) -> list:
     min_keep 未満になる場合は、選択肢を保つため絞り込みを諦めて全件返す。
     """
     from services.geocoding import verify_place_exists
-    checked = [(n, verify_place_exists(n, destination)) for n in names or []]
+    names = list(names or [])
+    if not names:
+        return []
+    # 1件ずつ順に問い合わせると候補数ぶんの往復が直列に積み上がる（8件で8往復）。
+    # 互いに独立な問い合わせなので並列にして待ち時間を候補数ぶんの1に縮める（順序は維持）。
+    with ThreadPoolExecutor(max_workers=min(8, len(names))) as ex:
+        verdicts = list(ex.map(lambda n: verify_place_exists(n, destination), names))
+    checked = list(zip(names, verdicts))
     dropped = [n for n, ok in checked if ok is False]
     if not dropped:
-        return list(names or [])
+        return names
     kept = [n for n, ok in checked if ok is not False]
     if len(kept) < min_keep:
         log.info("[実在確認] 未確認候補が多いため絞り込みを中止: dropped=%s", dropped)
-        return list(names)
+        return names
     log.info("[実在確認] Google Placesで見つからず候補から除外: %s", dropped)
     return kept
 
@@ -494,6 +502,9 @@ def gourmet_hunter(state: TravelPlanState):
         prompt += f"\n【バランサーからの修正要求】:\n{state['feedback']}\nこの指摘を反映して、飲食店を選び直してください。"
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望を必ず最優先で反映して飲食店を選んでください。"
+    if state.get("no_car"):
+        # 観光・宿には入れていた条件が飲食店にだけ抜けており、車でしか行けない店が選ばれ得た
+        prompt += "\n【重要】運転免許がない/運転しない前提です。公共交通機関（電車・バス）＋徒歩で無理なく行ける店だけを選び、車でしか行けない店は除外すること。"
     prompt += _pref(state)
     prompt += _directive(state)
 
@@ -813,6 +824,10 @@ def balancer(state: TravelPlanState):
 ■ 予算上限: 1人あたり {state['budget_limit']:,}円（往復交通費 {state['transport_cost']:,}円確定、残り予算: {state['remaining_budget']:,}円）
 ■ テーマ: {', '.join(state['themes'])}
 ■ 特別条件: {', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}
+■ 往復の交通手段: {state.get('transport_mode') or 'おまかせ'}
+■ 運転の可否: {'運転しない（車・レンタカーは不可。公共交通＋徒歩のみ）' if state.get('no_car') else '制約なし'}
+■ 時間に関するご希望: {state.get('schedule_pref') or 'なし'}
+■ 今回のご要望: {state.get('user_feedback') or 'なし'}
 ■ 観光地: {', '.join(state['spots'])}
 ■ 飲食店: {', '.join(state['restaurants'])}
 {f"■ 宿泊施設: {', '.join(state.get('accommodation', []))}" if not is_day_trip(state['duration']) else "■ 宿泊施設: なし（宿泊しない行程）"}
@@ -821,7 +836,7 @@ def balancer(state: TravelPlanState):
 ■ 費用見積もり:
 {chr(10).join(state.get('budget_estimate', []))}
 
-【審査の5観点】
+【審査の6観点】
 1. 予算: 費用見積もりの1人あたり合計が予算上限（{state['budget_limit']:,}円）の【110%以内】に収まっているか。予備費の範囲内とみなせる軽微な超過（110%以内）は合格とし、fix_budget にしないこと。明確に110%を超える場合のみ問題とし、超過金額を具体的に明記すること。
 2. スケジュール: 期間（{state['duration']}＝{_b_days}日間）どおりの日数で組まれているか（{"「1日目」〜「" + str(_b_days) + "日目」まで全てあり、帰路は最終日のみ" if _b_days >= 2 else "1日で完結している"}）。「予備日」や中身のない日で埋めていないか。移動時間が現実的か、開館前到着・閉館後出発などの矛盾がないか、1日の総移動時間が観光時間を上回っていないか。
    ※日数不足・途中の日の帰路・予備日は【スケジュールの問題】なので必ず fix_time を選ぶこと（fix_accommodation にしない）。宿泊施設リストは施設名のみで泊数を表さない（同一施設での連泊が原則）ため、宿の泊数不足をここから推定しないこと。
@@ -829,6 +844,9 @@ def balancer(state: TravelPlanState):
 3. 疲労度: {state['num_people']}人の大人数で、特別条件（{', '.join(state['special_requirements']) if state['special_requirements'] else 'なし'}）を持つ参加者が無理なく楽しめる強度か。
 4. テーマ一貫性: 観光スポット・飲食店{"" if is_day_trip(state["duration"]) else "・宿泊施設"}がすべて旅行テーマ（{', '.join(state['themes'])}）に沿っているか。
 5. 特別条件の充足: 車椅子対応・アレルギー対応などの特別条件が、全スポット・飲食店{"" if is_day_trip(state["duration"]) else "・宿泊施設"}で実際に満たされているか。
+6. ご希望の反映: 上記の「運転の可否」「時間に関するご希望」「今回のご要望」がスケジュールに反映されているか。
+   ※「運転しない」なのに車・レンタカーでの移動が含まれる、「夕方までに帰りたい」のに夜遅くの帰宅になっている、
+     といった食い違いは fix_time を選び、feedback に食い違いの箇所を具体的に書くこと（「なし」の項目は審査対象外）。
 {"【重要】これは宿泊のないプランです（日帰りまたは夜行）。fix_accommodation は絶対に使わないこと。" if is_day_trip(state["duration"]) else ""}
 
 【判定ルール】
@@ -922,16 +940,6 @@ def route_after_balancer(state: TravelPlanState):
     prev_status = state.get("prev_status", "")
 
     terminal_statuses = {"approved", "budget_infeasible"}
-    intermediate_statuses = {
-        "candidates_ready",
-        "accommodation_candidates_ready",
-        "gourmet_candidates_ready",
-    }
-    fallback_statuses = {
-        "fallback_sightseeing",
-        "fallback_accommodation",
-        "fallback_gourmet",
-    }
     fix_statuses = {
         "fix_sightseeing",
         "fix_gourmet",
@@ -945,10 +953,6 @@ def route_after_balancer(state: TravelPlanState):
     if state["retry_count"] >= MAX_BALANCER_RETRIES:
         log.warning("⚠️ 差し戻し上限（5回）に達したため強制終了します。最終ステータス: %s", status)
         return "end"
-    if status in intermediate_statuses:
-        return status
-    if status in fallback_statuses:
-        return "timekeeper"
     if status == prev_status and status in fix_statuses:
         log.warning("⚠️ 同じ問題（%s）が繰り返されたため、観光スポット選定からやり直します。", status)
         return "sightseeing"
@@ -956,7 +960,7 @@ def route_after_balancer(state: TravelPlanState):
     return {
         "fix_sightseeing": "sightseeing",
         # グルメだけの問題は宿を選び直さず、飲食店の再抽出からやり直す（宿の再発防止）
-        "fix_gourmet": "gourmet_candidates_ready",
+        "fix_gourmet": "gourmet_candidates",
         "fix_accommodation": "accommodation",
         "fix_budget": "accommodation",
         "fix_time": "timekeeper",

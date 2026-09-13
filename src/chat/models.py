@@ -46,9 +46,6 @@ class TravelPlanState(TypedDict):
         "fix_budget",
         "fix_time",
         "budget_infeasible",
-        "candidates_ready",
-        "accommodation_candidates_ready",
-        "gourmet_candidates_ready",
     ]
     prev_status: str
     retry_count: int
@@ -56,7 +53,6 @@ class TravelPlanState(TypedDict):
     # 部分編集の対象領域（sightseeing/gourmet/accommodation/schedule/budget/transport）。
     # 空ならフル生成。対象外の領域は前回プランの成果物をそのまま引き継ぐ。
     edit_targets: List[str]
-    search_context: str
     spot_candidates: List[str]
     accommodation_candidates: List[str]
     restaurant_candidates: List[str]
@@ -120,9 +116,6 @@ class CostOutput(BaseModel):
 
 
 class BalancerOutput(BaseModel):
-    # 注: ルーティング側(route_after_balancer)には歴史的経緯で candidates_ready /
-    # fallback_* の分岐も残っているが、LLM に選ばせる価値はない（approved の代わりに
-    # 選ばれると無意味な再ループになる）ため、出力スキーマからは除外している。
     status: Literal[
         "approved",
         "fix_sightseeing",

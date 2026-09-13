@@ -508,6 +508,11 @@ def _plan_to_view_dict(state: dict, plan_id: int, created_at) -> dict:
         'num_people': state.get('num_people'),
         'budget_limit': state.get('budget_limit'),
         'departure_location': state.get('departure_location'),
+        # ご希望も往復させる。ここから漏れると /apply_saved_plan の上書きで
+        # 「運転しない」等が既定値に戻ってしまう（UPDATE の対象列のため）
+        'transport_mode': state.get('transport_mode'),
+        'no_car': bool(state.get('no_car')),
+        'schedule_pref': state.get('schedule_pref'),
         'transport_cost': state.get('transport_cost'),
         'remaining_budget': state.get('remaining_budget'),
         'total_per_person': state.get('total_per_person'),
@@ -564,7 +569,7 @@ def edit_saved_plan(plan_id):
         新規のプラン生成（send_message の run_chat）が即保存するのとは別扱い。
         """
         try:
-            final_state = run_plan_edit(plan, message)
+            final_state = run_plan_edit(plan, message, user_id)
             # まだ保存しない。修正案（プレビュー）として返す
             result['plan'] = _plan_to_view_dict(final_state, plan_id, plan.get('created_at'))
         except ValueError as e:

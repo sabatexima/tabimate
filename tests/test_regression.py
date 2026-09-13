@@ -610,3 +610,118 @@ def test_overnight_trip_meals_and_costs():
     assert "2日目" in sections and "宿泊費" not in sections
     sections_stay = ag._build_day_sections("2泊3日")
     assert "宿泊費" in sections_stay                    # 従来挙動は不変
+
+
+# ----------------------------------------------------------------------
+# ご希望（交通手段・運転の可否・時間）が、保存と修正の往復で消えないこと
+# ----------------------------------------------------------------------
+def test_saved_plan_edit_keeps_transport_preferences(monkeypatch):
+    """しおりからのチャット修正で「運転しない」等の前提が失われないこと。
+
+    以前は edit_saved_plan が transport_mode="おまかせ" / no_car=False を
+    決め打ちしており、修正のたびに車前提の行程へ戻る可能性があった。
+    """
+    import chat.chat as C
+    from chat.chat import _PlanEditIntent
+    captured = {}
+    monkeypatch.setattr(C, "generate_travel_plan",
+                        lambda inputs: (captured.update(inputs), dict(inputs, status="approved"))[1])
+    monkeypatch.setattr(C, "invoke_with_retry",
+                        lambda llm, msgs: _PlanEditIntent(edit_targets=["gourmet"]))
+    plan = dict(_saved_plan(), transport_mode="新幹線", no_car=1,
+                schedule_pref="夕方までに帰りたい")
+    C.edit_saved_plan(plan, "ご飯を変えて")
+    assert captured["transport_mode"] == "新幹線"
+    assert captured["no_car"] is True
+    assert captured["schedule_pref"] == "夕方までに帰りたい"
+
+
+def test_plan_payload_carries_transport_preferences():
+    """チャット内の部分編集も plan_json 経由なので、控えに希望が載っていること。"""
+    from chat.formatter import plan_payload
+    payload = plan_payload({"destination": "静岡", "transport_mode": "新幹線",
+                            "no_car": True, "schedule_pref": "朝はゆっくり"})
+    assert payload["transport_mode"] == "新幹線"
+    assert payload["no_car"] is True
+    assert payload["schedule_pref"] == "朝はゆっくり"
+
+
+def test_apply_saved_plan_roundtrip_keeps_preferences():
+    """修正案プレビューの辞書にも希望が入っていること。
+
+    /apply_saved_plan はクライアントが返してきたこの辞書をそのまま UPDATE に流す。
+    ここから漏れると、確定を押した瞬間に保存済みの希望が既定値へ戻る。
+    """
+    from views.planner import _plan_to_view_dict
+    view = _plan_to_view_dict({"destination": "静岡", "transport_mode": "高速バス",
+                               "no_car": True, "schedule_pref": "早めに帰りたい"}, 1, None)
+    assert view["transport_mode"] == "高速バス"
+    assert view["no_car"] is True
+    assert view["schedule_pref"] == "早めに帰りたい"
+
+
+def test_db_write_and_read_cover_the_same_plan_columns():
+    """travel_plans の INSERT・UPDATE・SELECT が同じ列集合を扱っていること。
+
+    列を1か所にだけ足すと、書けるのに読めない（またはその逆）が起きる。
+    実際そうやって transport_mode 等が抜け落ちていた。
+    """
+    import re
+    from pathlib import Path
+    src = Path(__file__).resolve().parent.parent / "src" / "db.py"
+    text = src.read_text(encoding="utf-8")
+
+    insert = re.search(r"INSERT INTO travel_plans \((.*?)\) VALUES", text, re.S).group(1)
+    insert_cols = {c.strip() for c in insert.replace("\n", " ").split(",") if c.strip()}
+    # UPDATE は rating 用など複数あるので、プラン本体を書き換えるものを選ぶ
+    updates = [m.group(1) for m in
+               re.finditer(r"UPDATE travel_plans SET(.*?)WHERE id = :id", text, re.S)]
+    update = next(u for u in updates if "destination =" in u)
+    update_cols = {m.group(1) for m in re.finditer(r"(\w+)\s*=\s*:", update)}
+    select = re.search(r"_PLAN_SELECT_COLS = \((.*?)\n\)", text, re.S).group(1)
+    select_cols = {c.strip() for c in select.replace('"', " ").replace("\n", " ").split(",") if c.strip()}
+
+    assert len(insert_cols) >= 20 and len(update_cols) >= 20 and len(select_cols) >= 20
+    for col in ("transport_mode", "no_car", "schedule_pref"):
+        assert col in insert_cols, f"INSERT に {col} が無い"
+        assert col in update_cols, f"UPDATE に {col} が無い"
+        assert col in select_cols, f"SELECT に {col} が無い"
+    # 書き込める列はすべて読み戻せること（geo_done は書き込み時に固定値なので除く）
+    assert (insert_cols | update_cols) - {"geo_done"} <= select_cols | {"google_user_id", "user_email"}
+
+
+# ----------------------------------------------------------------------
+# 審査 → ルーティングの取りこぼし
+# ----------------------------------------------------------------------
+def test_every_balancer_status_has_a_route():
+    """バランサーが返しうる status が、すべて実在するノードへ振り分けられること。
+
+    逆に、どこからも生成されない status の分岐を残さないこと（読む人を惑わせる）。
+    """
+    from chat.models import BalancerOutput
+    from chat.agents import route_after_balancer
+    from chat.graph import workflow
+    import typing
+
+    statuses = typing.get_args(BalancerOutput.model_fields["status"].annotation)
+    assert len(statuses) == 7
+    destinations = set(workflow.nodes) | {"end"}
+    for status in statuses:
+        route = route_after_balancer({"status": status, "prev_status": "", "retry_count": 0})
+        assert route in destinations, f"{status} の行き先 {route} がノードに無い"
+
+
+def test_route_after_balancer_has_no_unreachable_branch():
+    """ルーティングが参照する status 名が、実際に代入されうるものだけであること。"""
+    import inspect
+    from chat.agents import route_after_balancer, balancer
+    from chat.models import BalancerOutput, TravelPlanState
+    import typing
+
+    known = set(typing.get_args(BalancerOutput.model_fields["status"].annotation))
+    known |= set(typing.get_args(TravelPlanState.__annotations__["status"]))
+    source = inspect.getsource(route_after_balancer) + inspect.getsource(balancer)
+    for name in ("fallback_sightseeing", "fallback_accommodation", "fallback_gourmet",
+                 "candidates_ready", "accommodation_candidates_ready"):
+        assert name not in known, f"{name} はどこからも代入されない"
+        assert f'"{name}"' not in source, f"{name} の分岐が残っている"

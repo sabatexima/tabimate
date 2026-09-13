@@ -1,10 +1,14 @@
 """プラン生成のワークフロー（LangGraph）定義と実行エントリ。
 
 各エージェント（chat.agents）をノードとして登録し、
-  transport → 観光候補/選定 → 宿泊候補/選定 → グルメ候補/選定
+  観光選定 → 宿泊候補/選定 → グルメ候補/選定
   → timekeeper → cost_manager → balancer
 の順に連結する。balancer の後は route_after_balancer により
 承認なら終了、差し戻しなら該当ノードへ戻る条件分岐を行う。
+
+交通費の試算（transport_agent）・観光候補の抽出（sightseeing_candidates）・
+天気の取得はグラフに含めない。互いに独立なので generate_travel_plan が
+並列に先行実行してから本体を回す（下の workflow 組み立て部のコメント参照）。
 
 generate_travel_plan() が外部からの呼び出し口。
 末尾の __main__ ブロックは単体動作確認用のCLIテストハーネス。
@@ -64,9 +68,8 @@ workflow.add_conditional_edges(
         "sightseeing": "sightseeing",
         "accommodation": "accommodation",
         "timekeeper": "timekeeper",
-        "accommodation_candidates_ready": "accommodation_candidates",
-        "gourmet_candidates_ready": "gourmet_candidates",
-        "candidates_ready": "sightseeing",
+        # fix_gourmet の戻り先。飲食店だけ候補の抽出からやり直す
+        "gourmet_candidates": "gourmet_candidates",
     },
 )
 
@@ -87,7 +90,6 @@ def generate_travel_plan(inputs: dict):
     inputs.setdefault("retry_count", 0)
     inputs.setdefault("prev_status", "")
     inputs.setdefault("user_feedback", "")
-    inputs.setdefault("search_context", "")
     inputs.setdefault("spot_candidates", [])
     inputs.setdefault("accommodation_candidates", [])
     inputs.setdefault("restaurant_candidates", [])
@@ -157,7 +159,6 @@ if __name__ == "__main__":
         "retry_count": 0,
         "prev_status": "",
         "user_feedback": "",
-        "search_context": "",
         "spot_candidates": [],
         "accommodation_candidates": [],
         "restaurant_candidates": [],

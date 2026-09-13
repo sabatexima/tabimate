@@ -31,6 +31,11 @@ def plan_payload(state: dict) -> dict:
         "num_people":           state.get("num_people"),
         "budget_limit":         state.get("budget_limit"),
         "departure_location":   state.get("departure_location"),
+        # ご希望（交通手段・運転の可否・時間）も控える。これが無いと、
+        # あとからプランを直すときに「運転しない」等の前提が失われる
+        "transport_mode":       state.get("transport_mode"),
+        "no_car":               bool(state.get("no_car")),
+        "schedule_pref":        state.get("schedule_pref"),
         "transport_cost":       state.get("transport_cost"),
         "remaining_budget":     state.get("remaining_budget"),
         "total_per_person":     state.get("total_per_person"),

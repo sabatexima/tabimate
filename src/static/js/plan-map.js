@@ -44,7 +44,7 @@
   // 見つからなかった場合も「無い」ことを覚える（毎回聞きに行かないため）
   async function geocode(name) {
     // destination（「関西」「浅草」等）を付けると Nominatim のヒット率が下がるため、
-    // スポット名のみで検索する（国の絞り込みはサーバー側の countrycodes=jp で担保）。
+    // スポット名のみで検索する（国の絞り込みはサーバー側が行き先から決める）。
     const url = `/api/geocode?q=${encodeURIComponent(name)}`;
     try {
       const res = await fetch(url);
@@ -548,8 +548,12 @@
 
     if (all.length > 0) {
       map.fitBounds(L.latLngBounds(all.map(p => [p.lat, p.lng])).pad(0.2));
+    } else if (plan.center && Number.isFinite(plan.center.lat) && Number.isFinite(plan.center.lng)) {
+      // ピン未設置でも行き先は分かっている（/api/plan_geo が添える）。その街を出す。
+      // 海外のプランで日本全図から探させないため
+      map.setView([plan.center.lat, plan.center.lng], 11);
     } else {
-      map.setView([36.2, 138.2], 5);  // ピン未設置の編集時は日本全体を表示
+      map.setView([36.2, 138.2], 5);  // 行き先も引けなかったときだけ日本全体
     }
   };
 })();

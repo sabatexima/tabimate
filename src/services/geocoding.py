@@ -1,9 +1,14 @@
 """スポット名 → 緯度経度の変換（ジオコーディング）を担う共通モジュール。
 
-Nominatim(OpenStreetMap) を日本(countrycodes=jp)に絞って利用し、
-当たらないときは国土地理院の住所検索APIへフォールバックする（どちらも無料・キー不要）。
+Nominatim(OpenStreetMap) を使い、当たらないときは国土地理院の住所検索APIへ
+フォールバックする（どちらも無料・キー不要）。
 プラン生成時のバッチ取得（geocode_spots）と、保存前データの無い旧プラン用の
 オンデマンドプロキシ（/api/geocode → geocode_one）の両方から再利用される。
+
+国の扱い:
+  行き先の国は geocode_center が決める（まず日本で探し、無ければ世界で探す）。
+  スポットの検索はその国に絞る（country）。日本なら従来どおり countrycodes=jp、
+  海外ならその国コード。国土地理院は日本の地名しか持たないので海外では使わない。
 
 精度向上の工夫:
   - 表記の正規化（NFKC・空白圧縮）と、括弧注釈・末尾総称を外したゆらぎ候補で再検索
@@ -11,6 +16,7 @@ Nominatim(OpenStreetMap) を日本(countrycodes=jp)に絞って利用し、
   - 中心から遠すぎるヒット（同名の別地）は棄却する
     （誤ピンを立てるより「未配置」にしてカスタムピンで置いてもらう方が良い）
 """
+import math
 import os
 import re
 import time
@@ -59,8 +65,14 @@ def _throttle_nominatim() -> None:
 
 
 def _dist_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """日本近辺用の簡易距離（km）。緯度1度≈111km、経度1度≈91km(cos35°)で近似。"""
-    return (((lat1 - lat2) * 111.0) ** 2 + ((lng1 - lng2) * 91.0) ** 2) ** 0.5
+    """2点間の簡易距離（km）。緯度1度≈111km、経度1度は緯度に応じて縮む（111×cos φ）。
+
+    以前は経度を 91km/度（北緯35°の値）で固定していた。日本ではそれで合うが、
+    赤道近くでは2割短く、北欧では倍近く見積もりが狂う。2点の平均緯度から求める。
+    """
+    mean_lat = math.radians((lat1 + lat2) / 2)
+    dlng_km = (lng1 - lng2) * 111.0 * math.cos(mean_lat)
+    return (((lat1 - lat2) * 111.0) ** 2 + dlng_km ** 2) ** 0.5
 
 
 def _pick_candidate(cands: list, center: tuple | None,
@@ -82,15 +94,19 @@ def _pick_candidate(cands: list, center: tuple | None,
 
 def _query_nominatim(q: str, viewbox: str | None = None,
                      center: tuple | None = None,
-                     max_km: float = _MAX_DIST_KM) -> dict | None:
-    """Nominatim に1回問い合わせ、採用候補の {"lat","lng"} を返す（日本に限定）。
+                     max_km: float = _MAX_DIST_KM,
+                     country: str | None = "jp") -> dict | None:
+    """Nominatim に1回問い合わせ、採用候補の {"lat","lng"} を返す。
 
+    country（ISO 3166-1 小文字）でその国に絞る。None なら世界中から探す。
     候補は5件まで取得し、center（目的地中心）があれば最寄りを採用・遠方は棄却。
     viewbox 指定時はその範囲を優先（bounded=0 なので範囲外も除外せず順位補正のみ）。
     失敗・該当なしは None。
     """
     try:
-        params = {"q": q, "format": "json", "limit": 5, "countrycodes": "jp"}
+        params = {"q": q, "format": "json", "limit": 5}
+        if country:
+            params["countrycodes"] = country
         if viewbox:
             params["viewbox"] = viewbox
             params["bounded"] = 0
@@ -144,18 +160,22 @@ def _first_within(cands: list, center: tuple | None,
 
 
 def _query_google_places(q: str, center: tuple | None = None,
-                         max_km: float = _MAX_DIST_KM) -> dict | None:
+                         max_km: float = _MAX_DIST_KM,
+                         country: str | None = "jp") -> dict | None:
     """Google Places (New) の Text Search で検索する。キー未設定・失敗時は None。
 
     飲食店・宿など「固有の店名」はOSM/地理院ではほぼ当たらないため、
     GOOGLE_MAPS_API_KEY があるときはこれを最初に試す。
     center 指定時はその周辺を優先（locationBias の上限は半径50km）。
+    country は結果の地域バイアス（regionCode）。海外の行き先ではその国を渡す。
     """
     key = os.getenv("GOOGLE_MAPS_API_KEY")
     if not key:
         return None
     try:
-        body = {"textQuery": q, "languageCode": "ja", "regionCode": "JP"}
+        body = {"textQuery": q, "languageCode": "ja"}
+        if country:
+            body["regionCode"] = country.upper()
         if center:
             body["locationBias"] = {"circle": {
                 "center": {"latitude": center[0], "longitude": center[1]},
@@ -191,10 +211,13 @@ def _query_google_places(q: str, center: tuple | None = None,
     return None
 
 
-def verify_place_exists(name: str, context: str | None = None) -> bool | None:
+def verify_place_exists(name: str, context: str | None = None,
+                        country: str | None = "jp") -> bool | None:
     """Google Places で「その名前の場所が実在するか」を確認する。
 
     プラン生成時に、LLMが創作した店・宿を候補から落とすために使う。
+    country は地域バイアス。海外の行き先で JP のままだと、実在する店を
+    「見つからない」と誤って落としかねない。
     返り値: True=実在 / False=見つからない / None=検証できない（キー未設定・APIエラー）。
     None は「わからない」なので、呼び出し側は除外しないこと。
     """
@@ -205,9 +228,10 @@ def verify_place_exists(name: str, context: str | None = None) -> bool | None:
     if not q:
         return None
     try:
-        resp = requests.post(_GOOGLE_PLACES_URL, json={
-            "textQuery": q, "languageCode": "ja", "regionCode": "JP",
-        }, timeout=4, headers={
+        body = {"textQuery": q, "languageCode": "ja"}
+        if country:
+            body["regionCode"] = country.upper()
+        resp = requests.post(_GOOGLE_PLACES_URL, json=body, timeout=4, headers={
             "X-Goog-Api-Key": key,
             "X-Goog-FieldMask": "places.location",
         })
@@ -240,12 +264,16 @@ def _normalize(q: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", q or "")).strip()
 
 
-def _variants(query: str) -> list:
+def _variants(query: str, overseas: bool = False) -> list:
     """検索に使う表記ゆらぎ候補を、当たりやすい順に返す（重複は除く）。
 
     1. 正規化した名前そのまま
     2. 括弧注釈を外した名前（「兼六園（ライトアップ）」→「兼六園」）
     3. 末尾の総称を外した名前（「城崎温泉街」→「城崎温泉」。2の結果にも適用）
+
+    overseas のときは、括弧の中身を**最初**に試す。海外の名前はエージェントが
+    「日本語名（現地語名）」の形で書く（例: エッフェル塔（Tour Eiffel））。
+    地図データに載っているのは現地語名なので、そちらが最も当たりやすい。
     """
     out = []
 
@@ -255,6 +283,9 @@ def _variants(query: str) -> list:
         if q and q not in out:
             out.append(q)
 
+    if overseas:
+        for m in _PAREN_RE.finditer(query):
+            add(m.group(0)[1:-1])
     add(query)
     no_paren = _PAREN_RE.sub("", query)
     add(no_paren)
@@ -267,21 +298,32 @@ def _variants(query: str) -> list:
 
 
 def geocode_center(query: str) -> dict | None:
-    """目的地の中心座標と、その広さに応じた許容半径(km)を返す。失敗時は None。
+    """目的地の中心座標・広さに応じた許容半径(km)・国コードを返す。失敗時は None。
+
+    まず日本に絞って探し、当たらなければ世界で探す。日本の地名を先に見るのは、
+    「パリ」のような曖昧さの無い名前でも、国内の同名地（例: 大阪の「アメリカ村」）を
+    国内旅行の文脈で正しく拾うため。海外の行き先はここで初めて分かる。
 
     Nominatim の boundingbox（行政界）から半径を適応的に決める：
     市が目的地なら狭く（誤マッチに厳しく）、都道府県・広域なら広く
     （道内周遊の知床のような遠方の正解を弾かない）。
-    返り値: {"lat": float, "lng": float, "radius_km": float}
+    返り値: {"lat": float, "lng": float, "radius_km": float, "country_code": str}
+            country_code は ISO 3166-1 の小文字（"jp", "fr" …）。不明なら ""。
     """
     q = _normalize(query)
     if not q:
         return None
-    try:
-        params = {"q": q, "format": "json", "limit": 1, "countrycodes": "jp"}
-        _throttle_nominatim()
-        resp = requests.get(_NOMINATIM_URL, params=params, headers=_HEADERS, timeout=3)
-        data = resp.json()
+    for country in ("jp", None):
+        try:
+            params = {"q": q, "format": "json", "limit": 1, "addressdetails": 1}
+            if country:
+                params["countrycodes"] = country
+            _throttle_nominatim()
+            resp = requests.get(_NOMINATIM_URL, params=params, headers=_HEADERS, timeout=3)
+            data = resp.json()
+        except Exception as e:
+            logger.warning("ジオコーディング失敗(中心取得): q=%s, error=%s", q, e)
+            return None  # 通信の不調なら2周目も同じなので、待たずに諦める
         if isinstance(data, list) and data:
             d = data[0]
             radius = _MAX_DIST_KM
@@ -289,10 +331,15 @@ def geocode_center(query: str) -> dict | None:
             if bb and len(bb) == 4:
                 south, north, west, east = (float(x) for x in bb)
                 radius = _radius_from_bbox(south, west, north, east)
-            return {"lat": float(d["lat"]), "lng": float(d["lon"]), "radius_km": radius}
-    except Exception as e:
-        logger.warning("ジオコーディング失敗(中心取得): q=%s, error=%s", q, e)
+            cc = ((d.get("address") or {}).get("country_code") or country or "").lower()
+            return {"lat": float(d["lat"]), "lng": float(d["lon"]),
+                    "radius_km": radius, "country_code": cc}
     return None
+
+
+def is_overseas(country_code: str | None) -> bool:
+    """国コードが「日本以外の判明した国」なら True。不明（空）は国内扱い。"""
+    return bool(country_code) and country_code.lower() != "jp"
 
 
 # 見つからなかった名前を一定時間おぼえて、地図を開くたびの再検索を抑える
@@ -309,19 +356,23 @@ def _neg_key(query: str, context: str | None) -> str:
 
 def geocode_one(query: str, context: str | None = None, viewbox: str | None = None,
                 center: tuple | None = None,
-                max_km: float = _MAX_DIST_KM) -> dict | None:
+                max_km: float = _MAX_DIST_KM,
+                country: str | None = "jp") -> dict | None:
     """スポット名1件を緯度経度に変換する。失敗時は None。
 
     プロバイダの優先順:
       0. Google Places（GOOGLE_MAPS_API_KEY 設定時のみ）: 店名・宿名に圧倒的に強い
       1. Nominatim: 表記ゆらぎ候補そのまま → 「候補, context」
-      2. 国土地理院: 候補そのまま（OSM未登録の地名の救済）
+      2. 国土地理院: 候補そのまま（OSM未登録の地名の救済。日本のみ）
     viewbox はNominatimの順位補正、center は最寄り採用と遠方誤マッチの棄却に使う。
+    country は行き先の国（geocode_center が返す country_code）。海外ではその国に絞り、
+    表記ゆらぎでは括弧内の現地語名を先に試す。
     返り値: {"lat": float, "lng": float} もしくは None
     """
     query = _normalize(query)
     if not query:
         return None
+    overseas = is_overseas(country)
     # 直近に全プロバイダで外れた名前はTTL内は再検索しない（毎回の待ち時間とAPI消費を抑える）
     key = _neg_key(query, context)
     failed_at = _neg_cache.get(key)
@@ -329,30 +380,32 @@ def geocode_one(query: str, context: str | None = None, viewbox: str | None = No
         return None
     # Google はあいまいな表記に強いので、1回だけ「名前＋目的地」で当てにいく
     hit = _query_google_places(f"{query} {context}" if context else query,
-                               center=center, max_km=max_km)
+                               center=center, max_km=max_km, country=country)
     if hit:
         _neg_cache.pop(key, None)
         return hit
-    variants = _variants(query)
+    variants = _variants(query, overseas=overseas)
     for q in variants:
-        hit = _query_nominatim(q, viewbox=viewbox, center=center, max_km=max_km)
+        hit = _query_nominatim(q, viewbox=viewbox, center=center, max_km=max_km, country=country)
         if hit is None and context:
-            hit = _query_nominatim(f"{q}, {context}", viewbox=viewbox, center=center, max_km=max_km)
+            hit = _query_nominatim(f"{q}, {context}", viewbox=viewbox, center=center,
+                                   max_km=max_km, country=country)
         if hit:
             _neg_cache.pop(key, None)
             return hit
-    for q in variants:
-        hit = _query_gsi(q, center=center, max_km=max_km)
-        if hit:
-            _neg_cache.pop(key, None)
-            return hit
+    if not overseas:  # 国土地理院は日本の地名しか持たない
+        for q in variants:
+            hit = _query_gsi(q, center=center, max_km=max_km)
+            if hit:
+                _neg_cache.pop(key, None)
+                return hit
     _neg_cache[key] = time.monotonic()
     return None
 
 
 def geocode_spots(spots: list, known: dict | None = None, context: str | None = None,
                   viewbox: str | None = None, center: tuple | None = None,
-                  max_km: float = _MAX_DIST_KM) -> list:
+                  max_km: float = _MAX_DIST_KM, country: str | None = "jp") -> list:
     """スポット名のリストを順にジオコーディングし、成功したものだけ返す。
 
     返り値: [{"name": str, "lat": float, "lng": float}, ...]（順序は入力どおり）
@@ -361,6 +414,7 @@ def geocode_spots(spots: list, known: dict | None = None, context: str | None = 
            （編集時に変わっていないスポットの再ジオコーディングを避ける）。
     context: 名前単独で当たらない場合の再検索キー（グルメ/宿は目的地を渡すと精度↑）。
     center: 目的地の中心 (lat, lng)。最寄り候補の採用と遠方誤マッチの棄却に使う。
+    country: 行き先の国コード。海外ならその国に絞って探す。
     ※ Nominatim の 1 req/s は _throttle_nominatim がモジュール全体で保証する。
     """
     known = known or {}
@@ -372,7 +426,8 @@ def geocode_spots(spots: list, known: dict | None = None, context: str | None = 
         if hit and hit.get("lat") is not None and hit.get("lng") is not None:
             results.append({"name": name, "lat": hit["lat"], "lng": hit["lng"]})
             continue
-        coords = geocode_one(name, context=context, viewbox=viewbox, center=center, max_km=max_km)
+        coords = geocode_one(name, context=context, viewbox=viewbox, center=center,
+                             max_km=max_km, country=country)
         if coords:
             results.append({"name": name, "lat": coords["lat"], "lng": coords["lng"]})
     return results
@@ -418,11 +473,13 @@ def ensure_plan_coords(plan: dict) -> dict:
     viewbox = None
     center = None
     max_km = _MAX_DIST_KM
+    country = "jp"  # 中心が取れなければ従来どおり日本として探す
     if dest and any(_missing(f, n) for f, n in fields):
         c = geocode_center(dest)
         if c:
             center = (c["lat"], c["lng"])
             max_km = c["radius_km"]
+            country = c.get("country_code") or "jp"
             # 優先範囲も許容半径に合わせて広げる（1度≈91〜111km）
             viewbox = _viewbox_around(c["lat"], c["lng"], pad=max(0.4, max_km / 100))
 
@@ -444,7 +501,7 @@ def ensure_plan_coords(plan: dict) -> dict:
         names = plan.get(name_field) or []
         plan[coord_field] = geocode_spots(names, known=_existing(coord_field),
                                           context=context, viewbox=viewbox,
-                                          center=center, max_km=max_km)
+                                          center=center, max_km=max_km, country=country)
         changed = True
 
     # context は「名前単独で失敗したとき」だけ使う（観光も含め、化けを防ぎつつ精度を上げる）

@@ -941,11 +941,22 @@ def plan_geo(plan_id):
                            'restaurant_coords': plan.get('restaurant_coords') or [],
                            'accommodation_coords': plan.get('accommodation_coords') or []}), 200, {'Content-Type': 'application/json'}
     ensure_plan_coords(plan)
-    return json.dumps({
+    out = {
         'spot_coords': plan.get('spot_coords') or [],
         'restaurant_coords': plan.get('restaurant_coords') or [],
         'accommodation_coords': plan.get('accommodation_coords') or [],
-    }, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+    }
+    # ピンが1本も無いときだけ、行き先の中心を添える。地図の初期表示に使う
+    # （海外のプランで日本全図が出ないように）。座標は TTL キャッシュ済みなので安い。
+    if not any(out.values()) and plan.get('destination'):
+        try:
+            from services.weather import dest_center
+            c = dest_center(plan['destination'])
+            if c:
+                out['center'] = {'lat': c['lat'], 'lng': c['lng']}
+        except Exception:
+            logger.debug("行き先の中心の取得に失敗", exc_info=True)
+    return json.dumps(out, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
 
 
 @planner.route('/get_my_plans')

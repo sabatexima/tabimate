@@ -105,8 +105,9 @@ def test_plan_forecast_geocodes_destination_and_caches(monkeypatch):
     from services import weather
     from services import geocoding
     calls = []
-    monkeypatch.setattr(geocoding, "geocode_one",
-                        lambda d, **k: (calls.append(d), {"lat": 35.0, "lng": 138.4})[1])
+    monkeypatch.setattr(geocoding, "geocode_center",
+                        lambda d: (calls.append(d),
+                                   {"lat": 35.0, "lng": 138.4, "radius_km": 80.0, "country_code": "jp"})[1])
     monkeypatch.setattr(weather, "forecast", lambda *a, **k: [{"date": "x"}])
     weather._DEST_CACHE.clear()
 
@@ -869,7 +870,7 @@ def _capture_agent(monkeypatch):
     monkeypatch.setattr(A, "llm", type("L", (), {"with_structured_output": lambda s, m: None})())
     monkeypatch.setattr(A, "build_search_context",
                         lambda qs: (seen.update(queries=qs), "")[1])
-    monkeypatch.setattr(A, "_filter_real_places", lambda names, dest, min_keep: names)
+    monkeypatch.setattr(A, "_filter_real_places", lambda names, dest, min_keep, **kw: names)
     return A, seen
 
 
@@ -914,3 +915,118 @@ def test_accommodation_prompts_omit_the_always_empty_restaurant_line(monkeypatch
         assert "\n飲食店: " not in seen["prompt"], agent.__name__
         agent(dict(_AGENT_BASE, restaurants=["磯丸"], **extra))
         assert "飲食店: 磯丸" in seen["prompt"], agent.__name__
+
+
+# ----------------------------------------------------------------------
+# 海外の行き先: 生成側の指示が切り替わること
+# ----------------------------------------------------------------------
+def test_directive_adds_yen_conversion_and_local_names_overseas():
+    from chat.agents import _directive
+    home = _directive({"is_overseas": False})
+    abroad = _directive({"is_overseas": True, "dest_country": "fr"})
+    assert "日本円に換算" not in home and "現地語" not in home
+    assert "国コード FR" in abroad and "日本円に換算" in abroad and "Tour Eiffel" in abroad
+    assert "すべて日本語で出力" in abroad     # 出力言語は変えない
+
+
+def test_overseas_flags_reach_transport_timekeeper_and_cost(monkeypatch):
+    import chat.agents as A
+    seen = {}
+    fake = type("R", (), {"transport_cost": 80000, "schedule": ["1日目 …"],
+                          "budget_estimate": ["x"], "total_per_person": 1})()
+    monkeypatch.setattr(A, "invoke_with_retry", lambda llm, prompt: (seen.update(p=prompt), fake)[1])
+    stub = type("L", (), {"with_structured_output": lambda s, m: None})()
+    monkeypatch.setattr(A, "llm", stub)
+    monkeypatch.setattr(A, "llm_strong", stub)
+    base = dict(destination="パリ", departure_location="東京", num_people=2, travel_date="2099年8月1日",
+                duration="3泊4日", budget_limit=300000, themes=["美術館"], special_requirements=[],
+                spots=["ルーヴル美術館（Musée du Louvre）"], restaurants=["a"], accommodation=["h"],
+                transport_cost=120000, remaining_budget=180000, schedule=["1日目"],
+                is_overseas=True, dest_country="fr", no_car=False, transport_mode="おまかせ")
+
+    A.transport_agent(dict(base))
+    assert "航空便を前提" in seen["p"] and "燃油サーチャージ" in seen["p"]
+    A.timekeeper(dict(base))
+    assert "現地時刻" in seen["p"] and "入国審査" in seen["p"] and "Tour Eiffel" in seen["p"]
+    A.cost_manager(dict(base))
+    assert "海外旅行保険" in seen["p"] and "換算レート" in seen["p"]
+
+    # 国内では出ない
+    for agent in (A.transport_agent, A.timekeeper, A.cost_manager):
+        agent(dict(base, is_overseas=False, dest_country="jp", destination="金沢"))
+        assert "航空便を前提" not in seen["p"] and "現地時刻" not in seen["p"] \
+            and "海外旅行保険" not in seen["p"], agent.__name__
+
+
+def test_generate_travel_plan_detects_an_overseas_destination(monkeypatch):
+    """生成の前に行き先の国を引き、状態に is_overseas / dest_country を入れること。"""
+    import chat.graph as G
+    captured = {}
+    monkeypatch.setattr(G, "_lookup_destination",
+                        lambda d: {"lat": 48.86, "lng": 2.35, "radius_km": 80.0, "country_code": "fr"})
+    monkeypatch.setattr(G, "transport_agent", lambda i: {"transport_cost": 1, "remaining_budget": 9})
+    monkeypatch.setattr(G, "sightseeing_candidates", lambda i: {"spot_candidates": []})
+    monkeypatch.setattr(G.graph, "invoke", lambda inputs, config: (captured.update(inputs), inputs)[1])
+    G.generate_travel_plan({"destination": "パリ", "travel_date": "2099年8月1日", "duration": "3泊4日",
+                            "themes": ["美術館"], "num_people": 2, "budget_limit": 300000,
+                            "departure_location": "東京", "special_requirements": []})
+    assert captured["is_overseas"] is True and captured["dest_country"] == "fr"
+
+    # 引けなければ国内扱い（従来どおり）
+    monkeypatch.setattr(G, "_lookup_destination", lambda d: None)
+    G.generate_travel_plan({"destination": "どこか", "travel_date": "2099年8月1日", "duration": "日帰り",
+                            "themes": ["x"], "num_people": 1, "budget_limit": 1, "departure_location": "y",
+                            "special_requirements": []})
+    assert captured["is_overseas"] is False and captured["dest_country"] == ""
+
+
+def test_generation_hint_reuses_a_given_center(monkeypatch):
+    """生成側が先に引いた座標を渡せば、天気のために二度引かないこと。"""
+    from services import weather
+    from datetime import date, timedelta
+    calls = []
+    monkeypatch.setattr(weather, "dest_center", lambda d: (calls.append(d), None)[1])
+    monkeypatch.setattr(weather, "forecast", lambda lat, lng, s, e: [
+        {"date": "x", "label": "晴れ", "tmin": 20, "tmax": 30, "code": 0}])
+    soon = date.today() + timedelta(days=2)
+    hint = weather.generation_hint("パリ", f"{soon.year}年{soon.month}月{soon.day}日", "日帰り",
+                                   center={"lat": 48.86, "lng": 2.35})
+    assert "天気予報" in hint and calls == []
+
+
+def test_packing_list_adds_overseas_essentials(monkeypatch):
+    from services import packing, weather
+    seen = {}
+    monkeypatch.setattr(packing, "invoke_with_retry",
+                        lambda llm, prompt: (seen.update(p=prompt), type("R", (), {"items": ["a"]})())[1])
+    monkeypatch.setattr(packing, "llm", type("L", (), {"with_structured_output": lambda s, m: None})())
+    monkeypatch.setattr(weather, "generation_hint", lambda *a, **k: "")
+    monkeypatch.setattr(weather, "dest_center", lambda d: {"lat": 0, "lng": 0, "country_code": "fr"})
+    packing.generate_packing_list({"destination": "パリ", "duration": "3泊4日"})
+    assert "パスポート" in seen["p"] and "変換プラグ" in seen["p"]
+    monkeypatch.setattr(weather, "dest_center", lambda d: {"lat": 0, "lng": 0, "country_code": "jp"})
+    packing.generate_packing_list({"destination": "金沢", "duration": "1泊2日"})
+    assert "パスポート" not in seen["p"]
+
+
+def test_plan_geo_returns_the_center_only_when_there_are_no_pins(monkeypatch, client=None):
+    from app import app
+    import views.planner as P
+    import db
+    from services import weather, geocoding
+    monkeypatch.setattr(geocoding, "ensure_plan_coords", lambda plan: plan)
+    monkeypatch.setattr(weather, "dest_center", lambda d: {"lat": 48.86, "lng": 2.35})
+    monkeypatch.setattr(P, "_geo_rate_limited", lambda uid: False)
+    plans = {1: {"id": 1, "google_user_id": "u1", "destination": "パリ", "geo_done": 1,
+                 "spot_coords": [], "restaurant_coords": [], "accommodation_coords": []},
+             2: {"id": 2, "google_user_id": "u1", "destination": "パリ", "geo_done": 1,
+                 "spot_coords": [{"name": "x", "lat": 1, "lng": 2}],
+                 "restaurant_coords": [], "accommodation_coords": []}}
+    monkeypatch.setattr(db, "get_travel_plan_by_id", lambda pid: plans.get(pid))
+    with app.test_client() as c:
+        with c.session_transaction() as sess:
+            sess["user_id"] = "u1"; sess["user_email"] = "u@example.com"
+        empty = c.get("/api/plan_geo/1").get_json()
+        pinned = c.get("/api/plan_geo/2").get_json()
+    assert empty["center"] == {"lat": 48.86, "lng": 2.35}   # ピンが無い → 行き先の街を出す
+    assert "center" not in pinned                            # ピンがあれば fitBounds に任せる

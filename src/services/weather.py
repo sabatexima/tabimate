@@ -149,15 +149,19 @@ _DEST_CACHE_TTL = 6 * 3600  # 秒。目的地の座標はほぼ不変なので�
 _dest_lock = threading.Lock()
 
 
-def _dest_center(destination: str) -> dict | None:
-    """目的地名を中心座標に変換する（TTLキャッシュ付き）。"""
+def dest_center(destination: str) -> dict | None:
+    """目的地名を中心座標に変換する（TTLキャッシュ付き）。
+
+    返り値は geocoding.geocode_center と同じ {"lat","lng","radius_km","country_code"}。
+    天気だけでなく、プラン生成（海外かどうか）と持ち物リストも同じ答えを使い回す。
+    """
     now = time.time()
     with _dest_lock:
         hit = _DEST_CACHE.get(destination)
         if hit and now - hit[1] < _DEST_CACHE_TTL:
             return hit[0]
-    from services.geocoding import geocode_one
-    loc = geocode_one(destination)  # {"lat","lng"} もしくは None
+    from services.geocoding import geocode_center
+    loc = geocode_center(destination)
     with _dest_lock:
         _DEST_CACHE[destination] = (loc, now)
     return loc
@@ -176,23 +180,23 @@ def plan_forecast(plan: dict) -> list:
     coords = plan.get('spot_coords') or []
     loc = next((c for c in coords if c.get('lat') is not None and c.get('lng') is not None), None)
     if not loc and plan.get('destination'):
-        loc = _dest_center(plan['destination'])
+        loc = dest_center(plan['destination'])
     if not loc:
         return []
     end = start + timedelta(days=_num_days(plan.get('duration')) - 1)
     return forecast(loc['lat'], loc['lng'], start, end)
 
 
-def generation_hint(destination: str, travel_date, duration) -> str:
+def generation_hint(destination: str, travel_date, duration, center: dict | None = None) -> str:
     """生成用：目的地をジオコーディングして予報を取り、屋内/屋外調整の指示文を返す。
 
+    center を渡せばその座標を使う（生成側が行き先を先に調べているので二度引かない）。
     予報が取れない（日付不明・16日より先・座標不明）場合は空文字（=天気考慮なし）。
     """
     start = parse_date(travel_date)
     if not start or not destination:
         return ""
-    from services.geocoding import geocode_one
-    center = geocode_one(destination)
+    center = center or dest_center(destination)
     if not center:
         return ""
     end = start + timedelta(days=_num_days(duration) - 1)

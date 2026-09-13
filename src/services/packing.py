@@ -26,9 +26,13 @@ def generate_packing_list(plan: dict) -> list:
 
     # 天気ヒント（取得できない環境・日付では空文字。持ち物生成は続行する）
     wx = ""
+    overseas = False
     try:
         from services import weather
-        wx = weather.generation_hint(dest, plan.get("travel_date"), duration) or ""
+        from services.geocoding import is_overseas
+        center = weather.dest_center(dest) if dest else None
+        overseas = is_overseas((center or {}).get("country_code"))
+        wx = weather.generation_hint(dest, plan.get("travel_date"), duration, center=center) or ""
     except Exception:
         logger.info("持ち物生成: 天気ヒントの取得をスキップ")
 
@@ -48,6 +52,7 @@ def generate_packing_list(plan: dict) -> list:
   条件に合わせて具体的に。
 ・各項目は短い名詞で（「折りたたみ傘」「モバイルバッテリー」など）。文や説明は書かない。
 ・10〜16個。多すぎず、抜け漏れなく。
+{"・海外旅行なので、パスポート・海外旅行保険の証書・変換プラグ・現地通貨とクレジットカード・海外用SIMかWi-Fi、のように海外ならではの必需品を優先して入れる。" if overseas else ""}
 
 【出力】
 持ち物名のリストだけを返す。

@@ -76,6 +76,18 @@ workflow.add_conditional_edges(
 graph = workflow.compile()
 
 
+def _lookup_destination(destination) -> dict | None:
+    """目的地の座標と国を引く（TTLキャッシュ付き）。引けなければ None で、生成は続ける。"""
+    if not destination:
+        return None
+    try:
+        from services.weather import dest_center
+        return dest_center(destination)
+    except Exception:
+        log.debug("目的地の照会に失敗", exc_info=True)
+        return None
+
+
 def generate_travel_plan(inputs: dict):
     """旅行条件 inputs からプラン生成ワークフローを実行し、最終状態を返す。
 
@@ -95,6 +107,19 @@ def generate_travel_plan(inputs: dict):
     inputs.setdefault("restaurant_candidates", [])
     inputs.setdefault("weather", "")
 
+    # 行き先の国を先に調べる。海外なら、費用を円に換算する・名前に現地語名を添える・
+    # フライトを行程に組む、といった指示が全エージェントに要る。天気もこの座標を使い回す。
+    # 引けなければ国内扱い（従来どおり）。呼び出し側が既に決めていればそれを尊重する。
+    dest_info = _lookup_destination(inputs.get("destination")) if "is_overseas" not in inputs else None
+    if "is_overseas" not in inputs:
+        from services.geocoding import is_overseas
+        cc = (dest_info or {}).get("country_code") or ""
+        inputs["dest_country"] = cc
+        inputs["is_overseas"] = is_overseas(cc)
+        if inputs["is_overseas"]:
+            log.info("🌏 海外の行き先: destination=%s country=%s", inputs.get("destination"), cc)
+    inputs.setdefault("dest_country", "")
+
     def _compute_weather():
         """旅行日の天気予報を、プロンプトに添えるヒント文にする。
 
@@ -104,7 +129,8 @@ def generate_travel_plan(inputs: dict):
         try:
             from services import weather as wx
             return wx.generation_hint(
-                inputs.get("destination"), inputs.get("travel_date"), inputs.get("duration"))
+                inputs.get("destination"), inputs.get("travel_date"), inputs.get("duration"),
+                center=dest_info)
         except Exception:
             log.debug("天気ヒントの取得に失敗", exc_info=True)
             return ""

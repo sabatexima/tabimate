@@ -27,6 +27,10 @@ class TravelPlanState(TypedDict):
     no_car: bool  # 運転免許なし/運転不可。Trueなら車を使わず公共交通機関で組む
     schedule_pref: str  # 時間の希望（「夕方までに帰りたい」「朝はゆっくり」等）。無ければ空
     weather: str  # 旅行日の天気予報ヒント（屋内/屋外の調整用）。取得できなければ空
+    # 行き先の国。生成の前に目的地をジオコーディングして決める（services.weather.dest_center）。
+    # 海外なら費用の円換算・現地語名・フライトの指示を各エージェントに足す。
+    dest_country: str  # ISO 3166-1 小文字（"jp","fr"…）。不明なら ""（＝国内扱い）
+    is_overseas: bool
     user_preferences: str  # 過去の★評価から得た好み（参考）。無ければ空
     special_requirements: List[str]
     transport_cost: int

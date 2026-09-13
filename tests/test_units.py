@@ -179,7 +179,7 @@ def test_filter_real_places_drops_hallucinated_names(monkeypatch):
     real = {"熱海銀座おさかな食堂": True, "囲炉茶屋": True, "海鮮処 磯丸": False,
             "熱海プリン": True, "存在しない食堂": False}
     monkeypatch.setattr(geocoding, "verify_place_exists",
-                        lambda n, c=None: real.get(n))
+                        lambda n, c=None, **kw: real.get(n))
     names = list(real)
     out = agents._filter_real_places(names, "熱海", min_keep=3)
     assert out == ["熱海銀座おさかな食堂", "囲炉茶屋", "熱海プリン"]
@@ -187,11 +187,11 @@ def test_filter_real_places_drops_hallucinated_names(monkeypatch):
     # 実在確認できた候補が少なすぎるときは絞り込みを諦める（選択肢を保つ）
     mostly_fake = {"A": False, "B": False, "C": False, "D": True}
     monkeypatch.setattr(geocoding, "verify_place_exists",
-                        lambda n, c=None: mostly_fake.get(n))
+                        lambda n, c=None, **kw: mostly_fake.get(n))
     assert agents._filter_real_places(list(mostly_fake), "熱海", min_keep=3) == list(mostly_fake)
 
     # キー未設定（全部None＝検証不能）なら何も落とさない
-    monkeypatch.setattr(geocoding, "verify_place_exists", lambda n, c=None: None)
+    monkeypatch.setattr(geocoding, "verify_place_exists", lambda n, c=None, **kw: None)
     assert agents._filter_real_places(["X", "Y"], "熱海", min_keep=3) == ["X", "Y"]
 
 
@@ -390,3 +390,149 @@ def test_app_signin_rejects_missing_and_invalid_id_token(monkeypatch):
     monkeypatch.setattr(api_auth, "verify_google_id_token", lambda _t: None)
     with app.test_client() as c:
         assert c.post("/auth/app/signin", json={"id_token": "bad"}).status_code == 401
+
+
+# ----------------------------------------------------------------------
+# 海外の行き先: 国を決めて、その国で探す
+# ----------------------------------------------------------------------
+class _Resp:
+    def __init__(self, payload, status=200):
+        self._p, self.status_code = payload, status
+
+    def json(self):
+        return self._p
+
+
+def test_dist_km_scales_longitude_by_latitude():
+    # 日本（北緯35°）では従来の 91km/度 とほぼ同じ
+    assert abs(geocoding._dist_km(35.0, 135.0, 35.0, 136.0) - 91.0) < 1.0
+    # 赤道では経度1度≈111km、北緯60°では≈55km。固定値では2割〜2倍狂っていた
+    assert abs(geocoding._dist_km(0.0, 0.0, 0.0, 1.0) - 111.0) < 1.0
+    assert abs(geocoding._dist_km(60.0, 10.0, 60.0, 11.0) - 55.5) < 1.0
+
+
+def test_geocode_center_tries_japan_then_the_world(monkeypatch):
+    """日本で当たらなければ世界で探し、国コードを返すこと。"""
+    calls = []
+
+    def fake_get(url, params=None, **kw):
+        calls.append(dict(params))
+        if params.get("countrycodes") == "jp":
+            return _Resp([])
+        return _Resp([{"lat": "48.8566", "lon": "2.3522",
+                       "boundingbox": ["48.81", "48.90", "2.22", "2.47"],
+                       "address": {"country_code": "fr"}}])
+    monkeypatch.setattr(geocoding.requests, "get", fake_get)
+    monkeypatch.setattr(geocoding, "_throttle_nominatim", lambda: None)
+
+    c = geocoding.geocode_center("パリ")
+    assert c["country_code"] == "fr"
+    assert abs(c["lat"] - 48.8566) < 1e-4
+    assert [q.get("countrycodes") for q in calls] == ["jp", None]   # 日本 → 世界 の順
+    assert all(q.get("addressdetails") == 1 for q in calls)          # 国を知るために必要
+
+
+def test_geocode_center_keeps_domestic_hits_first(monkeypatch):
+    """国内で当たれば世界は探さず、country_code は jp。"""
+    calls = []
+
+    def fake_get(url, params=None, **kw):
+        calls.append(dict(params))
+        return _Resp([{"lat": "36.5", "lon": "136.6",
+                       "boundingbox": ["36.45", "36.75", "136.55", "136.85"],
+                       "address": {"country_code": "jp"}}])
+    monkeypatch.setattr(geocoding.requests, "get", fake_get)
+    monkeypatch.setattr(geocoding, "_throttle_nominatim", lambda: None)
+    c = geocoding.geocode_center("金沢")
+    assert c["country_code"] == "jp" and len(calls) == 1
+
+
+def test_is_overseas():
+    assert geocoding.is_overseas("fr") and geocoding.is_overseas("US")
+    assert not geocoding.is_overseas("jp") and not geocoding.is_overseas("") \
+        and not geocoding.is_overseas(None)
+
+
+def test_variants_try_the_local_name_first_overseas():
+    v = geocoding._variants("エッフェル塔（Tour Eiffel）", overseas=True)
+    assert v[0] == "Tour Eiffel"                      # 地図データに載っているのは現地語名
+    assert "エッフェル塔" in v
+    # 国内では従来どおり（括弧の中身は「ライトアップ」のような注釈なので先頭にしない）
+    assert geocoding._variants("兼六園（ライトアップ）")[0] == "兼六園（ライトアップ）"
+
+
+def test_geocode_one_overseas_searches_that_country_and_skips_gsi(monkeypatch):
+    geocoding._neg_cache.clear()
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
+    seen = {"nominatim": [], "gsi": 0}
+
+    def fake_nominatim(q, viewbox=None, center=None, max_km=None, country="jp"):
+        seen["nominatim"].append((q, country))
+        return {"lat": 48.86, "lng": 2.29} if q == "Tour Eiffel" else None
+    monkeypatch.setattr(geocoding, "_query_nominatim", fake_nominatim)
+    monkeypatch.setattr(geocoding, "_query_gsi",
+                        lambda *a, **k: seen.__setitem__("gsi", seen["gsi"] + 1))
+
+    hit = geocoding.geocode_one("エッフェル塔（Tour Eiffel）", context="パリ", country="fr")
+    assert hit == {"lat": 48.86, "lng": 2.29}
+    assert seen["nominatim"][0] == ("Tour Eiffel", "fr")   # 現地語名を、その国で
+    assert seen["gsi"] == 0
+
+    # 海外で全部外れても、国土地理院（日本専用）には聞きに行かない
+    geocoding._neg_cache.clear()
+    assert geocoding.geocode_one("Nowhere Café", context="パリ", country="fr") is None
+    assert seen["gsi"] == 0
+
+    # 国内はこれまでどおり jp で探し、外れたら地理院にも聞く
+    geocoding._neg_cache.clear()
+    seen["nominatim"].clear()
+    geocoding.geocode_one("架空の場所", country="jp")
+    assert all(c == "jp" for _, c in seen["nominatim"])
+    assert seen["gsi"] >= 1
+
+
+def test_google_places_region_follows_the_country(monkeypatch):
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "dummy")
+    bodies = []
+
+    def fake_post(url, json=None, **kw):
+        bodies.append(json)
+        return _Resp({"places": [{"location": {"latitude": 48.86, "longitude": 2.29}}]})
+    monkeypatch.setattr(geocoding.requests, "post", fake_post)
+
+    geocoding._query_google_places("Tour Eiffel", country="fr")
+    geocoding.verify_place_exists("Le Jules Verne", "パリ", country="fr")
+    geocoding._query_google_places("兼六園")                 # 既定は日本
+    assert [b.get("regionCode") for b in bodies] == ["FR", "FR", "JP"]
+
+
+def test_ensure_plan_coords_passes_the_country_to_spot_lookups(monkeypatch):
+    monkeypatch.setattr(geocoding, "geocode_center",
+                        lambda q: {"lat": 48.86, "lng": 2.35, "radius_km": 80.0, "country_code": "fr"})
+    got = {}
+
+    def fake_geocode_one(name, **kw):
+        got[name] = kw.get("country")
+        return {"lat": 48.86, "lng": 2.29}
+    monkeypatch.setattr(geocoding, "geocode_one", fake_geocode_one)
+    plan = {"destination": "パリ", "spots": ["エッフェル塔（Tour Eiffel）"],
+            "restaurants": [], "accommodation": []}
+    geocoding.ensure_plan_coords(plan)
+    assert got == {"エッフェル塔（Tour Eiffel）": "fr"}
+    assert plan["spot_coords"][0]["lat"] == 48.86
+
+
+def test_nominatim_query_carries_the_country(monkeypatch):
+    """実際の問い合わせパラメータに国が乗ること（None なら世界）。"""
+    params_seen = []
+
+    def fake_get(url, params=None, **kw):
+        params_seen.append(dict(params))
+        return _Resp([{"lat": "48.86", "lon": "2.29"}])
+    monkeypatch.setattr(geocoding.requests, "get", fake_get)
+    monkeypatch.setattr(geocoding, "_throttle_nominatim", lambda: None)
+
+    geocoding._query_nominatim("Tour Eiffel", country="fr")
+    geocoding._query_nominatim("Tour Eiffel", country=None)
+    geocoding._query_nominatim("兼六園")
+    assert [q.get("countrycodes") for q in params_seen] == ["fr", None, "jp"]

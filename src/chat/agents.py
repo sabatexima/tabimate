@@ -94,17 +94,31 @@ def _weather(state) -> str:
 
 
 def _directive(state=None) -> str:
-    """全エージェント共通の指示（出力言語・本日の日付・実在性）。各プロンプト末尾に付与する。"""
-    return (
+    """全エージェント共通の指示（出力言語・本日の日付・実在性）。各プロンプト末尾に付与する。
+
+    海外の行き先では、金額の円換算と「日本語名（現地語名）」の書き方も加える。
+    現地語名は地図で探すときの手がかりになる（geocoding._variants が括弧の中を先に試す）。
+    """
+    text = (
         "\n【共通の指示】\n"
         f"・本日の日付は {date.today().isoformat()}。営業状況・季節・開催時期の判断に使うこと。\n"
         "・すべて日本語で出力すること。\n"
         "・実在し、現在も営業している施設・スポット・店舗のみを扱うこと。"
         "閉業・移転・長期休業・期間限定の終了が疑われる場合は避け、確証が持てなければ別の確実な候補にすること。\n"
     )
+    if state and state.get("is_overseas"):
+        cc = (state.get("dest_country") or "").upper()
+        text += (
+            f"・行き先は海外（国コード {cc}）。金額はすべて日本円に換算して書き、"
+            "換算に使った概算レート（例: 1ユーロ≒165円）を1か所に明記すること。\n"
+            "・施設・スポット・店・宿の名前は「日本語名（現地語または英語の正式名称）」の形で書くこと"
+            "（例: エッフェル塔（Tour Eiffel））。地図で探すのに使うので現地語名を省かないこと。\n"
+        )
+    return text
 
 
-def _filter_real_places(names: list, destination: str, min_keep: int) -> list:
+def _filter_real_places(names: list, destination: str, min_keep: int,
+                        country: str | None = "jp") -> list:
     """候補名を Google Places で実在確認し、見つからない名前を候補から落とす。
 
     プロンプトで「実在する店のみ」と指示してもLLMは店名を創作することがある
@@ -119,7 +133,7 @@ def _filter_real_places(names: list, destination: str, min_keep: int) -> list:
     # 1件ずつ順に問い合わせると候補数ぶんの往復が直列に積み上がる（8件で8往復）。
     # 互いに独立な問い合わせなので並列にして待ち時間を候補数ぶんの1に縮める（順序は維持）。
     with ThreadPoolExecutor(max_workers=min(8, len(names))) as ex:
-        verdicts = list(ex.map(lambda n: verify_place_exists(n, destination), names))
+        verdicts = list(ex.map(lambda n: verify_place_exists(n, destination, country=country), names))
     checked = list(zip(names, verdicts))
     dropped = [n for n, ok in checked if ok is False]
     if not dropped:
@@ -181,6 +195,13 @@ def transport_agent(state: TravelPlanState):
     else:
         mode_instruction = """・新幹線・特急・飛行機・高速バス・車など、所要時間と費用のバランスが最も良い交通手段を選ぶこと
 ・宿泊・食事・観光に十分な残予算を確保できるよう、過度に高額でない費用対効果の高い手段を優先すること（交通費で予算の大半を使い切らない）"""
+    if state.get("is_overseas"):
+        # 海外は航空便。国内向けの列挙（新幹線・高速バス）に引きずられて陸路を選ばないよう明示する
+        mode_instruction += (
+            "\n・行き先は海外のため、往復は航空便を前提にすること（陸路・船を指定された場合を除く）"
+            "\n・航空券は燃油サーチャージ・空港税等の諸費用込みの往復額に、自宅→出発空港と現地空港→市内の"
+            "アクセス費を加え、1人あたり日本円で見積もること（現地通貨の分は概算レートで換算）"
+        )
 
     prompt = f"""あなたは交通費の専門家です。以下の条件で往復交通費（1人あたり）を概算してください。
 
@@ -248,7 +269,8 @@ def sightseeing_candidates(state: TravelPlanState):
     structured_llm = llm.with_structured_output(SightseeingCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     # LLMが創作したスポット名を候補段階で落とす（Google Placesキー設定時のみ）
-    candidates = _filter_real_places(response.candidates, state["destination"], min_keep=4)
+    candidates = _filter_real_places(response.candidates, state["destination"], min_keep=4,
+                                     country=state.get("dest_country") or "jp")
     _pp(candidates, "✨ 候補スポット:")
     return {"spot_candidates": candidates}
 
@@ -349,7 +371,8 @@ def accommodation_candidates(state: TravelPlanState):
     structured_llm = llm.with_structured_output(AccommodationCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     # LLMが創作した宿名を候補段階で落とす（Google Placesキー設定時のみ）
-    accommodation = _filter_real_places(response.accommodation, state["destination"], min_keep=2)
+    accommodation = _filter_real_places(response.accommodation, state["destination"], min_keep=2,
+                                        country=state.get("dest_country") or "jp")
     _pp(accommodation, "🏨 候補宿泊施設:")
     return {"accommodation_candidates": accommodation}
 
@@ -488,7 +511,8 @@ def gourmet_candidates(state: TravelPlanState):
     structured_llm = llm.with_structured_output(GourmetCandidatesOutput)
     response = invoke_with_retry(structured_llm, prompt)
     # LLMが創作した店名を候補段階で落とす（Google Placesキー設定時のみ）
-    restaurants = _filter_real_places(response.restaurants, state["destination"], min_keep=3)
+    restaurants = _filter_real_places(response.restaurants, state["destination"], min_keep=3,
+                                      country=state.get("dest_country") or "jp")
     _pp(restaurants, "🍱 候補飲食店:")
     return {"restaurant_candidates": restaurants}
 
@@ -688,6 +712,15 @@ def timekeeper(state: TravelPlanState):
             "\n\n【移動手段（重要）】運転免許がない/運転しない前提です。すべての移動を公共交通機関（電車・バス）"
             "＋徒歩で組み、各移動に路線・所要時間を明記すること。レンタカー・自家用車の運転を前提にしないこと。"
         )
+    if state.get("is_overseas"):
+        prompt += (
+            "\n\n【海外行程の条件（重要）】\n"
+            "・時刻はすべて現地時刻で書き、冒頭に日本との時差を1行で示すこと。\n"
+            "・往路・復路のフライトは出発・到着の時刻と所要時間を明記すること。出国は出発の2〜3時間前に空港へ着き、"
+            "到着後は入国審査・荷物受取に1時間程度を見込むこと。\n"
+            "・初日は到着後の行程を軽めにし、最終日は復路の出発時刻から逆算して現地を出ること。"
+            "乗継がある場合はその待ち時間も含めること。"
+        )
 
     if state.get("weather"):
         prompt += (
@@ -817,6 +850,12 @@ def cost_manager(state: TravelPlanState):
 """
     if state.get("user_feedback"):
         prompt += f"\n【ユーザーからのご要望（最優先）】:\n{state['user_feedback']}\n上記の要望（予算配分など）を必ず最優先で反映して見積もること。"
+    if state.get("is_overseas"):
+        prompt += (
+            "\n【海外の費用】現地通貨の金額はすべて日本円に換算し、換算レートを冒頭に明記すること。"
+            "「海外旅行保険」「通信費（SIM/Wi-Fi）」「両替・カード手数料の目安」を項目として必ず加え、"
+            "それらも1人あたり合計に含めること。"
+        )
     prompt += (
         "\n【整合の必須事項】1人あたり合計は往復交通費を含み、各費用項目の和と必ず一致させること。"
         "予算上限を超える場合は超過額を明記すること。total_per_person は同じ合計額（整数・円）にすること。"

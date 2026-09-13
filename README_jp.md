@@ -23,6 +23,7 @@
   <img src="https://img.shields.io/badge/LangGraph-1.2-1C3C3C" alt="LangGraph 1.2">
   <img src="https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
   <img src="https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?logo=googlecloud&logoColor=white" alt="Cloud Run">
+  <img src="https://img.shields.io/badge/License-MIT-4fa83a" alt="MIT License">
 </p>
 
 <p align="center">
@@ -223,7 +224,7 @@ python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.
 
 ```
 tabimate/
-├── LICENSE                      # 全ての権利を留保。読んでもらうための公開
+├── LICENSE                      # MIT（ちゃむの画像も同じ）
 ├── THIRD_PARTY_NOTICES.md       # 依存のライセンスと地図の帰属表示
 ├── requirements.in              # 直接依存（直すのはこちら）
 ├── requirements.txt             # 解決して固定した結果（生成物）
@@ -432,9 +433,9 @@ python tests/test_smoke.py      # プラン生成の通し確認（APIキーが�
 
 ## ライセンス
 
-読んでいただくために公開しているもので、再利用のためではありません
-→ [LICENSE](LICENSE)。著作権は留保しています。一部でも使いたい場合は、
-まずご連絡ください。
+**MIT ライセンス**です → [LICENSE](LICENSE)。利用・改変・再配布・商用利用、
+すべて自由です。条件は著作権表示を残すことだけ。マスコットの「ちゃむ」と画像も
+自作なので、同じ MIT に含めています。
 
 土台にしているライブラリ・地図データ・書体は、それぞれのライセンスと帰属表示に
 従います。一覧は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に。

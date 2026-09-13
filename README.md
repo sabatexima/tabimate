@@ -23,6 +23,7 @@
   <img src="https://img.shields.io/badge/LangGraph-1.2-1C3C3C" alt="LangGraph 1.2">
   <img src="https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
   <img src="https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?logo=googlecloud&logoColor=white" alt="Cloud Run">
+  <img src="https://img.shields.io/badge/License-MIT-4fa83a" alt="MIT License">
 </p>
 
 <p align="center">
@@ -225,7 +226,7 @@ Good next steps, if you keep going:
 
 ```
 tabimate/
-├── LICENSE                      # all rights reserved — published to be read
+├── LICENSE                      # MIT (Chamu's artwork included)
 ├── THIRD_PARTY_NOTICES.md       # dependency licenses and map attribution
 ├── requirements.in              # direct dependencies (edit this one)
 ├── requirements.txt             # the resolved, pinned result (generated)
@@ -433,8 +434,9 @@ The browser suite exists because this code breaks in ways a linter cannot see. A
 
 ## License
 
-Published so it can be read, not to be reused — see [LICENSE](LICENSE).
-All rights reserved; please get in touch before using any part of it.
+**MIT License** — see [LICENSE](LICENSE). Use it, change it, redistribute it,
+sell it; the only condition is keeping the copyright notice. The mascot Chamu
+and the artwork are original work and are included under the same license.
 
 The libraries, map data and fonts it stands on keep their own licenses and
 attribution, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -391,7 +391,7 @@ Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the pub
 ### Tests & CI
 
 ```bash
-pytest tests/ -k "not smoke"    # 238 offline tests — no API keys, no DB
+pytest tests/ -k "not smoke"    # 247 offline tests — no API keys, no DB
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)

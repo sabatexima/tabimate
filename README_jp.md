@@ -390,7 +390,7 @@ START
 ### テストとCI
 
 ```bash
-pytest tests/ -k "not smoke"    # 238件のオフラインテスト（APIキーもDBも不要）
+pytest tests/ -k "not smoke"    # 247件のオフラインテスト（APIキーもDBも不要）
 scripts/check_home_js.sh        # チャット画面を本物のブラウザで動かす
 scripts/check_ios_logic.sh      # iOSのロジックを Linux の Swift で型検査
 python tests/test_smoke.py      # プラン生成の通し確認（APIキーが要ります）

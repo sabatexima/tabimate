@@ -1,5 +1,6 @@
 """完成した旅行プラン状態を、チャットに表示するHTMLカードへ整形するモジュール。"""
 
+import html
 import json
 import urllib.parse
 from logger import get_logger
@@ -123,7 +124,12 @@ def _format_plan(state: dict) -> str:
   </div>
 </div>""")
 
-    plan_json = json.dumps(plan_payload(state), ensure_ascii=False).replace("'", "&#39;").replace('"', "&quot;")
+    # data-plan 属性に JSON を埋める。画面側は dataset から読んで JSON.parse する。
+    # & を先に実体化すること。" だけを置き換えると、値の中に「&quot;」という
+    # 文字列があったときブラウザが属性を読む段階でそれが " に戻り、JSON の
+    # 構造が壊れる（保存ボタンが動かなくなり、細工次第では別の項目を混ぜられる）。
+    # html.escape は & → < > → " ' の順に処理するので、この取り違えが起きない。
+    plan_json = html.escape(json.dumps(plan_payload(state), ensure_ascii=False), quote=True)
 
     save_button = f'<div class="plan-save-area"><button class="plan-save-btn" data-plan="{plan_json}">このプランを保存する</button></div>'
 

@@ -1228,3 +1228,76 @@ def test_worst_case_retry_loop_fits_in_the_recursion_limit():
     assert steps.count("balancer") == MAX_BALANCER_RETRIES
     assert "sightseeing_candidates" in steps          # 入れ替えを通っている
     assert len(steps) < limit, f"{len(steps)} ステップで上限 {limit} に近い"
+
+
+# ----------------------------------------------------------------------
+# プランカードに埋める data-plan（保存ボタンが読み戻す）
+# ----------------------------------------------------------------------
+_HOSTILE = [
+    ("普通の地名", "金沢"),
+    ("二重引用符", '金沢"の宿'),
+    ("アンパサンド", "金沢&の宿"),
+    ("「&quot;」という文字列", "金沢&quot;の宿"),
+    ("実体参照っぽい文字列", "金沢&amp;&lt;script&gt;"),
+    ("JSONへの注入を狙う", '金沢&quot;,&quot;num_people&quot;:9999,&quot;x&quot;:&quot;'),
+    ("山括弧", "金沢<script>alert(1)</script>"),
+    ("単引用符", "金沢'の宿"),
+]
+
+
+def _card(**over):
+    """プランカードのHTMLを1枚作る。"""
+    from chat.formatter import _format_plan
+    state = dict(destination="金沢", travel_date="2099年8月1日", duration="1泊2日",
+                 num_people=2, budget_limit=50000, departure_location="東京",
+                 transport_cost=1000, remaining_budget=49000, total_per_person=40000,
+                 status="approved", feedback="ok", themes=["食"], special_requirements=[],
+                 spots=["兼六園"], restaurants=["店"], accommodation=["宿"],
+                 schedule=["09:00 出発"], budget_estimate=["合計"])
+    state.update(over)
+    return _format_plan(state)
+
+
+@pytest.mark.parametrize("label,destination", _HOSTILE)
+def test_data_plan_survives_the_browser_round_trip(label, destination):
+    """data-plan がブラウザの読み方で元の JSON に戻ること。
+
+    画面側は dataset から属性を読んで JSON.parse する。ブラウザは属性値の
+    実体参照をそこで戻すので、埋める側は & を最初に実体化しないといけない。
+    " だけを置き換えていたため、値に「&quot;」という文字列があると
+    その段階で " に戻り、JSON が壊れていた（保存ボタンが動かなくなり、
+    細工次第では別の項目を混ぜられた）。
+    """
+    import html as html_mod
+    import json as json_mod
+    import re
+
+    attr = re.search(r'data-plan="([^"]*)"', _card(destination=destination)).group(1)
+    payload = json_mod.loads(html_mod.unescape(attr))   # ブラウザと同じ手順
+    assert payload["destination"] == destination
+    assert payload["num_people"] == 2, "別の値を混ぜられた"
+    assert "x" not in payload, "無い項目を差し込まれた"
+
+
+def test_plan_card_escapes_every_field_it_prints():
+    """AIやユーザーの文字列が、そのままタグとして画面に出ないこと。
+
+    プランカードは画面側で marked.parse() を通すため、生のタグが残ると
+    そのまま解釈される。data-plan 属性の中は引用符が実体化されていて
+    属性の外に出られないので、そこは対象外にして数える。
+    """
+    import re
+
+    evil = "<script>X</script>"
+    html = _card(destination=f"金沢{evil}", departure_location=f"東京{evil}",
+                 duration=f"1泊2日{evil}", travel_date=f"日程{evil}",
+                 themes=[f"テーマ{evil}"], special_requirements=[f"条件{evil}"],
+                 spots=[f"観光{evil}"], restaurants=[f"食{evil}"],
+                 accommodation=[f"宿{evil}"], schedule=[f"09:00 {evil}"],
+                 budget_estimate=[f"合計{evil}"], feedback=f"よい旅を{evil}")
+    outside = re.sub(r'data-plan="[^"]*"', 'data-plan="…"', html)
+    assert evil not in outside, "生のタグが画面に出ている"
+    assert outside.count("&lt;script&gt;") >= 8, "エスケープされた形が見当たらない"
+    # 属性は閉じ引用符で正しく終わり、外へ出ていないこと
+    for m in re.finditer(r'data-plan="([^"]*)"', html):
+        assert '"' not in m.group(1)

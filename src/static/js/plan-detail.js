@@ -136,7 +136,7 @@ function accountingHtml(plan, editing = false) {
         <div class="account-row">
           <span class="account-est">見積もり ${fmt(est)}円/人</span>
           <span class="account-input-wrap">
-            <input type="number" class="account-input" inputmode="numeric" min="0"${cur}
+            <input type="text" class="account-input" inputmode="numeric" maxlength="9"${cur}
                    placeholder="使った額" aria-label="実際に使った額（円/人）">
             <span class="account-yen">円/人</span>
           </span>
@@ -195,8 +195,20 @@ function mountAccounting(card, plan, editing = false) {
   if (saveBtn) {
     const input = box.querySelector('.account-input');
     const submit = () => {
-      const v = (input.value || '').trim();
+      // type="number" をやめたので、数字かどうかはここで見る。
+      // 矢印（スピナー）は1円刻みで使い道が無いうえ、フィールドの上で
+      // ページをスクロールすると金額が勝手に変わってしまうため外した。
+      // 全角で打たれることもあるので半角に直してから判定する
+      const v = (input.value || '').trim()
+        .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .replace(/[,，\s円]/g, '');
       if (v === '') { input.focus(); return; }
+      if (!/^\d+$/.test(v)) {
+        alert('金額は数字で入力してください');
+        input.focus();
+        input.select();
+        return;
+      }
       save(parseInt(v, 10), saveBtn);
     };
     saveBtn.addEventListener('click', submit);

@@ -104,6 +104,23 @@
     return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
   }
 
+  // タイルの拡大率まわり。
+  //   maxZoom        地図として許す上限
+  //   maxNativeZoom  配信元が実際に持っている上限。これを超える拡大では、
+  //                  Leaflet がこの段のタイルを引き伸ばして使う
+  // 水彩（Stamen Watercolor）は手描きなので、通常の地図ほど深い段を持たない。
+  // maxNativeZoom を教えないと、無い段のタイルを取りに行って404になり、
+  // ピンと線だけが浮いた灰色の地図になる（実際そうなっていた）。
+  const MAX_ZOOM = 18;
+  const MAX_FIT_ZOOM = 16;   // ピンが密集していても、ここより寄せない
+  function tileOptions() {
+    return {
+      attribution: tileAttrib(),
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: STADIA_KEY ? 16 : 19,
+    };
+  }
+
   // しずく型ピン。label は番号 or グリフ（食/宿）。観光だけ四つ葉アクセント付き。
   // しずく型ピンを SVG で描く。Leaflet の既定ピン（青い画像）は世界観に合わない。
   // 観光だけ四つ葉、グルメと宿は「食」「宿」の字を入れて、色が見えなくても分かるように
@@ -587,7 +604,7 @@
 
     el.innerHTML = '';
     const map = L.map(el, { zoomControl: true, scrollWheelZoom: false });
-    L.tileLayer(tileUrl(), { attribution: tileAttrib(), maxZoom: 18 }).addTo(map);
+    L.tileLayer(tileUrl(), tileOptions()).addTo(map);
 
     // スケジュールに登場する順（＝移動する順番）で、観光・グルメ・宿を
     // 横断した通し番号を振る。色はカテゴリのまま、番号だけ移動順。
@@ -628,7 +645,8 @@
         drawRoute(routeAll.filter(show));
         const visible = autoPoints.filter(show);
         if (visible.length) {
-          map.fitBounds(L.latLngBounds(visible.map(p => [p.lat, p.lng])).pad(0.2), { maxZoom: 15 });
+          map.fitBounds(L.latLngBounds(visible.map(p => [p.lat, p.lng])).pad(0.2),
+                        { maxZoom: MAX_FIT_ZOOM });
         }
       });
     }
@@ -649,7 +667,10 @@
     if (present.length > 1) addLegend(map, present);
 
     if (all.length > 0) {
-      map.fitBounds(L.latLngBounds(all.map(p => [p.lat, p.lng])).pad(0.2));
+      // 上限を付けないと、ピンが近いプラン（1つの街の中だけを回る等）で
+      // タイルの無い段まで一気に寄ってしまう
+      map.fitBounds(L.latLngBounds(all.map(p => [p.lat, p.lng])).pad(0.2),
+                    { maxZoom: MAX_FIT_ZOOM });
     } else if (plan.center && Number.isFinite(plan.center.lat) && Number.isFinite(plan.center.lng)) {
       // ピン未設置でも行き先は分かっている（/api/plan_geo が添える）。その街を出す。
       // 海外のプランで日本全図から探させないため

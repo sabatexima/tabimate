@@ -30,6 +30,23 @@
   }
 
   // タイルの帰属表示は提供元の条件。地図の右下に必ず出す
+  // タイルの拡大率まわり。
+  //   maxZoom        地図として許す上限
+  //   maxNativeZoom  配信元が実際に持っている上限。これを超える拡大では、
+  //                  Leaflet がこの段のタイルを引き伸ばして使う
+  // 水彩（Stamen Watercolor）は手描きなので、通常の地図ほど深い段を持たない。
+  // maxNativeZoom を教えないと、無い段のタイルを取りに行って404になり、
+  // ピンと線だけが浮いた灰色の地図になる（実際そうなっていた）。
+  const MAX_ZOOM = 18;
+  const MAX_FIT_ZOOM = 16;   // ピンが密集していても、ここより寄せない
+  function tileOptions() {
+    return {
+      attribution: tileAttrib(),
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: STADIA_KEY ? 16 : 19,
+    };
+  }
+
   function tileAttrib() {
     if (STADIA_KEY) {
       return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://stamen.com">Stamen Design</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
@@ -104,7 +121,7 @@
 
     el.innerHTML = '';
     const map = L.map(el, { zoomControl: true, scrollWheelZoom: false });
-    L.tileLayer(tileUrl(), { attribution: tileAttrib(), maxZoom: 18 }).addTo(map);
+    L.tileLayer(tileUrl(), tileOptions()).addTo(map);
 
     // 撮影順に点線でつなぐ＝歩いた道のり（足あと）
     if (pts.length > 1) {
@@ -125,6 +142,6 @@
     const all = [...pts, ...plan].map(p => [p.lat, p.lng]);
     // 実績と計画の両方が収まる範囲に合わせる。少し余白を付けないと
     // 端のピンが画面の縁に張り付く
-    map.fitBounds(L.latLngBounds(all).pad(0.2));
+    map.fitBounds(L.latLngBounds(all).pad(0.2), { maxZoom: MAX_FIT_ZOOM });
   };
 })();

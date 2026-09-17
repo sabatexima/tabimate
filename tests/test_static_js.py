@@ -9,6 +9,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 HOME_JS = ROOT / "src" / "static" / "js" / "home.js"
 HOME_HTML = ROOT / "src" / "templates" / "home.html"
@@ -149,3 +151,100 @@ def test_plan_map_day_headers_match_the_agent_rule():
     points = [{"name": "熱海城"}, {"name": "起雲閣"}]
     r = _run_plan_map_days(points, ["１日目：熱海へ", "10:00 熱海城", "[2日目] 帰路", "10:00 起雲閣"])
     assert r["days"] == [1, 2] and r["daysOf"] == [[1], [2]]
+
+
+# ----------------------------------------------------------------------
+# 金額の入力欄（旅の会計）
+# ----------------------------------------------------------------------
+def test_amount_field_is_not_a_spinner():
+    """金額に数値スピナー（上下の矢印）を付けないこと。
+
+    1円刻みの矢印は数千円〜数万円の入力に使い道が無いうえ、type="number" は
+    フィールドの上でページをスクロールすると値が勝手に変わる。しおりは縦に
+    長いので、記録した金額が知らないうちにずれる経路になっていた。
+
+    代わりに inputmode="numeric" を残し、スマホの数字キーパッドは保つ。
+    """
+    js = (ROOT / "src" / "static" / "js" / "plan-detail.js").read_text(encoding="utf-8")
+    field = re.search(r'<input[^>]*class="account-input"[^>]*>', js, re.S)
+    assert field, "会計の入力欄が見つからない"
+    markup = field.group(0)
+    assert 'type="number"' not in markup, "数値スピナーが戻っている"
+    assert 'type="text"' in markup
+    assert 'inputmode="numeric"' in markup, "スマホの数字キーパッドが外れている"
+
+
+def test_amount_field_validates_before_sending():
+    """type="number" をやめたぶん、数字かどうかを送信前に見ていること。
+
+    ブラウザ任せの入力制限が無くなるので、ここが抜けると NaN が
+    サーバーへ飛ぶ（JSON では null になり、記録が黙って消える）。
+    """
+    js = (ROOT / "src" / "static" / "js" / "plan-detail.js").read_text(encoding="utf-8")
+    submit = re.search(r"const submit = \(\) => \{(.*?)\n    \};", js, re.S)
+    assert submit, "会計の送信処理が見つからない"
+    body = submit.group(1)
+    assert re.search(r"\\d\+?\$?/\.test\(|\^\\\\d\+\$", body) or r"/^\d+$/" in body, \
+        "数字かどうかの判定が無い"
+    assert "parseInt" in body
+
+
+# ----------------------------------------------------------------------
+# 地図の拡大率（タイルが無い段まで寄らないこと）
+# ----------------------------------------------------------------------
+MAP_JS = [ROOT / "src" / "static" / "js" / "plan-map.js",
+          ROOT / "src" / "static" / "js" / "footprint-map.js"]
+
+
+def _calls_of(name: str, js: str) -> list[str]:
+    """`name(...)` の呼び出しを、括弧を数えて丸ごと取り出す。
+
+    正規表現だと fitBounds(L.latLngBounds(xs.map(p => [a, b])).pad(0.2), …) のような
+    入れ子を拾いきれず、1件も見つからないのに素通りしてしまう（実際そうなった）。
+    """
+    out = []
+    for m in re.finditer(re.escape(name) + r"\(", js):
+        depth, i = 0, m.end() - 1
+        while i < len(js):
+            if js[i] == "(":
+                depth += 1
+            elif js[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    out.append(js[m.start():i + 1])
+                    break
+            i += 1
+    return out
+
+
+@pytest.mark.parametrize("path", MAP_JS, ids=lambda p: p.name)
+def test_tile_layer_declares_the_sources_real_zoom_limit(path):
+    """配信元が実際に持っている拡大段（maxNativeZoom）を Leaflet に伝えること。
+
+    水彩（Stamen Watercolor）は手描きで、通常の地図ほど深い段を持たない。
+    これを伝えないと、深く拡大したとき無い段のタイルを取りに行って404になり、
+    ピンと線だけが浮いた灰色の地図になる。伝えてあれば Leaflet が
+    手前の段を引き伸ばして使う。
+
+    実測: 伝えたとき z16 まで／外すと z17・z18 まで取りに行っていた。
+    """
+    js = path.read_text(encoding="utf-8")
+    assert "maxNativeZoom" in js, "配信元の上限を伝えていない"
+    assert re.search(r"maxNativeZoom:\s*STADIA_KEY\s*\?", js), \
+        "水彩と通常タイルで上限を出し分けていない"
+    assert not re.search(r"L\.tileLayer\([^)]*maxZoom:\s*\d+\s*\}", js), \
+        "タイル層の設定が直書きのまま（tileOptions を通していない）"
+
+
+@pytest.mark.parametrize("path", MAP_JS, ids=lambda p: p.name)
+def test_fit_bounds_never_zooms_past_the_tiles(path):
+    """ピンが密集していても、タイルのある段より深く寄せないこと。
+
+    fitBounds は収まるまで寄せるので、1つの街の中だけを回るプランだと
+    上限を付けないまま一気に深い段へ飛ぶ。
+    """
+    js = path.read_text(encoding="utf-8")
+    calls = _calls_of("fitBounds", js)
+    assert calls, "fitBounds が見つからない"
+    for call in calls:
+        assert "maxZoom" in call, f"上限の無い fitBounds がある: {call[:90]}"

@@ -294,3 +294,86 @@ def test_chat_messages_attach_plan_and_survive_broken_json(env, monkeypatch):
     assert messages[0]["plan"] is None                       # ユーザー発話
     assert messages[1]["plan"]["destination"] == "熱海"       # プラン提示
     assert messages[2]["plan"] is None                       # 壊れていても落とさない
+
+
+# ----------------------------------------------------------------------
+# 認可の掃討: IDを取る経路すべてを、無関係なユーザーとして叩く
+# ----------------------------------------------------------------------
+_SECRETS = ["秘密の行き先", "秘密のスポット", "秘密の店", "秘密の旅", "秘密の付箋"]
+
+_IDS = {"trip_id": TRIP["id"], "plan_id": 99, "photo_id": 11, "sticker_id": 5,
+        "grant_id": 7, "link_id": 3, "resource_id": TRIP["id"], "resource_type": "trip",
+        "storage_path": "p/a.jpg", "token": "tok-unknown"}
+
+
+def _fill(rule):
+    """ルールのプレースホルダを、所有者が持っている実在IDで埋める。"""
+    url = rule
+    for key, value in _IDS.items():
+        for shape in (f"<int:{key}>", f"<path:{key}>", f"<{key}>"):
+            url = url.replace(shape, str(value))
+    return None if "<" in url else url
+
+
+def test_no_id_route_hands_another_users_data_to_a_stranger(env, monkeypatch):
+    """IDを取る経路を全部、無関係なログインユーザーとして叩く。
+
+    1本ずつ手で書くと、経路が増えたときに取り残される（実際この検査を書くまで
+    39本中4本しか見ていなかった）。ここでは中身が漏れないことだけを見る。
+    拒否のしかたは経路ごとに違ってよい（404で存在を隠す／403で断る／
+    200だが空を返す、のいずれも漏れていなければ合格）。
+    """
+    import db
+    import db_reflection as repo
+
+    # 所有者の資源に、漏れたら分かる印を入れておく
+    monkeypatch.setattr(db, "get_travel_plan_by_id", lambda pid: {
+        "id": pid, "google_user_id": OWNER, "destination": "秘密の行き先",
+        "travel_date": "2099年8月1日", "duration": "1泊2日", "geo_done": 1,
+        "spots": ["秘密のスポット"], "restaurants": [], "accommodation": [],
+        "schedule": [], "budget_estimate": [], "themes": [],
+        "spot_coords": [{"name": "秘密のスポット", "lat": 1.0, "lng": 2.0}],
+        "restaurant_coords": [{"name": "秘密の店", "lat": 1.0, "lng": 2.0}],
+        "accommodation_coords": []})
+    monkeypatch.setattr(repo, "get_stickers",
+                        lambda tid: [{"id": 5, "text": "秘密の付箋"}])
+
+    app = env["app"]
+    stranger = headers_for("u-stranger", "stranger@example.com")
+    checked, leaked = 0, []
+    for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+        if "<" not in rule.rule or rule.endpoint == "static":
+            continue
+        url = _fill(rule.rule)
+        if url is None:
+            continue
+        for method in sorted(m for m in rule.methods if m in {"GET", "POST", "PATCH", "DELETE"}):
+            checked += 1
+            with app.test_client() as client:
+                try:
+                    resp = getattr(client, method.lower())(
+                        url, headers=stranger,
+                        json={} if method in ("POST", "PATCH") else None)
+                except Exception:
+                    continue          # DB未接続などで落ちる分は漏れようがない
+                body = resp.get_data(as_text=True)
+            found = [s for s in _SECRETS if s in body]
+            if found:
+                leaked.append((method, rule.rule, resp.status_code, found))
+
+    assert checked >= 35, f"叩けた経路が少なすぎる（{checked}本）。検査が縮んでいないか"
+    assert not leaked, "他人の中身が返っている:\n" + "\n".join(map(str, leaked))
+
+
+def test_the_owner_still_gets_their_own_data(env, monkeypatch):
+    """上の掃討が「誰にも何も返さない」で通っていないことの裏取り。"""
+    import db
+    monkeypatch.setattr(db, "get_travel_plan_by_id", lambda pid: {
+        "id": pid, "google_user_id": OWNER, "destination": "秘密の行き先",
+        "geo_done": 1, "spots": ["秘密のスポット"],
+        "spot_coords": [{"name": "秘密のスポット", "lat": 1.0, "lng": 2.0}],
+        "restaurant_coords": [], "accommodation_coords": []})
+    with env["app"].test_client() as client:
+        resp = client.get("/api/plan_geo/99", headers=headers_for(OWNER, "owner@example.com"))
+    assert resp.status_code == 200
+    assert "秘密のスポット" in resp.get_data(as_text=True)

@@ -391,7 +391,7 @@ Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the pub
 ### Tests & CI
 
 ```bash
-pytest tests/ -k "not smoke"    # 247 offline tests — no API keys, no DB
+pytest tests/ -k "not smoke"    # 249 offline tests — no API keys, no DB
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
@@ -403,7 +403,7 @@ python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 | `test_ios_routes.py` (44) | Every URL the iOS app calls exists on the server, with the right method |
 | `test_regression.py` (56) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, "I don't drive" survives a save-and-edit round trip, … |
 | `test_generation_status.py` (18) | Reload restore — the pending/done/gone decision, and what the page carries |
-| `test_app_api.py` (16) | Authorization and JSON shape for the native-app endpoints |
+| `test_app_api.py` (18) | Authorization and JSON shape for the native-app endpoints, plus a sweep of every ID-taking route (39) called as an unrelated user, asserting no one else's data comes back |
 | `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |
 | `test_pipeline.py` (53) | The whole generation run with only the model faked. Sweeps trip shapes (day trip to 5 nights, domestic/overseas, drives or not) checking for unfilled placeholders and empty fields in prompts, that conditional instructions appear exactly when they apply, and that a rejection's notes reach the candidate agents |
 | `test_static_js.py` (6) | The JS and the template still fit together (names, element ids), and which day the map assigns each pin to |

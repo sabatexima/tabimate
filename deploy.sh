@@ -174,6 +174,42 @@ JSON
   echo "・${AR_REPO}: 最新 ${KEEP_IMAGES} 個を残して古いイメージを自動削除します"
 fi
 
+echo "=== ビルド用にアップロードしたソースの自動削除設定 ==="
+# --source デプロイはソース一式を固めて Cloud Storage に置いてからビルドする。
+# ビルドが終われば不要だが、そのまま残り続けて保管料がかかる。
+# 置き場所は gcloud のバージョンで違う（新: run-sources-<PJ>-<REGION> / 旧: <PJ>_cloudbuild）
+# ので、存在する方に「SOURCE_TTL_DAYS 日より古いファイルは消す」ルールを付ける。
+# 写真用バケット（GCS_BUCKET）はユーザーのデータなので対象にしない。
+SOURCE_TTL_DAYS="${SOURCE_TTL_DAYS:-7}"
+LIFECYCLE_FILE=$(mktemp)
+cat > "$LIFECYCLE_FILE" <<JSON
+{"rule": [{"action": {"type": "Delete"}, "condition": {"age": ${SOURCE_TTL_DAYS}}}]}
+JSON
+for src_bucket in "run-sources-${PROJECT_ID}-${REGION}" "${PROJECT_ID}_cloudbuild"; do
+  if gcloud storage buckets describe "gs://${src_bucket}" --project "$PROJECT_ID" &>/dev/null; then
+    gcloud storage buckets update "gs://${src_bucket}" \
+      --lifecycle-file="$LIFECYCLE_FILE" --project "$PROJECT_ID" >/dev/null
+    echo "・gs://${src_bucket}: ${SOURCE_TTL_DAYS} 日より古いソースを自動削除します"
+  fi
+done
+rm -f "$LIFECYCLE_FILE"
+
+echo "=== 古い Cloud Run リビジョンを削除 ==="
+# デプロイごとにリビジョンが1つ増える。料金はかからないが、上で古いイメージを
+# 消すと中身の無いリビジョンが残るだけなので、イメージと同じ数だけ残して消す。
+# いまトラフィックを受けているリビジョンは Cloud Run 側が削除を拒否するので安全。
+old_revisions=$(gcloud run revisions list --service "$SERVICE_NAME" \
+                  --region "$REGION" --project "$PROJECT_ID" \
+                  --sort-by="~metadata.creationTimestamp" \
+                  --format="value(metadata.name)" | tail -n +"$((KEEP_IMAGES + 1))")
+if [ -n "$old_revisions" ]; then
+  echo "・古いリビジョンを $(printf '%s\n' "$old_revisions" | wc -l | tr -d ' ') 個削除します（最新 ${KEEP_IMAGES} 個は残す）"
+  printf '%s\n' "$old_revisions" | while read -r rev; do
+    gcloud run revisions delete "$rev" --region "$REGION" \
+      --project "$PROJECT_ID" --quiet >/dev/null 2>&1 || true
+  done
+fi
+
 echo "=== デプロイ完了 ==="
 gcloud run services describe "$SERVICE_NAME" \
   --region "$REGION" \

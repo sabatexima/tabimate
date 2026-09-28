@@ -35,6 +35,34 @@ for req in GOOGLE_API_KEY TAVILY_API_KEY GOOGLE_CLIENT_SECRET DB_PASS SECRET_KEY
 done
 
 echo "=== Secret Manager にシークレットを登録/更新 ==="
+# Secret Manager は「有効な版（version）」の数で毎月課金される。
+# 以前はデプロイのたびに、値が同じでも全シークレットに新しい版を足し、
+# 古い版を一度も消していなかった。デプロイ1回で5〜7版ずつ増え、
+# 積み上がった版の保管料が請求の最大項目になっていた。
+#   ・値が変わっていなければ版を足さない
+#   ・足したあとは、最新 KEEP_SECRET_VERSIONS 個だけ残して古い版を破棄する
+# 1つ前を残すのは、.env の書き間違いで壊れたときに戻せるようにするため。
+KEEP_SECRET_VERSIONS="${KEEP_SECRET_VERSIONS:-2}"
+
+# 古い版を破棄して、有効な版を最新 KEEP_SECRET_VERSIONS 個に絞る。
+# 破棄（destroy）は取り消せない。無効化（disable）では保管が続くので課金も止まらない。
+# Cloud Run は :latest を参照しているので、古い版を消しても動作には影響しない。
+_prune_secret_versions() {
+  local name=$1
+  local old
+  old=$(gcloud secrets versions list "$name" --project "$PROJECT_ID" \
+          --filter="state!=DESTROYED" --sort-by="~createTime" \
+          --format="value(name.basename())" | tail -n +"$((KEEP_SECRET_VERSIONS + 1))")
+  [ -z "$old" ] && return
+  local count
+  count=$(printf '%s\n' "$old" | wc -l | tr -d ' ')
+  echo "・${name}: 古い版を ${count} 個破棄します（最新 ${KEEP_SECRET_VERSIONS} 個は残す）"
+  printf '%s\n' "$old" | while read -r version; do
+    gcloud secrets versions destroy "$version" --secret="$name" \
+      --project "$PROJECT_ID" --quiet >/dev/null
+  done
+}
+
 _upsert_secret() {
   local name=$1
   local value=$2
@@ -43,14 +71,24 @@ _upsert_secret() {
   if [ -z "$value" ]; then
     if gcloud secrets describe "$name" --project "$PROJECT_ID" &>/dev/null; then
       echo "⚠ ${name} は .env に無いため、既存のSecretの値をそのまま使います"
+      _prune_secret_versions "$name"
       return
     fi
     echo "⚠ ${name} は空のSecretとして作成されます。使うときは .env に値を書いて再デプロイしてください"
   fi
   # printf を使うことで改行・特殊文字を安全に扱う
   if gcloud secrets describe "$name" --project "$PROJECT_ID" &>/dev/null; then
-    printf '%s' "$value" | gcloud secrets versions add "$name" \
-      --data-file=- --project "$PROJECT_ID"
+    local current
+    current=$(gcloud secrets versions access latest --secret="$name" \
+                --project "$PROJECT_ID" 2>/dev/null || true)
+    if [ "$current" = "$value" ]; then
+      echo "・${name} は変更なし（新しい版は作りません）"
+    else
+      printf '%s' "$value" | gcloud secrets versions add "$name" \
+        --data-file=- --project "$PROJECT_ID"
+    fi
+    # 変更が無くても毎回絞る。以前のデプロイで積み上がった版もここで片付く
+    _prune_secret_versions "$name"
   else
     printf '%s' "$value" | gcloud secrets create "$name" \
       --data-file=- --replication-policy=automatic --project "$PROJECT_ID"

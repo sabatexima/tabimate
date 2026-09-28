@@ -147,6 +147,33 @@ gcloud run deploy "$SERVICE_NAME" \
   --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,TAVILY_API_KEY=TAVILY_API_KEY:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,DB_PASS=DB_PASS:latest,SECRET_KEY=SECRET_KEY:latest,STADIA_API_KEY=STADIA_API_KEY:latest,GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest" \
   --project "$PROJECT_ID"
 
+echo "=== Artifact Registry の古いイメージを自動削除する設定 ==="
+# --source デプロイはビルドしたコンテナイメージを cloud-run-source-deploy に置く。
+# 何もしないとデプロイのたびに数百MBずつ積み上がり、保管料が毎日かかる。
+# 最新 KEEP_IMAGES 個だけ残し、それより古いものは削除するポリシーを付ける。
+# （Keep は Delete より優先される。削除はポリシーに従って1日1回ほどまとめて行われる）
+# 動いているリビジョンは最新のイメージを使っているので、古いものを消しても影響はない。
+# 古いリビジョンへの切り戻しは、残した KEEP_IMAGES 個の範囲でだけできる。
+KEEP_IMAGES="${KEEP_IMAGES:-3}"
+AR_REPO="cloud-run-source-deploy"
+if gcloud artifacts repositories describe "$AR_REPO" \
+     --location "$REGION" --project "$PROJECT_ID" &>/dev/null; then
+  POLICY_FILE=$(mktemp)
+  cat > "$POLICY_FILE" <<JSON
+[
+  {"name": "keep-recent", "action": {"type": "Keep"},
+   "mostRecentVersions": {"keepCount": ${KEEP_IMAGES}}},
+  {"name": "delete-old", "action": {"type": "Delete"},
+   "condition": {"tagState": "any", "olderThan": "1d"}}
+]
+JSON
+  gcloud artifacts repositories set-cleanup-policies "$AR_REPO" \
+    --location "$REGION" --project "$PROJECT_ID" \
+    --policy="$POLICY_FILE" --no-dry-run --quiet >/dev/null
+  rm -f "$POLICY_FILE"
+  echo "・${AR_REPO}: 最新 ${KEEP_IMAGES} 個を残して古いイメージを自動削除します"
+fi
+
 echo "=== デプロイ完了 ==="
 gcloud run services describe "$SERVICE_NAME" \
   --region "$REGION" \

@@ -329,6 +329,8 @@ def test_destination_step_failure_keeps_the_original(monkeypatch):
         raise RuntimeError("AI が落ちた")
     monkeypatch.setattr(A, "invoke_with_retry", broken)
     monkeypatch.setattr(A, "llm", _FakeLLM())
+    # 地図の照会は通さない（キャッシュや本物の通信の結果に左右されないように）
+    monkeypatch.setattr(A, "_clearly_specific", lambda dest: False)
     assert A.settle_destination({"destination": "関東"}) == {}
     assert calls["n"] == 1
 

@@ -359,10 +359,8 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 | `GCS_BUCKET` | cond. | Uses GCS when set, else the local filesystem |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | Local dir · signed-URL TTL · signer SA |
 | `REDIS_URL` | | Share in-flight generation state across instances |
-| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override models (defaults `gemini-3.8-flash` / `gemini-3.1-flash-lite`) — roll back a new model with one line |
 | `MAX_CONTENT_LENGTH_MB` | | Upload size cap per request (default 100) |
 | `SEARCH_SNIPPET_CHARS` / `SEARCH_QUERY_CHARS` | | How much of each web-search result is kept, and the cap per query (600 / 2400) — trims what reaches the model |
-| `INTERPRETER_MODEL` | | Model used for sticky notes and best-shot picking (default `gemini-3.1-flash-lite`) |
 | `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | Photos sent for sticky notes (6) and the longest edge each is resized to before sending (512 px) — the cost dial for that call |
 | `INTERPRETER_MAX_IMAGES` | | Fallback cap (4) for callers that don't set their own. Both current callers do — sticky notes use `STICKER_MAX_IMAGES`, best-shot picking sends every sampled photo (up to 12) — so changing this alone does nothing today |
 | `INTERPRETER_PRICE_INPUT_PER_M` / `INTERPRETER_PRICE_OUTPUT_PER_M` | | Prices per million tokens used only to log an estimated cost (0.25 / 1.50) |

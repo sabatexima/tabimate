@@ -357,10 +357,8 @@ START
 | `GCS_BUCKET` | 条件 | 設定すると GCS、無ければローカルのファイルシステム |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | 保存先 · 署名URLの有効期間 · 署名用SA |
 | `REDIS_URL` | | 生成中の状態をインスタンス間で共有する |
-| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | 使うモデルの上書き（既定 `gemini-3.8-flash` / `gemini-3.1-flash-lite`）。新モデルを1行で戻せます |
 | `MAX_CONTENT_LENGTH_MB` | | 1リクエストあたりのアップロード上限（既定100） |
 | `SEARCH_SNIPPET_CHARS` / `SEARCH_QUERY_CHARS` | | Web検索の結果をどこまで残すかと、1クエリあたりの上限（600 / 2400）。モデルに渡す量を抑える |
-| `INTERPRETER_MODEL` | | 付箋づくりとベストショット選びに使うモデル（既定 `gemini-3.1-flash-lite`） |
 | `STICKER_MAX_IMAGES` / `INTERPRETER_IMAGE_MAX_EDGE` | | 付箋づくりに送る写真の枚数（6）と、送る前に縮める長辺（512px）。付箋のコストはここで決まる |
 | `INTERPRETER_MAX_IMAGES` | | 枚数を指定しない呼び出しのための既定値（4）。いまはどちらの呼び出しも自前で指定しているので（付箋は `STICKER_MAX_IMAGES`、ベストショットは間引いた写真を全部＝最大12枚）、ここだけ変えても効きません |
 | `INTERPRETER_PRICE_INPUT_PER_M` / `INTERPRETER_PRICE_OUTPUT_PER_M` | | 概算コストをログに出すためだけの百万トークン単価（0.25 / 1.50） |

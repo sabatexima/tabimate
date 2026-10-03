@@ -1,7 +1,7 @@
 """AI と Web 検索の呼び出し口。プロンプトや旅の知識はここには置かない。
 
 このモジュールが持つのは「どのモデルを、どう呼ぶか」だけ:
-  ・使うモデル（環境変数で差し替え可。新モデルで問題が出たら .env の1行で戻せる）
+  ・使うモデル（コードで固定。変えるときは _MODEL_LITE / _MODEL_STRONG を書き換える）
   ・失敗したときの再試行（invoke_with_retry）
   ・Tavily の検索と、結果の切り詰め（モデルに渡す量を抑える）
 
@@ -18,9 +18,9 @@ from logger import get_logger
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'))
 
-# モデルIDは環境変数で差し替え可能にする（新モデルが出たとき .env の1行で戻せる）。
-_MODEL_LITE = os.getenv("GEMINI_MODEL_LITE", "gemini-3.1-flash-lite")
-_MODEL_STRONG = os.getenv("GEMINI_MODEL_STRONG", "gemini-3.8-flash")
+# 使うモデルはここで決める（環境変数では切り替えない）。変えるときはこの2行を書き換える。
+_MODEL_LITE = "gemini-3.1-flash-lite"
+_MODEL_STRONG = "gemini-3.8-flash"
 
 # 候補出し・選定・会話抽出など回数の多い軽作業用。
 # 3.5-flash-lite は品質は上だが値上げ（入力+20%/出力+67%）のため、

@@ -23,9 +23,9 @@ from logger import get_logger
 
 logger = get_logger("services.trip_interpreter")
 
-# --- モデル設定（環境変数で差替可能）---
+# --- モデル設定 ---
 # 付箋生成は短文の創作タスク（旅ごとに1回だけ）なので軽量モデルで十分。
-_MODEL = os.getenv("INTERPRETER_MODEL", "gemini-3.1-flash-lite")
+_MODEL = "gemini-3.1-flash-lite"
 # 画像は常に送る（写真を見ずに付箋は書けない）。コストは「送る枚数」と
 # 「縮小後の最大辺(px)」で抑える。
 _MAX_IMAGES = int(os.getenv("INTERPRETER_MAX_IMAGES", "4"))

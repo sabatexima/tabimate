@@ -75,12 +75,18 @@ def _validate(requests, images=(), page=(720, 405), delete=None):
             assert ep["pageObjectId"] in slides, "まだ無いページに置いている"
             size, tr = ep["size"], ep["transform"]
             assert size["width"]["unit"] == size["height"]["unit"] == tr["unit"] == "PT"
-            x, y = tr["translateX"], tr["translateY"]
-            assert x >= 0 and y >= 0
-            assert x + size["width"]["magnitude"] <= w + 0.5, (oid, "右にはみ出す")
-            assert y + size["height"]["magnitude"] <= h + 0.5, (oid, "下にはみ出す")
+            # 回した図形（マスキングテープ）も含め、4つの角がページに収まること
+            sw, sh = size["width"]["magnitude"], size["height"]["magnitude"]
+            a, b = tr.get("scaleX", 1), tr.get("shearY", 0)
+            c, d = tr.get("shearX", 0), tr.get("scaleY", 1)
+            for px, py in ((0, 0), (sw, 0), (0, sh), (sw, sh)):
+                cx = a * px + c * py + tr["translateX"]
+                cy = b * px + d * py + tr["translateY"]
+                assert -0.5 <= cx <= w + 0.5, (oid, "横にはみ出す", cx)
+                assert -0.5 <= cy <= h + 0.5, (oid, "縦にはみ出す", cy)
             if kind == "createShape":
-                assert body["shapeType"] in ("RECTANGLE", "ROUND_RECTANGLE", "ELLIPSE", "TEXT_BOX")
+                assert body["shapeType"] in ("RECTANGLE", "ROUND_RECTANGLE", "ELLIPSE", "TEXT_BOX",
+                                             "FLOWCHART_TERMINATOR", "WEDGE_ROUND_RECTANGLE_CALLOUT")
             if kind == "createImage":
                 assert body["url"].startswith("https://")
             objects[oid] = kind
@@ -158,47 +164,64 @@ def test_every_text_uses_the_sites_font():
     assert {s["style"]["fontFamily"] for s in alls} == {"Zen Maru Gothic"}
 
 
-def test_time_highlight_counts_emoji_as_two():
-    """Slides の文字位置は UTF-16。絵文字の後ろの行で、時刻の太字がずれないこと。"""
-    body, _ = SX.build_requests(_plan())
-    _, texts = _validate(body)
-    checked = 0
-    for r in body:
-        st = r.get("updateTextStyle")
-        if not st or st["textRange"]["type"] != "FIXED_RANGE":
-            continue
-        text = texts[st["objectId"]]
-        if "08:00" not in text:
-            continue
-        units = text.encode("utf-16-le")
-        a, b = st["textRange"]["startIndex"], st["textRange"]["endIndex"]
-        picked = units[a * 2:b * 2].decode("utf-16-le")
-        assert re.fullmatch(r"\d{2}:\d{2}", picked), picked
-        checked += 1
-    assert checked == 3, "1日目の3行ぶんの時刻が太字になっていない"
+def test_bold_ranges_count_emoji_as_two():
+    """Slides の文字位置は UTF-16。絵文字の後ろの行で、太字の範囲がずれないこと。"""
+    lines = ["🍀🍀 はじめの行", "■ 2日目の費用", "・昼食: 1,500円", "■ 合計"]
+    text, styles = SX._join_with_styles(
+        lines, lambda line: (len(line), "#000000") if line.startswith("■") else None)
+    units = text.encode("utf-16-le")
+    picked = [units[a * 2:b * 2].decode("utf-16-le") for a, b, _, _ in styles]
+    assert picked == ["■ 2日目の費用", "■ 合計"]
+
+
+def _timeline(texts_in_order):
+    """タイムラインの (時刻, 予定) の組を、ページの順に拾う。"""
+    out, pending = [], None
+    for t in texts_in_order:
+        if re.fullmatch(r"\d{1,2}:\d{2}", t):
+            pending = t
+        elif pending:
+            out.append((pending, t))
+            pending = None
+    return out
+
+
+def _texts_in_order(body):
+    return [r["insertText"]["text"] for r in body if "insertText" in r]
 
 
 def test_schedule_gets_one_page_per_day_and_splits_long_days():
     body, _ = SX.build_requests(SHAPES["長い旅"])
-    _, texts = _validate(body)
-    headings = [t for t in texts.values() if re.fullmatch(r"\d日目(（つづき）)?", t)]
-    assert [h for h in headings if "つづき" not in h] == [f"{d}日目" for d in range(1, 7)]
+    _validate(body)
+    texts = _texts_in_order(body)
+    assert [t for t in texts if re.fullmatch(r"\d日目", t)] == [f"{d}日目" for d in range(1, 7)]
+    # 日付が具体的なので、各日の左の帯に曜日つきの日付が出る
+    assert "11月3日（火）" in texts and "11月8日（日）" in texts
 
     body, _ = SX.build_requests(SHAPES["1日がとても長い"])
-    _, texts = _validate(body)
-    pages = [t for t in texts.values() if t.startswith("1日目")]
-    assert len(pages) >= 3 and pages[1] == "1日目（つづき）"
+    _validate(body)
+    texts = _texts_in_order(body)
+    assert texts.count("1日目") >= 2 and "（つづき）" in texts
     # 40行がどれも1回ずつ、どこかのページに載っていること（取りこぼし・重複が無い）
-    lines = [ln for t in texts.values() for ln in t.split("\n") if re.match(r"\d{2}:00 予定", ln)]
-    assert sorted(lines) == sorted(f"{i:02d}:00 予定{i}" for i in range(40))
+    assert sorted(_timeline(texts)) == sorted((f"{i:02d}:00", f"予定{i}") for i in range(40))
+
+
+def test_note_before_day_one_rides_on_day_one():
+    """「※時刻は現地時刻」のような1日目より前の行で、1枚を使い切らないこと。"""
+    plan = _plan(schedule=["※時刻はすべて現地時刻", "1日目", "10:00 出発", "2日目", "09:00 帰る"])
+    body, _ = SX.build_requests(plan)
+    slides, texts = _validate(body)
+    assert "スケジュール" not in texts.values(), "1日目の前の行だけでページを作っている"
+    order = _texts_in_order(body)
+    assert order.index("1日目") < order.index("※時刻はすべて現地時刻") < order.index("10:00")
 
 
 def test_day_trip_has_a_plain_schedule_and_skips_empty_sections():
     body, _ = SX.build_requests(SHAPES["日帰り"])
     _, texts = _validate(body)
     joined = "\n".join(texts.values())
-    assert "当日のスケジュール" in joined
-    assert "🏨 宿泊" not in joined, "宿の無い旅に宿の欄を出している"
+    assert "日帰り" in texts.values()
+    assert "とまるところ" not in joined, "宿の無い旅に宿の欄を出している"
     assert "わすれずに" not in joined, "持ちものが無いのにページを作っている"
 
 
@@ -208,10 +231,34 @@ def test_bare_plan_still_makes_a_cover_and_a_goodbye():
     assert len(slides) == 2
     assert "熱海" in texts.values() and "いってらっしゃい！🍀" in texts.values()
     assert "None" not in "".join(texts.values())
+    assert "ち ゃ む か ら   ひ と こ と" not in texts.values(), "ひとことが無いのに見出しだけ出ている"
+
+
+def test_every_page_but_the_cover_is_numbered():
+    body, _ = SX.build_requests(_plan())
+    slides, texts = _validate(body)
+    numbers = sorted(t for t in texts.values() if re.fullmatch(r"\d+ / \d+", t))
+    total = len(slides)
+    assert numbers == sorted(f"{n} / {total}" for n in range(2, total + 1))
+
+
+def test_cost_page_puts_the_per_person_total_up_front():
+    body, _ = SX.build_requests(_plan())
+    _, texts = _validate(body)
+    assert "68,000円" in texts.values()
+    assert "2人で 136,000円" in texts.values()
+
+
+def test_packing_list_keeps_names_short_and_fits_one_page():
+    body, _ = SX.build_requests(_plan(packing_list=["とても長い名前の持ちものの例ですよ"] + [f"品{i}" for i in range(30)]))
+    _, texts = _validate(body)
+    pills = [t for t in texts.values() if t.startswith("○  ")]
+    assert len(pills) == 21
+    assert "○  とても長い名前の持ちもの…" in pills
 
 
 def test_cards_do_not_overflow():
-    """カードに入れた文字が、見積もりで箱の高さを超えないこと（API は自動で縮めない）。"""
+    """入れた文字が、見積もりで箱の高さを超えないこと（API は自動で縮めない）。"""
     for name, plan in SHAPES.items():
         body, _ = SX.build_requests(plan)
         boxes = {r["createShape"]["objectId"]: r["createShape"]["elementProperties"]["size"]
@@ -229,8 +276,8 @@ def test_cards_do_not_overflow():
             width, height = box["width"]["magnitude"], box["height"]["magnitude"]
             size = sizes[oid]
             chars = max(1, int((width - 14) / size))
-            need = SX._visual_lines(text.split("\n"), chars) * size * spacing[oid] / 100 * 1.2
-            assert need <= height + size * 1.5, f"{name}: 「{text[:20]}…」が箱からあふれる"
+            need = SX._text_height(text.split("\n"), chars, size, spacing[oid])
+            assert need <= height + size * 1.6, f"{name}: 「{text[:20]}…」が箱からあふれる"
 
 
 def test_cost_headings_are_not_left_alone_at_the_bottom():

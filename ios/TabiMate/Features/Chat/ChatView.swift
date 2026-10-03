@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// ちゃむとの相談画面。話しかけると旅のしおりを組んでくれる。
 struct ChatView: View {
@@ -32,6 +33,13 @@ struct ChatView: View {
             }
             .task { await model.load() }
             .onAppear { model.consumePendingDraft() }
+            // 作っている間は画面を自動で消さない。画面が消えてアプリが裏に回ると
+            // 接続が切れ、本番のサーバーでは生成が止まってしまう（サーバーは
+            // 「リクエストを処理している間だけCPUを使う」設定のため）。
+            .onChange(of: model.isGenerating) { _, generating in
+                UIApplication.shared.isIdleTimerDisabled = generating
+            }
+            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         }
     }
 
@@ -172,10 +180,31 @@ private struct MessageRow: View {
 }
 
 /// 「まだ考えてるよ」の吹き出し。四つ葉が順に灯る。
+/// 5秒を超えたら（＝プランを作っている）、下に「アプリを開いたままにしてね」を添える。
+/// 閉じると生成が止まることがあるため。数秒で終わる質問の返事では出さない。
 private struct ThinkingBubble: View {
     @State private var phase = 0
+    @State private var showStayNote = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            bubble
+            if showStayNote {
+                Text("できあがるまで、アプリを開いたままにしてね。閉じると止まってしまうことがあります。")
+                    .font(.meta)
+                    .foregroundStyle(Theme.Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 56)
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(5))
+            withAnimation { showStayNote = true }
+        }
+    }
+
+    private var bubble: some View {
         HStack(alignment: .bottom, spacing: 10) {
             ChamuAvatar(size: 46)
             HStack(spacing: 5) {

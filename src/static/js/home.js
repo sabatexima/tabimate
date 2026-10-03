@@ -4,12 +4,19 @@
      フォーム送信 → POST /send_message → サーバーは SSE（data: 行）を流す
      → 最後に OK / ABORTED / ERROR のどれかが来たら、履歴を読み直して描き直す
 
-   ■ ここで一番大事なこと: 生成はこの接続より長生きする
+   ■ ここで一番大事なこと: 生成中は画面を開いたままにしてもらう
      プラン生成には数分かかる。サーバーは別スレッドで作り、**保存もそのスレッドが
-     行う**ので、途中でブラウザを閉じてもリロードしても結果は残る。
+     行う**ので、接続が切れたこと自体で結果が捨てられることはない。
      （以前は SSE の送信側で保存していて、リロードした瞬間に生成が捨てられていた）
+     ただし本番の Cloud Run は「リクエストを処理している間だけCPUを使う」設定なので、
+     接続が切れると CPU がほぼ止まり、生成も止まる（インスタンスごと消えることもある）。
+     常時CPUにすれば直るが、料金が上がるのでやらない。代わりに:
+       ・長い生成では「開いたままにしてね」と出す（thinking-note）
+       ・画面が自動で消えないようにする（Screen Wake Lock。スマホの自動ロック対策）
+       ・閉じる／再読み込みしようとしたら、ブラウザの確認を出す（beforeunload）
 
-   ■ だから、リロード後の復元がある（resumeIfGenerating）
+   ■ それでもリロードされたときの復元（resumeIfGenerating）
+     同じインスタンスで生成が走りきれば、開き直したときに結果が出る。
      まだ返事待ちの生成があるかどうかは**サーバーが知っている**。ページを出すとき
      .chat-container の data-pending-request / data-pending-message に載せてくるので、
      それを読むだけでよい。localStorage に控えは持たない（端末とサーバーがずれるため）。
@@ -51,13 +58,38 @@ const chatBox = document.getElementById('chat-box');
     '✨ 仕上げています',
   ];
   let thinkingTimer = null;
+  let wakeLock = null;
 
-  // 「考えています」を出し、段階表示を進め始める
-  function startThinking() {
+  // 画面が自動で消えないようにする。スマホは数十秒で画面が消え、ブラウザが
+  // 裏に回ると接続が切れて、本番では生成が止まってしまう（冒頭の説明）。
+  // 対応していないブラウザや、許可されない場面では何もしない。
+  async function keepScreenOn() {
+    if (wakeLock || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { wakeLock = null; }
+  }
+
+  function letScreenSleep() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+
+  // 「開いたままにしてね」の注意書き。条件の質問のような数秒の返事では出さない
+  function showStayNote(show) {
+    const note = document.getElementById('thinking-note');
+    if (note) note.hidden = !show;
+  }
+
+  // 「考えています」を出し、段階表示を進め始める。
+  // longRun=true（リロード後の復元など、長い生成だと分かっているとき）は注意書きをすぐ出す
+  function startThinking(longRun = false) {
     const el = document.getElementById('thinking-text');
     let i = 0;
     if (el) el.textContent = THINKING_STAGES[0];
+    showStayNote(longRun);
     typingIndicator.style.display = 'flex';
+    keepScreenOn();
     if (thinkingTimer) clearInterval(thinkingTimer);
     // 約5秒ごとに次の段階へ前進。最後（仕上げ）に達したら止める。
     // 条件の質問など短い応答は最初の段階のまま終わるので、誤った段階を見せない。
@@ -65,6 +97,7 @@ const chatBox = document.getElementById('chat-box');
       if (i < THINKING_STAGES.length - 1) {
         i++;
         if (el) el.textContent = THINKING_STAGES[i];
+        showStayNote(true);   // 5秒を超えた＝プランを作っている。閉じないよう伝える
       }
       if (i >= THINKING_STAGES.length - 1) {
         clearInterval(thinkingTimer);
@@ -75,8 +108,24 @@ const chatBox = document.getElementById('chat-box');
 
   function stopThinking() {
     typingIndicator.style.display = 'none';
+    showStayNote(false);
+    letScreenSleep();
     if (thinkingTimer) { clearInterval(thinkingTimer); thinkingTimer = null; }
   }
+
+  // 画面を消さない設定は、タブを裏に回すとブラウザが外す。戻ってきたとき、
+  // まだ作っている最中ならかけ直す
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && currentRequestId) keepScreenOn();
+  });
+
+  // 生成中に閉じる・再読み込みしようとしたら、ブラウザの確認を出す。
+  // 文言はブラウザが決める（独自の文は出せない）。止めたいときは停止ボタンを使う
+  window.addEventListener('beforeunload', (e) => {
+    if (!currentRequestId) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
 
   // 会話の最初にメイトから話しかける挨拶（クライアント側で常に先頭に表示）
   const GREETING = 'こんにちは！旅のプランを一緒に考える「ちゃむ」です🍀\n\n'
@@ -417,7 +466,7 @@ const chatBox = document.getElementById('chat-box');
     messageInput.disabled = true;
     sendButton.style.display = 'none';
     stopButton.style.display = 'flex';
-    startThinking();
+    startThinking(true);
 
     // 生成がどうなったかを尋ねる。
     //   'pending' まだ作っている最中
@@ -448,6 +497,7 @@ const chatBox = document.getElementById('chat-box');
       restoreInput(askedMessage);
       showSystemMessage(
         '前回のプラン作成は最後まで終わりませんでした。\n'
+        + '作っている途中で画面を閉じたり再読み込みしたりすると、止まってしまうことがあります。\n'
         + 'お手数ですが、下のボタンからもう一度お試しください🍀',
         askedMessage
       );

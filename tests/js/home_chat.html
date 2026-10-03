@@ -22,6 +22,7 @@
   <div id="chat-box"></div>
   <div id="typing" style="display:none">
     <span id="thinking-text"></span>
+    <span id="thinking-note" hidden></span>
   </div>
   <form id="message-form">
     <input type="text" id="message-input">
@@ -72,15 +73,28 @@
       // active はこのインスタンスの記憶。別のインスタンスが動かしていると false になる
       return json({ active: false, state: state.genState || 'gone' });
     }
-    if (path === '/abort_request') return json({ status: 'OK' });
+    if (path === '/abort_request') {
+      // 本物のサーバーは止めたあと ABORTED を流してストリームを閉じる
+      if (state.onAbort) state.onAbort();
+      return json({ status: 'OK' });
+    }
     if (path === '/send_message') {
       if (!state.keepStreamOpen) return json({ status: 'OK' });
       // 「まだ作っている最中」を作る。本物と同じく、中断されるまで返事を返さない
       const signal = options && options.signal;
       const res = json({ status: 'OK' });
+      let sentAborted = false;
       res.body = {
         getReader: () => ({
-          read: () => new Promise((_, reject) => {
+          read: () => new Promise((resolve, reject) => {
+            if (sentAborted) return resolve({ done: true });
+            if (state.abortEndsStream) {
+              state.onAbort = () => {
+                sentAborted = true;
+                resolve({ done: false,
+                          value: new TextEncoder().encode('data: {"status": "ABORTED"}\n\n') });
+              };
+            }
             if (!signal) return;
             signal.addEventListener('abort', () => {
               const err = new Error('aborted');
@@ -175,6 +189,39 @@
     state.genState = 'pending';
     markPending('r1', '車');
   }
+
+  // 12 は送信してから長く待つ場合。13 はリロード後の復元。
+  // 本番は接続が切れると生成が止まるので、画面を開いたままにしてもらう
+  // （注意書き・画面の自動消灯を止める・閉じる前の確認）
+  const wakeLog = [];
+  if (CASE === '12') { state.keepStreamOpen = true; state.abortEndsStream = true; }
+  if (CASE === '13') {
+    state.messages = [{ role: 'user', content: '車' }];
+    state.genState = 'pending';
+    markPending('r1', '車');
+  }
+  if (CASE === '12' || CASE === '13') {
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: async () => {
+          wakeLog.push('request');
+          const sentinel = new EventTarget();
+          sentinel.release = async () => {
+            wakeLog.push('release');
+            sentinel.dispatchEvent(new Event('release'));
+          };
+          return sentinel;
+        },
+      },
+    });
+  }
+  // 閉じる／再読み込みのときにブラウザが出す確認を、出そうとしたかどうか
+  const leaveIsGuarded = () => {
+    const e = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
 </script>
 
 <script src="../../src/static/js/home.js"></script>
@@ -286,6 +333,35 @@
         document.getElementById('message-input').disabled === false);
       check('生成状態を尋ねないこと',
         !calls.includes('GET /generation_status'), calls.join(' / '));
+      check('閉じるときに確認を出さないこと', !leaveIsGuarded());
+    }
+
+    if (CASE === '12') {
+      const note = () => document.getElementById('thinking-note');
+      document.getElementById('message-input').value = '金沢に2泊3日で';
+      document.getElementById('message-form')
+        .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      await wait(300);
+      check('数秒の返事では注意書きを出さないこと', note().hidden === true);
+      check('画面が消えないようにすること', wakeLog.includes('request'), wakeLog.join(','));
+      check('生成中は閉じる前に確認を出すこと', leaveIsGuarded());
+
+      await wait(5400);
+      check('長くかかったら「開いたままにしてね」を出すこと', note().hidden === false);
+
+      document.getElementById('stop-button').click();
+      await wait(200);
+      check('止めたら注意書きを消すこと', note().hidden === true);
+      check('止めたら画面の消灯を許すこと', wakeLog.includes('release'), wakeLog.join(','));
+      check('止めたあとは閉じる前に確認を出さないこと', !leaveIsGuarded());
+    }
+
+    if (CASE === '13') {
+      await wait(400);
+      check('リロード後の作成中は、すぐ注意書きを出すこと',
+        document.getElementById('thinking-note').hidden === false);
+      check('画面が消えないようにすること', wakeLog.includes('request'), wakeLog.join(','));
+      check('閉じる前に確認を出すこと', leaveIsGuarded());
     }
 
     if (CASE === '11') {

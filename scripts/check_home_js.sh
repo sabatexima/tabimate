@@ -76,14 +76,16 @@ declare -a NAMES=(
   [9]="生成が失われたら、案内を出して文を戻す"
   [10]="生成中でないときは静かでいる"
   [11]="復元中に新しい相談を始めても、前の回が割り込まない"
+  [12]="長い生成では「開いたままにしてね」と出し、画面を消さず、離れる前に確かめる"
+  [13]="リロード後の作成中も、開いたままにするよう伝える"
 )
 
 failed=0
-for case in 1 2 3 4 5 6 7 8 9 10 11; do
+for case in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
   url="http://127.0.0.1:$PORT/tests/js/home_chat.html?case=$case"
   case "$case" in 4|7) url="$url&q=%E6%B8%A9%E6%B3%89" ;; esac
   out=$("$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
-        --virtual-time-budget=8000 --dump-dom "$url" 2>/dev/null \
+        --virtual-time-budget=10000 --dump-dom "$url" 2>/dev/null \
         | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | head -1)
   if [ "$out" = "ALL PASS" ]; then
     echo "  ✓ ${NAMES[$case]}"

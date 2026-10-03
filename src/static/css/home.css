@@ -316,8 +316,18 @@
     font-weight: 500;
     display: none;            /* JSで flex に切り替え */
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
   }
+  /* 長い生成のときだけ出す、2行目の小さな注意書き */
+  .thinking-note {
+    flex-basis: 100%;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .thinking-note[hidden] { display: none; }
   .thinking-mate {
     width: 30px;
     height: 30px;

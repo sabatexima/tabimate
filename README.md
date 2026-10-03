@@ -221,7 +221,7 @@ Three layers. **Upper layers call lower ones; lower layers know nothing about th
 Good next steps, if you keep going:
 
 - `views/planner.py` (~970 lines) holds chat, plans and the plan APIs together; splitting it into `chat` / `plans` / `plan_api` would help
-- `chat/formatter.py` renders the plan to HTML — presentation work sitting in the AI layer. Cleaner for `chat/` to return state and `views/` to format it
+- `chat/formatter.py` renders the plan to HTML — presentation work sitting in the AI layer. Plans are already stored as data and built on each `/get_messages`, so this is now just a matter of moving the file under `views/`
 - `db.py` / `db_reflection.py` / `db_sharing.py` could become a `db/` package
 
 ### Layout
@@ -254,7 +254,7 @@ tabimate/
     ├── db_reflection.py         # trips / photos / stickers
     ├── db_sharing.py            # share links / email grants
     ├── views/                   # planner · auth · reflection · sharing (Blueprints)
-    ├── chat/                    # plan generation: agents · graph · chat · llm · models · formatter
+    ├── chat/                    # plan generation: agents (logic) · prompts (instructions to the AI) · graph · chat · llm · models · formatter
     ├── services/                # exif · features · images · storage · packing
     │                            #   · trip_interpreter (sticky notes) · weather · geocoding
     ├── templates/               # Jinja2 (extends layout.html; partial: _share_modal.html)
@@ -284,7 +284,7 @@ tabimate/
 
 ### Plan-generation agents
 
-`chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them.
+`chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them. The wording of every agent's instructions lives in `chat/prompts.py`; `agents.py` keeps only the logic (search, budget maths, validation, routing the retries).
 
 ```
 (before generating) look up the destination's country and centre once — overseas adds instructions to every agent
@@ -324,6 +324,8 @@ On page load, `/chat` reports whether a reply is still pending, so the "thinking
 | only the `user` row, recent | still generating |
 | only the `user` row, 20+ min old | gave up (the worker probably died) |
 | no rows | failed or aborted — already cleaned up |
+
+Plans are not stored as HTML in `chat_messages`. The message body is just a marker (`[旅行プランを生成しました]`) and the data goes in the `plan_json` column; `/get_messages` builds the card in its current design every time it is shown (`render_plan_message` in `chat/formatter.py`). Changing the card's look never leaves old plans stuck in an old design.
 
 The plan card shown in the chat goes through `marked.parse()` in the browser. Markdown ends an HTML block at a blank line, so `chat/formatter.py` returns HTML **with no blank lines** (otherwise a literal `<details>` shows up on screen).
 

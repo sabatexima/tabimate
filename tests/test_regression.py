@@ -676,9 +676,10 @@ def test_overnight_trip_is_no_lodging_but_two_days(monkeypatch):
 def test_overnight_trip_meals_and_costs():
     """0泊2日: 食事は昼2+夕1、費用テンプレに宿泊費の行が無い。"""
     import chat.agents as ag
-    sections = ag._build_day_sections("0泊2日")
+    from chat import prompts
+    sections = prompts.day_sections("0泊2日")
     assert "2日目" in sections and "宿泊費" not in sections
-    sections_stay = ag._build_day_sections("2泊3日")
+    sections_stay = prompts.day_sections("2泊3日")
     assert "宿泊費" in sections_stay                    # 従来挙動は不変
 
 
@@ -817,23 +818,35 @@ def test_is_car_covers_spelling_variants():
 
 
 def test_no_car_reaches_every_prompt_building_agent():
-    """プロンプトを組み立てるエージェントは全員 no_car を見ていること。
+    """場所を選ぶプロンプトは全部 no_car を見ていること。
 
     宿・飲食店・観光のどこか1つでも見落とすと、運転しない人に
     車でしか行けない場所が混ざる。実際に宿とグルメ候補で抜けていた。
+    文面は chat/prompts.py にあるので、そこの *_prompt を全部見る。
     """
     import inspect
     import chat.agents as A
+    import chat.prompts as P
 
-    # 費用マネージャーは決まったプランに値段を付けるだけで、行き先も経路も選ばない
-    prices_only = {"cost_manager"}
-    builders = [name for name, fn in vars(A).items()
-                if inspect.isfunction(fn) and fn.__module__ == A.__name__
-                and not name.startswith("_") and "prompt" in inspect.getsource(fn)
-                and name not in prices_only]
+    # 費用は決まったプランに値段を付けるだけで、行き先も経路も選ばない
+    prices_only = {"cost_prompt"}
+    builders = [name for name, fn in vars(P).items()
+                if inspect.isfunction(fn) and fn.__module__ == P.__name__
+                and name.endswith("_prompt") and name not in prices_only]
     assert len(builders) >= 8, builders
-    missing = [n for n in builders if "no_car" not in inspect.getsource(getattr(A, n))]
-    assert not missing, f"no_car を見ていないエージェント: {missing}"
+    missing = [n for n in builders if "no_car" not in inspect.getsource(getattr(P, n))]
+    assert not missing, f"no_car を見ていないプロンプト: {missing}"
+
+    # どのエージェントも、ここで確かめたプロンプトのどれかを使っていること
+    # （agents.py の中でまた文面を書き始めると、この検査をすり抜けるため）
+    agents = [name for name, fn in vars(A).items()
+              if inspect.isfunction(fn) and fn.__module__ == A.__name__
+              and not name.startswith("_") and "invoke_with_retry" in inspect.getsource(fn)]
+    assert len(agents) >= 9, agents
+    for name in agents:
+        src = inspect.getsource(getattr(A, name))
+        assert "prompt = P." in src, f"{name} が prompts.py を使っていない"
+        assert 'f"""' not in src, f"{name} の中にプロンプトの文面が戻っている"
 
 
 # ----------------------------------------------------------------------
@@ -991,9 +1004,9 @@ def test_accommodation_prompts_omit_the_always_empty_restaurant_line(monkeypatch
 # 海外の行き先: 生成側の指示が切り替わること
 # ----------------------------------------------------------------------
 def test_directive_adds_yen_conversion_and_local_names_overseas():
-    from chat.agents import _directive
-    home = _directive({"is_overseas": False})
-    abroad = _directive({"is_overseas": True, "dest_country": "fr"})
+    from chat.prompts import directive
+    home = directive({"is_overseas": False})
+    abroad = directive({"is_overseas": True, "dest_country": "fr"})
     assert "日本円に換算" not in home and "現地語" not in home
     assert "国コード FR" in abroad and "日本円に換算" in abroad and "Tour Eiffel" in abroad
     assert "すべて日本語で出力" in abroad     # 出力言語は変えない
@@ -1197,7 +1210,7 @@ def test_candidate_agents_get_the_review_feedback(monkeypatch):
 
 def test_refresh_hint_is_quiet_outside_a_rejection():
     """差し戻し以外では、ヒントを一切足さないこと。"""
-    from chat.agents import _refresh_hint
+    from chat.prompts import refresh_hint as _refresh_hint
     assert _refresh_hint({"feedback": "", "status": "fix_time"}, ["a"], "観光") == ""
     assert _refresh_hint({"feedback": "だめ", "status": "approved"}, ["a"], "観光") == ""
     assert _refresh_hint({}, ["a"], "観光") == ""

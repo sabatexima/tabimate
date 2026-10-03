@@ -219,7 +219,7 @@ python3.13 -m venv /tmp/resolve && /tmp/resolve/bin/pip install -r requirements.
 次に手を入れるなら、ここが候補です:
 
 - `views/planner.py`（約970行）はチャット・プラン・プラン用API が同居している。`chat` / `plans` / `plan_api` に分けると見通しがよくなる
-- `chat/formatter.py` はプランを HTML にする**表示の仕事**が AI の層に置かれている。`chat/` が状態を返し、`views/` 側で整形する形が筋がよい
+- `chat/formatter.py` はプランを HTML にする**表示の仕事**なのに AI の層に置かれている。プランはすでにデータだけで保存し、`/get_messages` が表示のたびに組み立てているので、ファイルを `views/` 側へ移すだけで済む
 - `db.py` / `db_reflection.py` / `db_sharing.py` は `db/` パッケージにまとめられる
 
 ### 置き場所
@@ -252,7 +252,7 @@ tabimate/
     ├── db_reflection.py         # trips / photos / stickers
     ├── db_sharing.py            # 公開リンク / メール共有
     ├── views/                   # planner · auth · reflection · sharing（Blueprint）
-    ├── chat/                    # プラン生成: agents · graph · chat · llm · models · formatter
+    ├── chat/                    # プラン生成: agents（処理）· prompts（AIへの指示文）· graph · chat · llm · models · formatter
     ├── services/                # exif · features · images · storage · packing
     │                            #   · trip_interpreter（付箋） · weather · geocoding
     ├── templates/               # Jinja2（layout.html を継承。部品は _share_modal.html）
@@ -282,7 +282,7 @@ tabimate/
 
 ### プラン生成のエージェント
 
-`chat/graph.py` が `StateGraph` を組み、`chat/agents.py` の関数をノードとしてつなぎます。状態は `TravelPlanState`（TypedDict）で流れます。
+`chat/graph.py` が `StateGraph` を組み、`chat/agents.py` の関数をノードとしてつなぎます。状態は `TravelPlanState`（TypedDict）で流れます。各エージェントに渡す指示文の文面は `chat/prompts.py` にまとめてあり、`agents.py` には検索・予算の計算・検証・差し戻しの処理だけを置いています。
 
 ```
 （生成の前に）行き先の国と座標を1回だけ引く → 海外なら各エージェントに指示を足す
@@ -322,6 +322,8 @@ START
 | `user` の行だけ・最近 | まだ作っている |
 | `user` の行だけ・20分以上前 | あきらめる（ワーカーが落ちたとみられる） |
 | 行が無い | 失敗か中断。後片づけ済み |
+
+プランは `chat_messages` に HTML では保存しません。本文は目印（`[旅行プランを生成しました]`）だけにして中身は `plan_json` 列に入れ、`/get_messages` が表示のたびにいまの見た目のカードを組み立てます（`chat/formatter.py` の `render_plan_message`）。カードの形を変えても、過去のプランが古い見た目のまま残りません。
 
 チャットに出すプランカードは画面側で `marked.parse()` を通ります。Markdown は空行で HTML の解釈を打ち切るので、`chat/formatter.py` は**空行を含まない HTML** を返します（含めると `<details>` が文字のまま出ます）。
 

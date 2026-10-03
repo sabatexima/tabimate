@@ -397,3 +397,16 @@ def test_upload_of_only_unsupported_files_says_why(env):
     for r in (own, shared):
         assert r.status_code == 415
         assert "heic" in r.get_json()["error"]
+
+
+def test_trip_page_offers_the_album_slides_only_with_photos(env, monkeypatch):
+    """写真があればアルバムのスライドのボタンを出し、無ければ隠しておく（入ったら JS が出す）。"""
+    import re
+    with env["app"].test_client() as c:
+        html = c.get(f"/reflection/trips/{TRIP['id']}", headers=headers_for(OWNER)).get_data(as_text=True)
+    tag = re.search(r'<a[^>]*id="album-slides-btn"[^>]*>', html).group(0)
+    assert f'href="/trip/{TRIP["id"]}/slides"' in tag and "hidden" not in tag
+    monkeypatch.setattr(env["reflection"].repo, "get_photos", lambda tid: [])
+    with env["app"].test_client() as c:
+        html = c.get(f"/reflection/trips/{TRIP['id']}", headers=headers_for(OWNER)).get_data(as_text=True)
+    assert re.search(r'<a[^>]*id="album-slides-btn"[^>]*hidden', html)

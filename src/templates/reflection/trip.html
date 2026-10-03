@@ -67,6 +67,9 @@
     {% endfor %}
   </div>
   <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
+  {# 写真が主役のアルバムを Google スライドに作る（写真が入るまでは隠す。入ったら JS が出す） #}
+  <a class="btn secondary album-slides-btn" id="album-slides-btn" href="{{ url_for('slides.export_album', trip_id=trip.id) }}"
+     target="_blank" rel="noopener" {% if not photos %}hidden{% endif %}>📑 スライドのアルバムを作る</a>
   {# ブラウザ既定の「ファイルを選択」ボタンは英語表記で浮くので、
      input は隠して label をボタンにする（label なので JS 無しで開く） #}
   <div class="upload-row">

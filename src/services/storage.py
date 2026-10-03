@@ -297,3 +297,56 @@ def delete(storage_path: str) -> bool:
     ok = _delete_key(storage_path)
     _delete_key(_thumb_key(storage_path))  # サムネイルも削除（無ければ無視）
     return ok
+
+
+class TempImages:
+    """Google（スライド）に写真を取りに来てもらうための一時置き場。GCS のときだけ使える。
+
+    アルバムのスライドは、写真を URL で渡すと Google が取りに来てコピーを持つ
+    （貼ったあとは元のファイルが無くてもよい）。そこで、枠に合わせて切り抜いた写真を
+    ここに置いて署名付き URL を渡し、貼り終わったら cleanup() で消す。
+    途中で落ちて残った物は、次に使うときに sweep() で消す。
+    手元（ローカル保存）では Google が取りに来られないので、put は None を返す。
+    """
+
+    PREFIX = "slides-tmp/"
+
+    def __init__(self):
+        self.base = f"{self.PREFIX}{uuid.uuid4().hex}/"
+        self.keys: list = []
+        self._lock = threading.Lock()
+        self._signer_ready = False
+
+    def put(self, name: str, data: bytes) -> str | None:
+        if not using_gcs():
+            return None
+        with self._lock:
+            if not self._signer_ready:
+                _get_signing_info()   # 並列で呼ばれる前に一度だけ（トークン更新の取り合いを避ける）
+                self._signer_ready = True
+        key = self.base + name
+        save_at(key, data, "image/jpeg")
+        with self._lock:
+            self.keys.append(key)
+        return _sign_url(key)
+
+    def cleanup(self) -> None:
+        keys, self.keys = self.keys, []
+        if keys:
+            with ThreadPoolExecutor(max_workers=min(8, len(keys))) as ex:
+                list(ex.map(_delete_key, keys))
+
+    @classmethod
+    def sweep(cls, max_age_hours: int = 6) -> int:
+        """前に作りかけて残った一時ファイル（max_age_hours より古い物）を消す。"""
+        if not using_gcs():
+            return 0
+        from datetime import datetime, timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        old = [b.name for b in _get_gcs_client().list_blobs(_GCS_BUCKET, prefix=cls.PREFIX)
+               if b.time_created and b.time_created < cutoff]
+        for key in old:
+            _delete_key(key)
+        if old:
+            logger.info("スライド用の一時ファイルを掃除: %d件", len(old))
+        return len(old)

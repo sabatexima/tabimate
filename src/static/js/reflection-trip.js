@@ -163,6 +163,8 @@ const CFG = JSON.parse(document.getElementById('page-config').textContent);
     onSaved: (p) => {
       grid.appendChild(makePhotoFigure(p));
       document.getElementById('photo-count').textContent = `現在 ${grid.querySelectorAll('.photo').length} 枚`;
+      const albumBtn = document.getElementById('album-slides-btn');
+      if (albumBtn) albumBtn.hidden = false;   // 写真が入ったらアルバムを作れる
     },
   });
 

@@ -51,8 +51,12 @@ def _py_index(text, u16):
     return len(text)
 
 
-def render(requests, out_html):
-    """要求を HTML に描く。返り値はページ数。"""
+def render(requests, out_html, image_src=None):
+    """要求を HTML に描く。返り値はページ数。
+
+    image_src は「画像の URL → 手元のファイル」の関数（アルバムの写真用）。
+    無ければ、URL の最後の名前を src/static/img から探す（ちゃむの絵）。
+    """
     slides, objs = [], {}
     for req in requests:
         (kind, v), = req.items()
@@ -107,7 +111,8 @@ def render(requests, out_html):
             pos = (f'width:{o["w"]}pt;height:{o["h"]}pt;'
                    f'transform:matrix({a},{b},{c},{d},{x * 4 / 3},{y * 4 / 3});')
             if o["kind"] == "IMAGE":
-                src = os.path.join(ROOT, "src", "static", "img", o["url"].rsplit("/", 1)[1])
+                src = (image_src(o["url"]) if image_src else
+                       os.path.join(ROOT, "src", "static", "img", o["url"].rsplit("/", 1)[1]))
                 out.append(f'<img class="o" src="file://{src}" style="{pos}object-fit:contain">')
                 continue
             if o["kind"] == "LINE":
@@ -193,11 +198,7 @@ def _plans():
 def main():
     out_dir = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "slides-preview")
     os.makedirs(out_dir, exist_ok=True)
-    for name in FONTS:
-        path = os.path.join(out_dir, name)
-        if not os.path.exists(path):
-            print(f"▸ フォントを取得: {name}")
-            urllib.request.urlretrieve(FONT_URL.format(name), path)
+    fonts(out_dir)
 
     from services.slides_export import build_requests
     chrome = _chrome()
@@ -206,22 +207,36 @@ def main():
         body, images = build_requests(plan, image_url=lambda f: f"https://example/{f}", weather_days=weather)
         page = os.path.join(out_dir, f"{n:02d}.html")
         pages = render(body + images, page)
-        dom = subprocess.run([chrome, "--headless", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
-                              "--virtual-time-budget=15000", "--dump-dom", "file://" + page],
-                             capture_output=True, text=True, timeout=180).stdout
-        result = dom.split('<pre id="result">')[-1].split("</pre>")[0] if '<pre id="result">' in dom else "NO RESULT"
-        ok = result == "NO OVERFLOW"
-        failed += not ok
-        print(f"  {'✓' if ok else '✗'} {name}（{pages}枚）" + ("" if ok else "\n      " + result.replace("\n", "\n      ")))
-        png = os.path.join(out_dir, f"{n:02d}.png")
-        subprocess.run([chrome, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
-                        "--allow-file-access-from-files", "--virtual-time-budget=15000",
-                        f"--window-size=960,{pages * 556}", f"--screenshot={png}", "file://" + page],
-                       capture_output=True, timeout=180)
-        _contact_sheet(png, pages)
+        failed += not check(chrome, page, pages, name)
     print(f"▸ 下見: {out_dir}")
     print("▸ すべて収まりました" if not failed else f"▸ あふれあり: {failed} 件")
     return 1 if failed else 0
+
+
+def check(chrome, page, pages, name):
+    """下見の HTML を本物のフォントで開き、あふれを数えて、全ページの画像を出す。"""
+    dom = subprocess.run([chrome, "--headless", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
+                          "--virtual-time-budget=15000", "--dump-dom", "file://" + page],
+                         capture_output=True, text=True, timeout=180).stdout
+    result = dom.split('<pre id="result">')[-1].split("</pre>")[0] if '<pre id="result">' in dom else "NO RESULT"
+    ok = result == "NO OVERFLOW"
+    print(f"  {'✓' if ok else '✗'} {name}（{pages}枚）" + ("" if ok else "\n      " + result.replace("\n", "\n      ")))
+    png = page[:-5] + ".png"
+    subprocess.run([chrome, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
+                    "--allow-file-access-from-files", "--virtual-time-budget=15000",
+                    f"--window-size=960,{pages * 556}", f"--screenshot={png}", "file://" + page],
+                   capture_output=True, timeout=180)
+    _contact_sheet(png, pages)
+    return ok
+
+
+def fonts(out_dir):
+    """実物と同じフォントを下見のフォルダに用意する（初回だけ取りに行く）。"""
+    for name in FONTS:
+        path = os.path.join(out_dir, name)
+        if not os.path.exists(path):
+            print(f"▸ フォントを取得: {name}")
+            urllib.request.urlretrieve(FONT_URL.format(name), path)
 
 
 def _contact_sheet(png, pages):

@@ -85,6 +85,7 @@ Plenty of apps help you book. TabiMate cares about the **before** and the **afte
 | 🍀 **Countdown** | "12 days to go." A little thrill every time you open the shelf. |
 | 📅 **Calendar export** | Download the schedule as `.ics`; the itinerary also prints to PDF. |
 | 📑 **Google Slides** | One button builds a picture-book itinerary deck in your own Drive — cover, places, day-by-day schedule, costs, packing list and a note from Chamu — ready to edit and share. |
+| 🖼 **Photo album slides** | Turns a trip's photos into a photobook-style deck: the cover photo, the best shot, each day's photos laid out to suit their shapes (portraits stay portrait, faces are kept when cropping) and the trip's words. No mascot — the people in the photos are the stars. |
 | ✏️ **Tweak later** | "Make Day 2 relaxed," "change the hotel" — all by chat. Rate with ★ and future suggestions quietly adapt. |
 
 ### 📸 After — photos turn into words on their own
@@ -374,7 +375,7 @@ cookies, refusing to start without `SECRET_KEY`). Do not set it by hand.
 
 ### HTTP endpoints
 
-**Pages** — `/` (welcome) · `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/plan/<id>/slides` (export to Google Slides) · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
+**Pages** — `/` (welcome) · `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/plan/<id>/slides` (export to Google Slides) · `/trip/<id>/slides` (photo album slides) · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
 
 **Chat** — `/send_message` (SSE) · `/get_messages` · `/reset_chat` · `/abort_request` · `/generation_status`
 
@@ -395,6 +396,7 @@ Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the pub
 ```bash
 pytest tests/ -k "not smoke"    # 323 offline tests — no API keys, no DB
 python3 scripts/preview_slides.py  # preview the Slides itinerary and count text overflow with the real font
+python3 scripts/preview_album.py   # preview the photo album slides (real crop pipeline; --photos DIR to use your own photos)
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
@@ -402,16 +404,17 @@ python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 
 | Suite | What it guards |
 |---|---|
-| `test_units.py` (38) | Thumbnail keys, URL generation, path traversal, geocoding variants, destination-country resolution, app-token issue/verify |
+| `test_units.py` (42) | Thumbnail keys, URL generation, path traversal, geocoding variants, destination-country resolution, app-token issue/verify |
 | `test_ios_routes.py` (44) | Every URL the iOS app calls exists on the server, with the right method |
 | `test_regression.py` (56) | Bugs that came back once already — every template `url_for` resolves, plan cards contain no blank lines, public-link trips wrap every photo, "I don't drive" survives a save-and-edit round trip, … |
 | `test_generation_status.py` (18) | Reload restore — the pending/done/gone decision, and what the page carries |
-| `test_app_api.py` (18) | Authorization and JSON shape for the native-app endpoints, plus a sweep of every ID-taking route (39) called as an unrelated user, asserting no one else's data comes back |
+| `test_app_api.py` (20) | Authorization and JSON shape for the native-app endpoints, plus a sweep of every ID-taking route (39) called as an unrelated user, asserting no one else's data comes back |
 | `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |
 | `test_pipeline.py` (53) | The whole generation run with only the model faked. Sweeps trip shapes (day trip to 5 nights, domestic/overseas, drives or not) checking for unfilled placeholders and empty fields in prompts, that conditional instructions appear exactly when they apply, and that a rejection's notes reach the candidate agents |
-| `test_static_js.py` (12) | The JS and the template still fit together (names, element ids), and which day the map assigns each pin to |
-| `test_slides_export.py` (42) | The Google Slides itinerary: every trip shape (day trip to two weeks, overseas, time ranges, notes) checked for object IDs, references, UTF-16 text positions, overflow and pagination, plus the route and OAuth round trip |
+| `test_static_js.py` (15) | The JS and the template still fit together (names, element ids), and which day the map assigns each pin to |
+| `test_slides_export.py` (49) | The Google Slides itinerary: every trip shape (day trip to two weeks, overseas, time ranges, notes) checked for object IDs, references, UTF-16 text positions, overflow and pagination, plus the route and OAuth round trip |
 | `test_slides_schema.py` (23) | Validates the requests against Google's published Slides API schema (`tests/data/slides_schema.json`) and runs 400 deliberately odd plans through it. This is what caught a shape name that doesn't exist |
+| `test_album_slides.py` (62) | The photo album: every photo placed once, in the order taken, never overlapping, tiny or off the page; crops stay close to each photo's shape; the schema check and 120 odd albums; orientation fixes and top-biased crops; one unfetchable photo doesn't drop the rest; temp files always cleaned up; who may export; the streamed progress page |
 | `tests/js/home_chat.html` (13 scenarios) | The chat screen, driven in headless Chromium |
 
 The browser suite exists because this code breaks in ways a linter cannot see. An inline script once declared a name that `home.js` already held; that killed the entire script silently, and the seasonal-idea chips simply did nothing.

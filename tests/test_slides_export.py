@@ -601,7 +601,7 @@ def test_export_sends_the_owner_to_google_with_the_narrow_scope(web):
     assert "login_hint=owner%40example.com" in loc
     assert "include_granted_scopes=true" in loc
     with client.session_transaction() as s:
-        assert s["slides_plan_id"] == 7
+        assert s["slides_target"] == ["plan", 7]
         assert any(k.startswith("_state_google_slides_") for k in s)
 
 
@@ -618,7 +618,7 @@ def test_callback_with_the_slides_state_creates_and_opens_the_presentation(web, 
     from services import slides_export
     login()
     with client.session_transaction() as s:
-        s["slides_plan_id"] = 7
+        s["slides_target"] = ["plan", 7]
         s["_state_google_slides_abc"] = {"data": {}, "exp": 9999999999}
     seen = {}
     monkeypatch.setattr(oauth.google_slides, "authorize_access_token", lambda: {"access_token": "tok"})
@@ -634,8 +634,26 @@ def test_callback_with_the_slides_state_creates_and_opens_the_presentation(web, 
     assert seen == {"token": "tok", "plan": 7,
                     "image": "http://localhost/static/img/mate.png"}
     with client.session_transaction() as s:
-        assert "slides_plan_id" not in s
+        assert "slides_target" not in s
         assert s["user_id"] == OWNER, "書き出しでログイン状態を変えてはいけない"
+
+
+def test_callback_still_understands_the_old_session_key(web, monkeypatch):
+    """更新の前に許可画面へ行った人（セッションに以前の形 slides_plan_id が残っている）。"""
+    client, login = web
+    from views.auth import oauth
+    from services import slides_export
+    login()
+    with client.session_transaction() as s:
+        s["slides_plan_id"] = 7
+        s["_state_google_slides_abc"] = {"data": {}, "exp": 9999999999}
+    monkeypatch.setattr(oauth.google_slides, "authorize_access_token", lambda: {"access_token": "tok"})
+    monkeypatch.setattr(slides_export, "create_presentation",
+                        lambda token, plan, **kw: "https://docs.google.com/presentation/d/old/edit")
+    r = client.get("/auth/callback?state=abc&code=xyz")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/d/old/edit")
+    with client.session_transaction() as s:
+        assert "slides_plan_id" not in s
 
 
 def test_cancelling_the_permission_goes_back_to_the_plan(web):

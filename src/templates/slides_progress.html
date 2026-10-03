@@ -1,0 +1,81 @@
+{% extends "layout.html" %}
+
+{# アルバムのスライドを作っている間のページ。サーバーが進み具合を
+   <script>step(…)</script> として「<!--progress-->」の所へ書き足していき、
+   できたら finish(URL)、だめなら fail(理由) を送る（views/slides.py の _finish_album）。 #}
+
+{% block title %}アルバムを作っています — たびメイト{% endblock %}
+
+{% block head %}
+<style>
+  .sp-wrap {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 70vh; text-align: center; padding: 24px 16px;
+  }
+  .sp-kicker { font-size: 0.78em; color: #c2a05e; letter-spacing: 0.38em; font-weight: 700; margin: 0 0 6px; }
+  .sp-wrap h1 { margin: 0 0 6px; font-size: 1.4em; color: var(--text-main); }
+  .sp-title { margin: 0 0 22px; color: var(--text-muted); overflow-wrap: anywhere; }
+  .sp-bar {
+    width: min(360px, 100%); height: 10px; border-radius: 999px; overflow: hidden;
+    background: var(--border);
+  }
+  .sp-bar i {
+    display: block; height: 100%; width: 2%; border-radius: 999px;
+    background: var(--primary-color); transition: width 0.4s ease;
+  }
+  .sp-status { margin: 12px 0 0; font-size: 0.92em; color: var(--text-main); min-height: 1.5em; }
+  .sp-note { margin: 18px 0 0; font-size: 0.82em; color: var(--text-muted); line-height: 1.8; }
+  .sp-link {
+    display: inline-block; margin-top: 22px; background: var(--primary-color); color: #fff;
+    text-decoration: none; font-weight: 700; padding: 11px 26px; border-radius: 26px;
+  }
+  .sp-link[hidden] { display: none; }
+  .sp-wrap.failed .sp-bar { display: none; }
+</style>
+<script>
+  // 段階ごとに、棒のどこからどこまでを使うか（%）
+  const SP_STAGES = {
+    '写真を読み込んでいます': [2, 45],
+    '写真をアルバムの形に整えています': [45, 75],
+    'スライドを作っています': [75, 80],
+    '写真を貼っています': [80, 99],
+  };
+  function step(text, done, total) {
+    const range = SP_STAGES[text] || [0, 0];
+    const ratio = total > 0 ? Math.min(1, done / total) : 0;
+    if (range[1]) document.getElementById('sp-fill').style.width = `${range[0] + (range[1] - range[0]) * ratio}%`;
+    document.getElementById('sp-status').textContent = total > 1 ? `${text}　${done} / ${total}` : text;
+  }
+  function finish(url) {
+    document.getElementById('sp-fill').style.width = '100%';
+    document.getElementById('sp-heading').textContent = 'できました';
+    document.getElementById('sp-status').textContent = 'スライドを開いています…';
+    document.getElementById('sp-note').textContent = 'Google ドライブにも保存されています。';
+    const link = document.getElementById('sp-open');
+    link.href = url;
+    link.hidden = false;
+    setTimeout(() => location.replace(url), 600);
+  }
+  function fail(message) {
+    document.getElementById('sp-wrap').classList.add('failed');
+    document.getElementById('sp-heading').textContent = 'アルバムを作れませんでした';
+    document.getElementById('sp-status').textContent = message;
+    document.getElementById('sp-note').textContent = '';
+    document.getElementById('sp-back').hidden = false;
+  }
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="sp-wrap" id="sp-wrap">
+  <p class="sp-kicker">思い出のアルバム</p>
+  <h1 id="sp-heading">アルバムを作っています</h1>
+  <p class="sp-title">{{ title }}</p>
+  <div class="sp-bar" role="progressbar" aria-label="アルバムを作る進み具合"><i id="sp-fill"></i></div>
+  <p class="sp-status" id="sp-status" aria-live="polite">準備しています</p>
+  <p class="sp-note" id="sp-note">写真の枚数によって、1分ほどかかります。このページは開いたままにしてください。</p>
+  <a class="sp-link" id="sp-open" hidden>スライドを開く</a>
+  <a class="sp-link" id="sp-back" href="{{ back }}" hidden>旅のページへ戻る</a>
+</div>
+<!--progress-->
+{% endblock %}

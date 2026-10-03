@@ -62,6 +62,12 @@
       {% endfor %}
     </div>
     <div class="photo-count" id="photo-count">現在 {{ photos|length }} 枚</div>
+    {# アルバムのスライドは、ログインしてメールで共有された人だけ（公開リンクでは出さない。
+       スライドを作るには、その人の Google アカウントで許可がいるため） #}
+    {% if session.get('user_id') and not share_token %}
+      <a class="btn secondary album-slides-btn" id="album-slides-btn" href="{{ url_for('slides.export_album', trip_id=trip.id) }}"
+         target="_blank" rel="noopener" {% if not photos %}hidden{% endif %}>📑 スライドのアルバムを作る</a>
+    {% endif %}
     {% if can_edit %}
       <div class="upload-row">
         <input type="file" id="photo-input" accept="image/*" multiple class="visually-hidden">

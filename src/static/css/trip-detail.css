@@ -32,6 +32,9 @@
 }
 .btn.secondary { background: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
 .btn:disabled { opacity: 0.6; cursor: default; }
+/* 写真の下の「スライドのアルバムを作る」（リンクをボタンの見た目に） */
+.album-slides-btn { display: inline-block; margin-top: 10px; text-decoration: none; }
+.album-slides-btn[hidden] { display: none; }
 
 /* 付箋ボード（主役・最上部） */
 .sticker-section { border-color: rgba(79,168,58,0.28); }

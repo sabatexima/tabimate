@@ -86,7 +86,7 @@ def _validate(requests, images=(), page=(720, 405), delete=None):
                 assert -0.5 <= cy <= h + 0.5, (oid, "縦にはみ出す", cy)
             if kind == "createShape":
                 assert body["shapeType"] in ("RECTANGLE", "ROUND_RECTANGLE", "ELLIPSE", "TEXT_BOX",
-                                             "FLOWCHART_TERMINATOR", "WEDGE_ROUND_RECTANGLE_CALLOUT")
+                                             "FLOW_CHART_TERMINATOR", "WEDGE_ROUND_RECTANGLE_CALLOUT")
             if kind == "createImage":
                 assert body["url"].startswith("https://")
             objects[oid] = kind

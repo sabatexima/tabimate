@@ -392,7 +392,8 @@ Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the pub
 ### Tests & CI
 
 ```bash
-pytest tests/ -k "not smoke"    # 255 offline tests — no API keys, no DB
+pytest tests/ -k "not smoke"    # 323 offline tests — no API keys, no DB
+python3 scripts/preview_slides.py  # preview the Slides itinerary and count text overflow with the real font
 scripts/check_home_js.sh        # drives the chat UI in a real browser
 scripts/check_ios_logic.sh      # type-checks the iOS logic on Linux Swift
 python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
@@ -408,7 +409,9 @@ python tests/test_smoke.py      # end-to-end plan generation (needs API keys)
 | `test_send_message_survives_disconnect.py` (7) | A generation is not thrown away when the browser goes |
 | `test_pipeline.py` (53) | The whole generation run with only the model faked. Sweeps trip shapes (day trip to 5 nights, domestic/overseas, drives or not) checking for unfilled placeholders and empty fields in prompts, that conditional instructions appear exactly when they apply, and that a rejection's notes reach the candidate agents |
 | `test_static_js.py` (12) | The JS and the template still fit together (names, element ids), and which day the map assigns each pin to |
-| `tests/js/home_chat.html` (11 scenarios) | The chat screen, driven in headless Chromium |
+| `test_slides_export.py` (42) | The Google Slides itinerary: every trip shape (day trip to two weeks, overseas, time ranges, notes) checked for object IDs, references, UTF-16 text positions, overflow and pagination, plus the route and OAuth round trip |
+| `test_slides_schema.py` (23) | Validates the requests against Google's published Slides API schema (`tests/data/slides_schema.json`) and runs 400 deliberately odd plans through it. This is what caught a shape name that doesn't exist |
+| `tests/js/home_chat.html` (13 scenarios) | The chat screen, driven in headless Chromium |
 
 The browser suite exists because this code breaks in ways a linter cannot see. An inline script once declared a name that `home.js` already held; that killed the entire script silently, and the seasonal-idea chips simply did nothing.
 

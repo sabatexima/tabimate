@@ -391,8 +391,9 @@ START
 ### テストとCI
 
 ```bash
-pytest tests/ -k "not smoke"    # 255件のオフラインテスト（APIキーもDBも不要）
+pytest tests/ -k "not smoke"    # 323件のオフラインテスト（APIキーもDBも不要）
 scripts/check_home_js.sh        # チャット画面を本物のブラウザで動かす
+python3 scripts/preview_slides.py  # しおりスライドの下見を作り、文字のはみ出しを本物のフォントで数える
 scripts/check_ios_logic.sh      # iOSのロジックを Linux の Swift で型検査
 python tests/test_smoke.py      # プラン生成の通し確認（APIキーが要ります）
 ```
@@ -407,7 +408,9 @@ python tests/test_smoke.py      # プラン生成の通し確認（APIキーが�
 | `test_send_message_survives_disconnect.py`（7） | ブラウザが去っても生成が捨てられないこと |
 | `test_pipeline.py`（53） | AIの返事だけ偽物にして、プラン生成を丸ごと通す。旅の形（日帰り〜5泊・国内/海外・運転の可否）を総当たりして、プロンプトに埋め残しや空欄が無いか、条件どおりの指示が出入りするか、差し戻しで指摘が候補集めに届くかを見る |
 | `test_static_js.py`（12） | JSとテンプレートが噛み合っていること（名前・要素のid）と、地図が各ピンをどの日に割り当てるか |
-| `tests/js/home_chat.html`（11場面） | チャット画面をヘッドレスChromiumで実際に動かす |
+| `test_slides_export.py`（42） | Google スライドのしおり。旅の形（日帰り〜2週間・海外・時間帯・注記）を総当たりして、図形のID・参照・文字の位置（UTF-16）・はみ出し・ページ分けを見る。ルートと OAuth の行き来も |
+| `test_slides_schema.py`（23） | しおりの要求を、Google が公開している Slides API のスキーマ（`tests/data/slides_schema.json`）で検査する。変なプラン400件（絵文字・長すぎる名前・None・文字列の数字・制御文字）も流す。存在しない図形名を使っていたのを、これで見つけた |
+| `tests/js/home_chat.html`（13場面） | チャット画面をヘッドレスChromiumで実際に動かす |
 
 ブラウザでの検査があるのは、この部分が**構文検査では見つからない壊れ方**をするからです。実際、テンプレート内のスクリプトが `home.js` と同じ名前を宣言していたためスクリプト全体が動かず、季節のチップを押しても無反応になっていました。
 

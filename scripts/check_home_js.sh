@@ -96,4 +96,27 @@ for case in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
   fi
 done
 
+# ----------------------------------------------------------------------
+# 写真のアップロード（photo-upload.js）
+# ----------------------------------------------------------------------
+declare -a UPLOAD_NAMES=(
+  [1]="写真を1枚ずつ送り、途中の数と量を出す（まとめると32MBを超えていた）"
+  [2]="1枚失敗しても、残りは入る"
+  [3]="1枚で32MBを超える写真は送らずに知らせる"
+  [4]="ボタンにつなぐと、進み具合の表示と片付けをする"
+)
+for case in 1 2 3 4; do
+  url="http://127.0.0.1:$PORT/tests/js/photo_upload.html?case=$case"
+  out=$("$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+        --virtual-time-budget=10000 --dump-dom "$url" 2>/dev/null \
+        | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | head -1)
+  if [ "$out" = "ALL PASS" ]; then
+    echo "  ✓ ${UPLOAD_NAMES[$case]}"
+  else
+    echo "  ✗ ${UPLOAD_NAMES[$case]}"
+    echo "      ${out:-（結果を取り出せませんでした）}"
+    failed=1
+  fi
+done
+
 [ "$failed" = "0" ] && echo "▸ すべて通りました" || { echo "▸ 失敗あり"; exit 1; }

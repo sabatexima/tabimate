@@ -6,6 +6,7 @@
 
 実行: pytest tests/test_static_js.py
 """
+import os
 import re
 from pathlib import Path
 
@@ -248,3 +249,23 @@ def test_fit_bounds_never_zooms_past_the_tiles(path):
     assert calls, "fitBounds が見つからない"
     for call in calls:
         assert "maxZoom" in call, f"上限の無い fitBounds がある: {call[:90]}"
+
+
+@pytest.mark.parametrize("page,script", [
+    ("reflection/trip.html", "reflection-trip.js"),
+    ("shared/trip.html", "shared-trip.js"),
+])
+def test_photo_pages_upload_one_photo_per_request(page, script):
+    """写真は1枚ずつ送る（photo-upload.js）。まとめて1回で送ると、本番の Cloud Run の
+    上限（1リクエスト32MB）をスマホの写真8枚ほどで超え、アップロードが丸ごと失敗していた。"""
+    root = os.path.join(os.path.dirname(__file__), "..", "src")
+    html = open(os.path.join(root, "templates", page), encoding="utf-8").read()
+    js = open(os.path.join(root, "static", "js", script), encoding="utf-8").read()
+    helper = html.find("js/photo-upload.js")
+    assert helper != -1, f"{page} が photo-upload.js を読んでいない"
+    assert helper < html.find(f"js/{script}"), "photo-upload.js はページの JS より先に読むこと"
+    for element_id in ("upload-progress", "upload-bar-fill", "upload-status"):
+        assert f'id="{element_id}"' in html, f"{page} に進み具合の {element_id} が無い"
+    assert "TabiPhotoUpload.wireUploader" in js
+    assert not re.search(r"for \(const \w+ of input\.files\) fd\.append", js), \
+        f"{script} が選んだ写真をまとめて1回で送っている"

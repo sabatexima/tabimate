@@ -227,8 +227,14 @@ struct TripDetailView: View {
                 }
 
                 if model.isUploading {
-                    ProgressView(value: model.uploadProgress)
-                        .tint(Theme.Palette.primary)
+                    HStack(spacing: 10) {
+                        ProgressView(value: model.uploadProgress)
+                            .tint(Theme.Palette.primary)
+                        Text("\(model.uploadDone) / \(model.uploadTotal) 枚")
+                            .font(.meta)
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.Palette.textMuted)
+                    }
                 }
 
                 let photos = model.detail?.photos ?? []
@@ -350,6 +356,8 @@ final class TripDetailViewModel: ObservableObject {
     @Published private(set) var state: LoadState = .loading
     @Published private(set) var isUploading = false
     @Published private(set) var uploadProgress: Double = 0
+    @Published private(set) var uploadDone = 0
+    @Published private(set) var uploadTotal = 0
     @Published private(set) var isInterpreting = false
     @Published var errorMessage: String?
 
@@ -357,7 +365,8 @@ final class TripDetailViewModel: ObservableObject {
 
     /// 1回のアップロードで送る枚数。サーバーの上限は50枚だが、
     /// 通信が長引きすぎないよう小分けにして進み具合も見せる。
-    private let batchSize = 10
+    /// 1枚の上限。本番の Cloud Run は1リクエスト32MBまで（包みのぶんを少し引く）。
+    private let maxBytes = 31 * 1024 * 1024
 
     init(trip: Trip) {
         self.trip = trip
@@ -377,40 +386,52 @@ final class TripDetailViewModel: ObservableObject {
 
     // MARK: - 写真
 
+    /// 写真を1枚ずつ送る。
+    ///
+    /// 以前は10枚ずつまとめて送っていたが、本番の Cloud Run は1リクエスト32MBまでしか
+    /// 受け取らず、スマホの写真（1枚3〜6MB）だと8枚ほどで超えて丸ごと断られていた。
+    /// 1枚ずつなら上限は「1枚32MB」になり、途中の1枚が失敗しても残りは入る。
+    /// 端末からの読み出しも1枚ずつ（50枚ぶんのHEICを一度に抱えると端末に落とされる）。
     func upload(_ items: [PhotosPickerItem]) async {
         isUploading = true
         uploadProgress = 0
+        uploadDone = 0
+        uploadTotal = items.count
         errorMessage = nil
         defer {
             isUploading = false
             uploadProgress = 0
         }
 
-        // 端末からの読み出しも一度に全部やらず、送るぶんだけ取り出す。
-        // 50枚ぶんのHEICを一度に抱えると数百MBになり、端末に落とされてしまう。
         var sent = 0
-        var failed = false
-        for start in stride(from: 0, to: items.count, by: batchSize) {
-            let chunk = Array(items[start..<min(start + batchSize, items.count)])
-            var images: [Data] = []
-            for item in chunk {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    images.append(data)   // 取り出せなかったものは黙って飛ばす
-                }
+        var failures = 0
+        var lastError: String?
+        for (index, item) in items.enumerated() {
+            defer {
+                uploadDone = index + 1
+                uploadProgress = Double(index + 1) / Double(max(items.count, 1))
             }
-            guard !images.isEmpty else { continue }
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                failures += 1
+                lastError = "写真を読み込めませんでした。"
+                continue
+            }
+            guard data.count <= maxBytes else {
+                failures += 1
+                lastError = "1枚32MBを超える写真は入れられません。"
+                continue
+            }
             do {
-                sent += try await ReflectionService.uploadPhotos(tripId: trip.id, shared: trip.isShared, images: images)
-                uploadProgress = Double(min(start + chunk.count, items.count)) / Double(items.count)
+                sent += try await ReflectionService.uploadPhotos(tripId: trip.id, shared: trip.isShared, images: [data])
             } catch {
-                errorMessage = (error as? APIError)?.errorDescription
-                    ?? "写真を入れられませんでした。"
-                failed = true
-                break   // 途中まで入った分はそのまま残す（読み直せば見える）
+                failures += 1
+                lastError = (error as? APIError)?.errorDescription ?? "写真を入れられませんでした。"
             }
         }
-        if sent == 0 && !failed {
-            errorMessage = "写真を読み込めませんでした。"
+        if failures > 0 {
+            errorMessage = sent > 0
+                ? "\(sent)枚入りました。\(failures)枚は入れられませんでした（\(lastError ?? "")）"
+                : (lastError ?? "写真を入れられませんでした。")
         }
         await load()
     }

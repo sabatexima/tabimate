@@ -75,6 +75,11 @@
     <span class="upload-chosen" id="photo-chosen"></span>
     <button class="btn" id="upload-btn">アップロード</button>
   </div>
+  {# 1枚ずつ送るので、何枚目まで入ったかと送った量を見せる（photo-upload.js） #}
+  <div class="upload-progress" id="upload-progress" hidden>
+    <div class="upload-bar" role="progressbar" aria-label="アップロードの進み具合"><i id="upload-bar-fill"></i></div>
+    <span class="upload-status" id="upload-status" aria-live="polite"></span>
+  </div>
 </div>
 
 <!-- ちゃむのベストショット（写真が3枚以上あるときだけ）-->
@@ -136,6 +141,7 @@
 </div>
 
 <script type="application/json" id="page-config">{{ {"tripId": trip.id, "indexUrl": url_for('reflection.index')}|tojson }}</script>
+<script src="{{ url_for('static', filename='js/photo-upload.js') }}"></script>
 <script src="{{ url_for('static', filename='js/reflection-trip.js') }}"></script>
 
 {% if footprints or my_plans %}

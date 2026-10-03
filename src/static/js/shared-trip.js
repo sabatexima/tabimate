@@ -38,25 +38,17 @@ if (CFG.canEdit) {
       chosen.textContent = n ? `${n}枚を選択中` : '';
     });
   }
-  const uploadBtn = document.getElementById('upload-btn');
-  if (uploadBtn) uploadBtn.addEventListener('click', async () => {
-    const input = document.getElementById('photo-input');
-    if (!input.files.length) { alert('写真を選択してください'); return; }
-    const fd = new FormData();
-    for (const f of input.files) fd.append('photos', f);
-    uploadBtn.disabled = true; uploadBtn.textContent = 'アップロード中...';
-    try {
-      const res = await fetch(withToken(`/shared/trip/${TRIP_ID}/photos`), { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok) {
-        const grid = document.getElementById('photo-grid');
-        data.saved.forEach(p => grid.appendChild(makePhotoFigure(p)));
+  // 1枚ずつ送り、入った写真から順に並べる（詳しくは photo-upload.js）
+  if (document.getElementById('upload-btn')) {
+    const grid = document.getElementById('photo-grid');
+    window.TabiPhotoUpload.wireUploader({
+      url: withToken(`/shared/trip/${TRIP_ID}/photos`),
+      onSaved: (p) => {
+        grid.appendChild(makePhotoFigure(p));
         document.getElementById('photo-count').textContent = `現在 ${grid.querySelectorAll('.photo').length} 枚`;
-        input.value = '';
-      } else { alert(data.error || 'アップロードに失敗しました'); }
-    } catch (e) { alert('アップロードに失敗しました'); }
-    uploadBtn.disabled = false; uploadBtn.textContent = 'アップロード';
-  });
+      },
+    });
+  }
 
   // 付箋生成
   const board = document.getElementById('sticker-board');

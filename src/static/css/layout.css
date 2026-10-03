@@ -381,4 +381,16 @@
     /* 写真を選ぶ → 枚数 → アップロード（振り返り詳細・共有された旅で共通） */
     .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
     .upload-row label.btn { cursor: pointer; }
+    /* 写真のアップロードの進み具合（photo-upload.js） */
+    .upload-progress { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .upload-progress[hidden] { display: none; }
+    .upload-bar {
+      flex: 1; height: 8px; border-radius: 999px; overflow: hidden;
+      background: var(--border); max-width: 320px;
+    }
+    .upload-bar i {
+      display: block; height: 100%; width: 0; border-radius: 999px;
+      background: var(--primary-color); transition: width 0.25s ease;
+    }
+    .upload-status { font-size: 0.85em; color: var(--text-muted); white-space: nowrap; }
     .upload-chosen { font-size: 0.85em; color: var(--text-muted); }

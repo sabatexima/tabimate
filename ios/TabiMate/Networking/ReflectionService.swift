@@ -97,7 +97,8 @@ enum ReflectionService {
 
     // MARK: - 写真
 
-    /// 写真をまとめて送る。1回あたり50枚までなので、多いときは分けて呼ぶこと。
+    /// 写真を送る。呼び出し側は1枚ずつ渡すこと（TripDetailView の upload）。
+    /// 本番の Cloud Run は1リクエスト32MBまでなので、まとめると数枚で超える。
     ///
     /// 写真は撮ったままのデータで送る（作り直すとEXIFが落ち、撮影日時と場所が
     /// 取れなくなるため）。そのぶんファイル名は中身に合わせて正しく付ける必要がある。
@@ -118,8 +119,8 @@ enum ReflectionService {
         var req = APIClient.request("\(editBase(tripId: tripId, shared: shared))/photos",
                                     method: "POST", body: body,
                                     contentType: "multipart/form-data; boundary=\(boundary)")
-        // 枚数が多いと時間がかかる（サーバー側でEXIF抽出とサムネイル生成をしている）
-        req.timeoutInterval = 300
+        // サーバー側でEXIF抽出・HEIC変換・サムネイル生成をするので、少し長めに待つ
+        req.timeoutInterval = 120
         let res = try await APIClient.shared.send(req, as: UploadResponse.self)
         NotificationCenter.default.post(name: .tripsChanged, object: nil)
         return res.count

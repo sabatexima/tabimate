@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>photo-upload.js の検査</title></head>
+<body>
+<!--
+  写真のアップロード（photo-upload.js）を本物のブラウザで動かす。
+  XMLHttpRequest を偽物に差し替え、送信の進み具合や失敗を作って確かめる。
+
+  なぜ要るか: 以前は選んだ写真を1回にまとめて送っていて、本番の Cloud Run の
+  上限（1リクエスト32MB）を8枚ほどで超えて失敗していた。1枚ずつ送ること、
+  進み具合が出ること、1枚の失敗で全部が止まらないことを見張る。
+
+  使い方: scripts/check_home_js.sh （?case=N でひとつずつ動かす）
+-->
+<input type="file" id="photo-input" multiple>
+<span id="photo-chosen"></span>
+<button id="upload-btn">アップロード</button>
+<div id="upload-progress" hidden><div><i id="upload-bar-fill"></i></div><span id="upload-status"></span></div>
+<pre id="result">（実行中）</pre>
+
+<script>
+  const CASE = new URLSearchParams(location.search).get('case');
+  const failures = [];
+  const check = (label, ok, detail) => { if (!ok) failures.push(label + (detail !== undefined ? '（' + detail + '）' : '')); };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ---- 偽の XMLHttpRequest ------------------------------------------------
+  const sent = [];          // 送った1回ごとの写真の枚数
+  let inFlight = 0, maxInFlight = 0;
+  let failOn = new Set();   // 何回目の送信を失敗させるか（0始まり）
+  let statusLog = [];
+  window.XMLHttpRequest = function () {
+    this.upload = {};
+    this.open = (m, url) => { this.url = url; };
+    this.send = (fd) => {
+      const n = sent.length;
+      sent.push(fd.getAll('photos').length);
+      inFlight += 1; maxInFlight = Math.max(maxInFlight, inFlight);
+      const size = fd.get('photos').size;
+      setTimeout(() => this.upload.onprogress && this.upload.onprogress({ lengthComputable: true, loaded: size / 2 }), 10);
+      setTimeout(() => {
+        inFlight -= 1;
+        if (failOn.has(n)) {
+          this.status = 413; this.responseText = '<html>Request Entity Too Large</html>';
+        } else {
+          this.status = 201;
+          this.responseText = JSON.stringify({ saved: [{ id: n + 1, url: '/p/' + (n + 1) }], count: 1 });
+        }
+        this.onload();
+      }, 40);
+    };
+  };
+
+  // 写真の代わり（中身はダミー、大きさだけ本物らしく）
+  const photo = (name, bytes) => new File([new Uint8Array(Math.min(bytes, 1024))], name, { type: 'image/jpeg' });
+  function withSize(file, bytes) { Object.defineProperty(file, 'size', { value: bytes }); return file; }
+</script>
+
+<script src="../../src/static/js/photo-upload.js"></script>
+
+<script>
+  (async () => {
+    const U = window.TabiPhotoUpload;
+
+    if (CASE === '1') {
+      // 8枚（1枚5MB＝合計40MB。まとめて送ると32MBを超えていた）
+      const files = Array.from({ length: 8 }, (_, i) => withSize(photo(`IMG_${i}.jpg`, 0), 5 * 1024 * 1024));
+      const savedIds = [];
+      const progress = [];
+      const guarded = [];
+      const realAdd = window.addEventListener.bind(window);
+      const result = await U.uploadPhotos({
+        files, url: '/reflection/trips/1/photos',
+        onSaved: (p) => {
+          savedIds.push(p.id);
+          // 送っている途中は、閉じようとすると確認が出る
+          const e = new Event('beforeunload', { cancelable: true });
+          window.dispatchEvent(e);
+          guarded.push(e.defaultPrevented);
+        },
+        onProgress: (p) => progress.push(p),
+      });
+      check('1回に1枚ずつ送ること', sent.length === 8 && sent.every((n) => n === 1), sent.join(','));
+      check('同時に送るのは2枚まで', maxInFlight <= 2, maxInFlight);
+      check('全部入ること', result.saved === 8 && result.failed.length === 0, JSON.stringify(result));
+      check('入った写真から順に並べること', savedIds.length === 8);
+      check('「3 / 8 枚」のような途中の数を出すこと', progress.some((p) => p.done === 3 && p.total === 8));
+      check('棒は途中の量も進むこと（送信中の進み具合）',
+        progress.some((p) => p.ratio > 0 && p.ratio < 1 && p.done < 8));
+      check('最後は100%になること', progress[progress.length - 1].ratio === 1);
+      check('送っている間は閉じる前に確認を出すこと', guarded.length > 0 && guarded.every(Boolean));
+      const after = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(after);
+      check('終わったら確認を出さないこと', !after.defaultPrevented);
+    }
+
+    if (CASE === '2') {
+      // 3枚目だけ失敗（大きすぎる）。残りは入ること
+      failOn = new Set([2]);
+      const files = Array.from({ length: 5 }, (_, i) => withSize(photo(`IMG_${i}.jpg`, 0), 3 * 1024 * 1024));
+      const result = await U.uploadPhotos({ files, url: '/x', concurrency: 1 });
+      check('1枚失敗しても残りは入ること', result.saved === 4, result.saved);
+      check('失敗した写真と理由を返すこと',
+        result.failed.length === 1 && result.failed[0].name === 'IMG_2.jpg'
+        && result.failed[0].reason.includes('大きすぎ'), JSON.stringify(result.failed));
+    }
+
+    if (CASE === '3') {
+      // 1枚で32MBを超える写真は、送らずに知らせる
+      const big = withSize(photo('BIG.jpg', 0), 40 * 1024 * 1024);
+      const ok = withSize(photo('OK.jpg', 0), 2 * 1024 * 1024);
+      const result = await U.uploadPhotos({ files: [big, ok], url: '/x' });
+      check('大きすぎる写真は送らないこと', sent.length === 1, sent.length);
+      check('ほかの写真は入ること', result.saved === 1);
+      check('理由を返すこと', result.failed.length === 1 && result.failed[0].reason.includes('32MB'),
+        JSON.stringify(result.failed));
+    }
+
+    if (CASE === '4') {
+      // ページのボタンにつないだとき: 進み具合の表示と、終わったあとの片付け
+      failOn = new Set([1]);
+      const input = document.getElementById('photo-input');
+      const files = [0, 1, 2].map((i) => withSize(photo(`P${i}.jpg`, 0), 1024 * 1024));
+      Object.defineProperty(input, 'files', { value: files, configurable: true });
+      window.alert = (msg) => { window.lastAlert = msg; };
+      const placed = [];
+      U.wireUploader({ url: '/x', onSaved: (p) => placed.push(p.id) });
+      const box = document.getElementById('upload-progress');
+      const status = document.getElementById('upload-status');
+      document.getElementById('upload-btn').click();
+      await wait(15);
+      check('始めたら進み具合を出すこと', !box.hidden);
+      check('送っている間はボタンを押せないこと', document.getElementById('upload-btn').disabled);
+      await wait(400);
+      check('入った写真を並べること', placed.length === 2, placed.length);
+      check('入った数と入らなかった数を出すこと', status.textContent.includes('2枚入りました') && status.textContent.includes('1枚'),
+        status.textContent);
+      check('入らなかった写真を知らせること', (window.lastAlert || '').includes('P1.jpg'), window.lastAlert);
+      check('終わったらボタンを戻すこと', !document.getElementById('upload-btn').disabled);
+    }
+
+    document.getElementById('result').textContent =
+      failures.length === 0 ? 'ALL PASS' : 'FAIL: ' + failures.join(' | ');
+  })().catch((e) => { document.getElementById('result').textContent = 'FAIL: 例外 ' + e; });
+</script>
+</body>
+</html>

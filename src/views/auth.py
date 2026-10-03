@@ -62,6 +62,9 @@ def init_oauth(app):
         server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
         client_kwargs={'scope': 'openid email profile'},
     )
+    # Google スライドへの書き出し用（ドライブにファイルを作る権限が加わるだけ）
+    from views.slides import register_client
+    register_client(oauth, os.getenv('GOOGLE_CLIENT_ID'), os.getenv('GOOGLE_CLIENT_SECRET'))
 
 
 @auth.route('/login')
@@ -74,7 +77,13 @@ def login():
 
 @auth.route('/callback')
 def callback():
-    """Google からのコールバックを受け、ユーザー情報をセッションに保存する。"""
+    """Google からのコールバックを受け、ユーザー情報をセッションに保存する。
+
+    スライド書き出し（views/slides.py）も同じ戻り先を使う。そちらの戻りなら任せる。
+    """
+    from views.slides import finish_slides_export, is_slides_callback
+    if session.get('user_id') and is_slides_callback():
+        return finish_slides_export()
     try:
         token = oauth.google.authorize_access_token()
         user = token.get('userinfo')

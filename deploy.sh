@@ -18,6 +18,7 @@ gcloud services enable \
   storage.googleapis.com \
   iamcredentials.googleapis.com \
   places.googleapis.com \
+  slides.googleapis.com \
   --project "$PROJECT_ID"
 
 # Cloud Run がデフォルトで使うサービスアカウント（Compute SA）

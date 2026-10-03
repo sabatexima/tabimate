@@ -84,6 +84,7 @@ Plenty of apps help you book. TabiMate cares about the **before** and the **afte
 | 🎒 **Packing list** | Suggested from your destination and the weather. Check an item and a clover blooms. |
 | 🍀 **Countdown** | "12 days to go." A little thrill every time you open the shelf. |
 | 📅 **Calendar export** | Download the schedule as `.ics`; the itinerary also prints to PDF. |
+| 📑 **Google Slides** | One button builds a picture-book itinerary deck in your own Drive — cover, places, day-by-day schedule, costs, packing list and a note from Chamu — ready to edit and share. |
 | ✏️ **Tweak later** | "Make Day 2 relaxed," "change the hotel" — all by chat. Rate with ★ and future suggestions quietly adapt. |
 
 ### 📸 After — photos turn into words on their own
@@ -310,11 +311,11 @@ START
 - **Escalating retries** — the first rejection re-picks from the same candidate pool (cheap). On a repeated verdict, or from the third rejection onwards, the graph returns to candidate gathering and changes the lineup (costly: search + LLM). The retry-count trigger matters: with verdicts alternating between areas, the repeat trigger never fires and the pool would go untouched to the cap. Candidate agents receive the review notes and the rejected lineup — without them, temperature 0 just rebuilds the identical list. The search queries stay the same, so a refreshed pool is drawn from the same evidence plus the exclusion.
 - **Retries** — `invoke_with_retry()` backs off on 429 / 503 / network errors, up to 5 attempts.
 
-### Generation outlives the connection
+### Generation and the connection
 
-Plan generation runs in a background thread that **also writes the result to the database**. Nothing about it depends on the browser staying connected.
+Plan generation runs in a background thread that **also writes the result to the database**, so a dropped connection never throws a finished result away (saving from the SSE responder would kill the generator the moment the page reloads).
 
-That matters because generation takes minutes. If the reply were saved by the SSE responder instead, reloading the page would kill the generator mid-flight and throw the whole generation away.
+In production, though, Cloud Run only allocates CPU while a request is being handled. Once the connection drops the CPU is throttled and generation stalls. Always-on CPU would fix it but costs more, so the UI asks people to stay instead: long generations show "keep this screen open until it's ready", the screen is kept awake (Screen Wake Lock on the web, `isIdleTimerDisabled` on iOS), and leaving mid-generation triggers the browser's confirm dialog.
 
 On page load, `/chat` reports whether a reply is still pending, so the "thinking" state comes back immediately after a reload. That state is derived from the rows in `chat_messages` rather than from process memory, so it stays correct across Cloud Run instances:
 
@@ -350,7 +351,7 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 | `SECRET_KEY` | prod | Flask session signing key |
 | `GOOGLE_API_KEY` | ✓ | Gemini API key |
 | `TAVILY_API_KEY` | ✓ | Tavily web search |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth (web sign-in) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth (web sign-in and the Google Slides export). For the export, add `https://www.googleapis.com/auth/drive.file` under the OAuth consent screen's Data access (it only touches files this app creates). `deploy.sh` enables the Slides API |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | ✓ | Database connection |
 | `GOOGLE_IOS_CLIENT_ID` | app | Audience for verifying ID tokens from the iOS app. Falls back to `GOOGLE_CLIENT_ID`; **sign-in is refused when neither is set**, because an unset audience makes the library skip `aud` validation entirely |
 | `APP_TOKEN_MAX_AGE_SEC` | | Lifetime of app tokens (default 30 days) |
@@ -372,7 +373,7 @@ cookies, refusing to start without `SECRET_KEY`). Do not set it by hand.
 
 ### HTTP endpoints
 
-**Pages** — `/` (welcome) · `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
+**Pages** — `/` (welcome) · `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/plan/<id>/slides` (export to Google Slides) · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
 
 **Chat** — `/send_message` (SSE) · `/get_messages` · `/reset_chat` · `/abort_request` · `/generation_status`
 
@@ -386,7 +387,7 @@ cookies, refusing to start without `SECRET_KEY`). Do not set it by hand.
 
 **Auth** — `/auth/login` · `/auth/callback` · `/auth/logout`
 
-Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the public `/s/<token>` view sits behind `@login_required`, which answers `401 JSON` to API clients and redirects browsers to the login page. 67 routes in total.
+Everything except `/`, `/terms`, `/privacy`, `/api/ideas`, `/auth/*` and the public `/s/<token>` view sits behind `@login_required`, which answers `401 JSON` to API clients and redirects browsers to the login page. 68 routes in total.
 
 ### Tests & CI
 

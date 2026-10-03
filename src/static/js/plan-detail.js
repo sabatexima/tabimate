@@ -503,6 +503,8 @@ function renderDetail(plan) {
       <div class="plan-footer">
         <button class="edit-btn" type="button">✏️ チャットで修正</button>
         <a class="cal-btn" href="/plan/${esc(plan.id)}/print" target="_blank" rel="noopener">🖨 しおり</a>
+        <a class="cal-btn" href="/plan/${esc(plan.id)}/slides" target="_blank" rel="noopener"
+           title="Google スライドに、絵本のしおりを作ります">📑 スライド</a>
         <a class="cal-btn" href="/export_plan_ics/${esc(plan.id)}">📅 カレンダー</a>
         <button class="share-btn" type="button">🔗 共有</button>
         <button class="delete-btn" type="button">削除</button>

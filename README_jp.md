@@ -82,6 +82,7 @@
 | 🎒 **持ち物リスト** | 行き先と天気から提案。チェックすると四つ葉が咲きます。 |
 | 🍀 **出発カウントダウン** | 「あと12日」。棚を開けるたび、ちょっとうれしい。 |
 | 📅 **カレンダー書き出し** | スケジュールを `.ics` で持ち出せます。しおりは印刷・PDF保存もできます。 |
+| 📑 **Google スライド** | ボタンひとつで、絵本の世界観のまま「旅のしおり」のスライドを自分のドライブに作れます。表紙・めぐるところ・日ごとの予定・費用・持ちもの・ちゃむのひとこと。あとから自由に直して共有できます。 |
 | ✏️ **あとから調整** | 「2日目をゆっくりに」「宿を変えて」もチャットで。★をつけると次からの提案がそっと寄っていきます。 |
 
 ### 📸 旅の「あと」— 写真が、ひとりでに言葉になる
@@ -308,11 +309,11 @@ START
 - **差し戻しの段階** — 1回目は同じ候補プールから選び直します（安い）。同じ指摘が2回続いたとき、または差し戻しが3回目に入ったときは、候補集めまで戻って顔ぶれを入れ替えます（検索とLLMを使うので高い）。後者が要るのは、観光→グルメ→観光と交互に指摘が来ると前者が一度も成立せず、上限まで同じ候補から選び直し続けるためです。候補エージェントには審査の指摘と前回弾かれた顔ぶれを渡します。渡さないと temperature=0 なので同じ候補が返るだけです（検索語は変えないので、入れ替えの材料は同じ検索結果＋除外の指示になります）。
 - **再試行** — `invoke_with_retry()` が 429 / 503 / 通信エラーを最大5回、間隔を空けて再試行します。
 
-### 生成は接続より長生きする
+### 生成と接続
 
-プラン生成は別スレッドで走り、**結果の保存もそのスレッドが行います**。ブラウザが繋がったままである必要はありません。
+プラン生成は別スレッドで走り、**結果の保存もそのスレッドが行います**。接続が切れたこと自体で結果が捨てられることはありません（保存を SSE の送信側でやると、リロードした瞬間に generator が止まり、生成がまるごと捨てられます）。
 
-生成には数分かかるので、ここが大事です。もし保存を SSE の送信側でやっていると、リロードで接続が切れた瞬間に generator が止まり、生成がまるごと捨てられてしまいます。
+ただし本番の Cloud Run は「リクエストを処理している間だけ CPU を使う」設定なので、接続が切れると CPU がほぼ止まり、生成も止まります。常時 CPU にすれば直りますが料金が上がるので、代わりに画面側で開いたままにしてもらいます: 長い生成では「できあがるまで、この画面を開いたままにしてね」と出し、画面の自動消灯を止め（Web は Screen Wake Lock、iOS は `isIdleTimerDisabled`）、生成中に閉じようとしたらブラウザの確認を出します。
 
 `/chat` はページを出すときに「まだ返事待ちの生成があるか」を載せるので、リロード直後から「考えています」が戻ります。その判断はプロセス内のメモリではなく `chat_messages` の行から決めるため、Cloud Run が複数インスタンスでも食い違いません。
 
@@ -348,7 +349,7 @@ START
 | `SECRET_KEY` | 本番 | Flask のセッション署名鍵 |
 | `GOOGLE_API_KEY` | ✓ | Gemini のAPIキー |
 | `TAVILY_API_KEY` | ✓ | Tavily のWeb検索 |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth（Web版のログイン） |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✓ | Google OAuth（Web版のログインと、Google スライドへの書き出し）。書き出しには、OAuth 同意画面の「データアクセス」に `https://www.googleapis.com/auth/drive.file` を足しておくこと（このアプリが作ったファイルにだけ触れる権限）。Slides API は `deploy.sh` が有効にする |
 | `DB_USER` / `DB_PASS` / `DB_NAME` / `DB_HOST` / `DB_PORT` | ✓ | データベース接続 |
 | `GOOGLE_IOS_CLIENT_ID` | アプリ | iOSアプリのIDトークンを検証する宛先。無ければ `GOOGLE_CLIENT_ID` を使い、**どちらも無いときはサインインを断ります**（宛先が未設定だと、ライブラリが `aud` の検証をまるごと省いてしまうため） |
 | `APP_TOKEN_MAX_AGE_SEC` | | アプリ用トークンの有効期間（既定30日） |
@@ -371,7 +372,7 @@ START
 
 ### HTTP エンドポイント
 
-**画面** — `/`（ようこそ）· `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
+**画面** — `/`（ようこそ）· `/chat` · `/saved_plans` · `/plan/<id>` · `/plan/<id>/print` · `/plan/<id>/slides`（Google スライドに書き出し）· `/reflection/` · `/reflection/digest` · `/reflection/trips/<id>` · `/shared` · `/s/<token>` · `/terms` · `/privacy`
 
 **チャット** — `/send_message`（SSE）· `/get_messages` · `/reset_chat` · `/abort_request` · `/generation_status`
 
@@ -385,7 +386,7 @@ START
 
 **認証** — `/auth/login` · `/auth/callback` · `/auth/logout`
 
-`/`・`/terms`・`/privacy`・`/api/ideas`・`/auth/*` と公開ビュー `/s/<token>` 以外は `@login_required` の内側です。未認証のとき、APIには `401 JSON` を返し、ブラウザはログイン画面へ送ります。全部で67ルートあります。
+`/`・`/terms`・`/privacy`・`/api/ideas`・`/auth/*` と公開ビュー `/s/<token>` 以外は `@login_required` の内側です。未認証のとき、APIには `401 JSON` を返し、ブラウザはログイン画面へ送ります。全部で68ルートあります。
 
 ### テストとCI
 

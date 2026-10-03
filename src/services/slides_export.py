@@ -30,8 +30,10 @@ Slides API は文字の大きさを自動で縮めてくれない（API から�
 """
 
 import math
+import random
 import re
 import unicodedata
+import zlib
 from datetime import date, timedelta
 
 from logger import get_logger
@@ -287,15 +289,16 @@ def _day_date(travel_date, day_num) -> str:
 
 
 def _weather_for(weather_days, d) -> str:
-    """その日の天気を「☀️ 12° / 5°」の形で。予報が無ければ空。"""
+    """その日の天気を「晴れ 12° / 5°」の形で（絵文字は使わず言葉で）。無ければ空。"""
     if not d or not weather_days:
         return ""
     for w in weather_days:
         if w.get("date") == d.isoformat():
+            word = w.get("label") if w.get("label") not in (None, "—") else ""
             temps = ""
             if w.get("tmax") is not None and w.get("tmin") is not None:
-                temps = f"  {round(w['tmax'])}° / {round(w['tmin'])}°"
-            return f"{w.get('emoji', '')}{temps}".strip()
+                temps = f"{round(w['tmax'])}° / {round(w['tmin'])}°"
+            return " ".join(t for t in (word, temps) if t)
     return ""
 
 
@@ -308,15 +311,25 @@ _STAY_RE = re.compile(r"チェックイン|チェックアウト|就寝|宿に�
 _FLY_RE = re.compile(r"空港|フライト|航空|搭乗|[A-Z]{2}\s?\d{2,4}便|\(AF|（AF|便）")
 _MOVE_RE = re.compile(r"(発|着)([（(、\s]|$)|移動|で[^、。]{1,14}へ|へ向かう|帰路|帰宅")
 
-# 分類ごとの目印（バッジの絵文字と色）
+# 分類ごとの目印。絵文字は使わない（写実的な絵文字は、ちゃむの水彩の絵と並ぶと
+# 浮く）。しおり全体で同じ色の決まりにする: 緑=みどころ・ピンク=ごはん・
+# 金茶=いどう・緑の輪=やど。日ごとのページには凡例を出す
 _KINDS = {
-    "stay":   ("🏨", "#fbf3d5"),
-    "meal":   ("🍱", BLUSH),
-    "cafe":   ("☕", BLUSH),
-    "fly":    ("✈️", MEADOW),
-    "move":   ("🚄", MEADOW),
-    "spot":   ("✨", LEAF),
+    "spot": (GREEN, "みどころ"),
+    "meal": (PINK, "ごはん"),
+    "cafe": (PINK, "ごはん"),
+    "move": (GOLD, "いどう"),
+    "fly":  (GOLD, "いどう"),
+    "stay": (None, "やど"),     # 塗らない輪
 }
+_LEGEND_ORDER = ["spot", "meal", "move", "stay"]
+
+# 日ごとのページの色の巡り（帯・大きな日付の数字・やわらかい形）。めくるたびに変わる
+_DAY_TONES = [
+    (MEADOW, "#e2ebd1", LEAF),
+    ("#fbf1dc", "#f1e2c0", "#f6e6c2"),
+    ("#fbeaee", "#f3d7dd", BLUSH),
+]
 
 
 def _place_names(plan: dict) -> list:
@@ -374,6 +387,8 @@ class _Deck:
         self.image_url = image_url  # ファイル名 → 公開URL。None なら絵は貼らない
         self._n = 0
         self.slide_ids: list = []
+        # 飾りの角度や位置の揺らぎ。行き先から決めるので、同じプランなら毎回同じになる
+        self.rng = random.Random(0)
 
     def _id(self, kind: str) -> str:
         self._n += 1
@@ -516,11 +531,6 @@ class _Deck:
         self.shape(page, "RECTANGLE", 0, 0, w, h, fill=color, alpha=alpha,
                    element=self._rotated(page, cx, cy, w, h, degrees))
 
-    def confetti(self, page, points):
-        """紙ふぶきの小さな点。points は [(x, y, 色), …]。"""
-        for x, y, color in points:
-            self.shape(page, "ELLIPSE", x, y, 6, 6, fill=color, alpha=0.8)
-
     def pill(self, page, x, y, text, size=10.5, fill=SURFACE, color=INK, outline=BORDER,
              bold=False, h=24, pad=14) -> float:
         """両端の丸い札。幅は文字数から決め、右端の x を返す（横に並べるため）。"""
@@ -530,18 +540,39 @@ class _Deck:
         self.text(oid, text, size=size, color=color, bold=bold, align="CENTER", line_spacing=100)
         return x + w
 
-    def badge(self, page, x, y, emoji, d=34, fill=MEADOW):
-        """丸いバッジに絵文字（分類の目印）。
+    def mark(self, page, cx, cy, kind, d=11):
+        """分類の目印の小さな丸（中心 cx, cy）。やどは塗らない輪、分類なしは淡い点。"""
+        if kind is None:
+            self.shape(page, "ELLIPSE", cx - 3.5, cy - 3.5, 7, 7, fill=WAVY)
+            return
+        color, _ = _KINDS[kind]
+        if color is None:
+            self.shape(page, "ELLIPSE", cx - d / 2, cy - d / 2, d, d, fill=SURFACE,
+                       outline=GREEN_DARK, weight=2)
+        else:
+            self.shape(page, "ELLIPSE", cx - d / 2, cy - d / 2, d, d, fill=color)
 
-        絵文字は丸の中ではなく、丸より広い透明な箱を重ねて真ん中に置く。図形の
-        文字には左右 0.1 インチ（約7.2pt）ずつ余白があり、API からは変えられない
-        ので、小さな丸だと絵文字の幅が足りず、真ん中からずれてしまう。
-        """
-        self.shape(page, "ELLIPSE", x, y, d, d, fill=fill)
-        size = round(d * 0.42, 1)
-        box_h = _line_height(size, 100) + 8
-        oid = self.shape(page, "TEXT_BOX", x - 10, y + (d - box_h) / 2, d + 20, box_h)
-        self.text(oid, emoji, size=size, align="CENTER", line_spacing=100)
+    def legend(self, page, x, y, kinds):
+        """凡例（● みどころ ● ごはん …）。出てくる分類だけを、決まった順に並べる。"""
+        shown = []
+        for kind in _LEGEND_ORDER:
+            if any(_KINDS[k][1] == _KINDS[kind][1] for k in kinds) and _KINDS[kind][1] not in shown:
+                shown.append(_KINDS[kind][1])
+                self.mark(page, x + 5, y + 10, kind, d=9)
+                self.label(page, x + 8, y, 70, 20, _KINDS[kind][1], size=9.5, color=MUTED)
+                x += 22 + _width(_KINDS[kind][1]) * 9.5 + 4
+
+    def tilt(self, low=4, high=9) -> float:
+        """テープの傾き。毎回少しずつ違う角度にして、機械的に見せない。"""
+        return round(self.rng.uniform(low, high) * self.rng.choice((-1, 1)), 1)
+
+    def scatter(self, page, zones, count=3):
+        """紙ふぶきを、空いている所（zones=[(x0, y0, x1, y1), …]）にだけ散らす。"""
+        colors = [PINK, GOLD, GREEN, PINK, GOLD]
+        for i in range(count):
+            x0, y0, x1, y1 = zones[i % len(zones)]
+            x, y = self.rng.uniform(x0, x1 - 6), self.rng.uniform(y0, y1 - 6)
+            self.shape(page, "ELLIPSE", x, y, 6, 6, fill=colors[(i + self._n) % len(colors)], alpha=0.8)
 
     def card(self, page, x, y, w, h, text="", inset=(16, 12), **kw) -> str:
         """角の丸いカードに文字を載せる。
@@ -560,9 +591,9 @@ class _Deck:
         """中身のページの頭: 金茶のキッカー・見出し・点線・右上のちゃむ。"""
         sid = self.slide()
         self.blob(sid, 610, 0, 110, 84, color=MEADOW, alpha=0.9)
-        self.label(sid, MARGIN, 22, 520, 18, _spaced(kicker), size=9, color=GOLD, bold=True)
-        self.label(sid, MARGIN, 36, 560, 34, heading, size=22, bold=True)
-        self.line(sid, MARGIN + 4, 74, min(300, 30 + 22 * _width(heading)), 0)
+        self.label(sid, MARGIN, 20, 520, 20, _spaced(kicker), size=10, color=GOLD, bold=True)
+        self.label(sid, MARGIN, 36, 560, 38, heading, size=24, bold=True)
+        self.line(sid, MARGIN + 4, 80, min(320, 30 + 24 * _width(heading)), 0)
         self.image(sid, "mate-head.png", 650, 14, 48, 48)
         return sid
 
@@ -608,6 +639,16 @@ def _text_height(lines: list, chars_per_line: int, size: float, spacing: float) 
     return _visual_lines(lines, chars_per_line) * _line_height(size, spacing)
 
 
+# 見出しの下の、中身を置ける高さ
+CONTENT_TOP, CONTENT_BOTTOM = 96, 366
+
+
+def _center(h: float, top: float = CONTENT_TOP, bottom: float = CONTENT_BOTTOM) -> float:
+    """高さ h のかたまりを、上下の真ん中に置くときの y。中身が少ないページを
+    上に詰めて下をがらんと空けない（作りかけに見えるため）。"""
+    return top + max(0.0, (bottom - top - h) / 2)
+
+
 # ----------------------------------------------------------------------
 # ページ
 # ----------------------------------------------------------------------
@@ -619,9 +660,10 @@ def _cover(deck: _Deck, plan: dict, weather_days):
     deck.blob(sid, 0, 330, 150, 75, color=BLUSH, alpha=0.7)
     deck.shape(sid, "RECTANGLE", 0, 372, BASE_W, 33, fill=MEADOW)
     deck.image(sid, "mate.png", 488, 62, 196, 262)
-    deck.tape(sid, 92, 40, w=96, h=22, color=BLUSH, degrees=-9)
-    deck.tape(sid, 640, 330, w=84, h=20, color=LEAF, degrees=7, alpha=0.95)
-    deck.confetti(sid, [(392, 60, PINK), (430, 326, GOLD), (24, 150, GREEN), (372, 250, GOLD)])
+    deck.tape(sid, 92, 40, w=96, h=22, color=BLUSH, degrees=-deck.tilt(6, 10))
+    deck.tape(sid, 640, 330, w=84, h=20, color=LEAF, degrees=deck.tilt(5, 9), alpha=0.95)
+    # 紙ふぶきは、文字の列（左）とちゃむ（右）のあいだと、左の余白にだけ
+    deck.scatter(sid, [(372, 40, 450, 120), (380, 240, 452, 330), (10, 120, 34, 300)], count=4)
 
     deck.pill(sid, MARGIN + 12, 78, _spaced("旅のしおり"), size=10, fill=GREEN,
               color="#ffffff", outline=None, bold=True, h=24, pad=16)
@@ -648,8 +690,8 @@ def _cover(deck: _Deck, plan: dict, weather_days):
     if sub:
         blocks.append(("sub", 30, "、".join(sub)))
     chips = [t for t in [
-        f"📅 {_clip(_clean(plan['travel_date'], True), 16)}" if plan.get("travel_date") else "",
-        f"👥 {_num(plan.get('num_people'))}人" if _num(plan.get("num_people")) else ""] if t]
+        _clip(_clean(plan["travel_date"], True), 16) if plan.get("travel_date") else "",
+        f"{_num(plan.get('num_people'))}人" if _num(plan.get("num_people")) else ""] if t]
     if chips:
         blocks.append(("chips", 34, chips))
     themes = _items(plan.get("themes"))[:3]
@@ -658,11 +700,12 @@ def _cover(deck: _Deck, plan: dict, weather_days):
     total, budget = _num(plan.get("total_per_person")), _num(plan.get("budget_limit"))
     if total or budget:
         blocks.append(("cost", 50, total or budget))
-    days = [d for d in (weather_days or [])[:5]
-            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(d.get("date") or ""))]
+    days = [d for d in (weather_days or [])[:4]
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(d.get("date") or ""))
+            and d.get("label") not in (None, "—")]
     if days:
-        blocks.append(("weather", 22, "🌤 " + "　".join(
-            f"{int(d['date'][5:7])}/{int(d['date'][8:10])} {d.get('emoji', '')}" for d in days)))
+        blocks.append(("weather", 22, "天気　" + "　".join(
+            f"{int(d['date'][5:7])}/{int(d['date'][8:10])} {d['label']}" for d in days)))
     bottom = 364
     for drop in ("weather", "themes", "sub", "chips"):
         if y + sum(h for _, h, _ in blocks) <= bottom:
@@ -675,9 +718,9 @@ def _cover(deck: _Deck, plan: dict, weather_days):
         elif kind == "chips":
             x = MARGIN + 12
             for text in value:
-                if x + _width(text) * 10.5 + 28 > 440:
+                if x + _width(text) * 11 + 28 > 440:
                     break
-                x = deck.pill(sid, x, y, text, size=10.5) + 8
+                x = deck.pill(sid, x, y, text, size=11) + 8
         elif kind == "themes":
             # 旅のテーマは、ハッシュタグ風の小さな札に（3つまで）
             x = MARGIN + 12
@@ -700,25 +743,36 @@ def _cover(deck: _Deck, plan: dict, weather_days):
 
 
 def _overview(deck: _Deck, plan: dict):
-    cols = [(icon, label, fill, _items(plan.get(key)))
-            for icon, label, fill, key in (("✨", "めぐるところ", MEADOW, "spots"),
-                                           ("🍱", "ごはん", BLUSH, "restaurants"),
-                                           ("🏨", "とまるところ", "#fbf3d5", "accommodation"))]
-    cols = [c for c in cols if c[3]]
+    """この旅で楽しむこと: めぐるところ・ごはん・とまるところを、テープを貼ったカードで。"""
+    cols = [(kind, label, _items(plan.get(key)))
+            for kind, label, key in (("spot", "めぐるところ", "spots"),
+                                     ("meal", "ごはん", "restaurants"),
+                                     ("stay", "とまるところ", "accommodation"))]
+    cols = [c for c in cols if c[2]]
     if not cols:
         return
     sid = deck.page_head("旅のなかみ", "この旅で 楽しむこと")
     gap = 18
-    width = BASE_W - MARGIN * 2
-    w = (width - gap * (len(cols) - 1)) / len(cols)
+    w = (BASE_W - MARGIN * 2 - gap * (len(cols) - 1)) / len(cols)
     inner = w - 32
-    # 長い名前（海外の「日本語名（現地語名）」など）が多いときは、字を一段ずつ小さく
-    room = 188
-    for size in (12, 10.5, 9.5):
+    room = 205
+    sizes = (14, 13, 12, 10.5, 9.5)
+
+    def ok(size, one_line):
         chars = max(6, int(inner / size))
-        h = max(_text_height([f"・{i}" for i in c[3]], chars, size, 145) for c in cols)
-        if h <= room:
-            break
+        per = chars * _WRAP_SAFETY
+        for c in cols:
+            lines = [f"・{i}" for i in c[2]]
+            if _text_height(lines, chars, size, 145) > room:
+                return False
+            if one_line and any(_wrap_lines(ln, per) > 1 for ln in lines):
+                return False
+        return True
+
+    # 中身が少ないほど字を大きく。名前は1行に収まる大きさを選ぶ（「…いきいき」と
+    # 「亭」のような泣き別れを避ける）。どうしても入らなければ折り返しを許す
+    size = next((z for z in sizes if ok(z, True)), None) or next((z for z in sizes if ok(z, False)), sizes[-1])
+    chars = max(6, int(inner / size))
 
     def fit(items):
         """いちばん小さい字でも入らないときは、入るところまでにして「…ほか N件」で結ぶ。"""
@@ -734,18 +788,20 @@ def _overview(deck: _Deck, plan: dict):
         return [_clip(lines[0], chars * _WRAP_SAFETY * 2)] + (
             [f"…ほか {len(lines) - 1}件"] if len(lines) > 1 else [])
 
-    blocks = [fit(c[3]) for c in cols]
+    blocks = [fit(c[2]) for c in cols]
     h = max(_text_height(b, chars, size, 145) for b in blocks)
-    h = max(150, min(262, h + 74))
-    for n, ((icon, label, fill, _), lines) in enumerate(zip(cols, blocks)):
+    h = max(150, min(268, h + 76))
+    top = _center(h + 8, CONTENT_TOP + 8)
+    tapes = (BLUSH, LEAF, "#f6edc8")
+    for n, ((kind, label, _), lines) in enumerate(zip(cols, blocks)):
         x = MARGIN + n * (w + gap)
-        deck.card(sid, x, 100, w, h)
-        deck.tape(sid, x + w / 2, 100, w=64, h=16,
-                  color=(BLUSH, LEAF, "#f6edc8")[n % 3], degrees=(-6, 5, -4)[n % 3])
-        deck.badge(sid, x + 16, 118, icon, d=34, fill=fill)
-        deck.label(sid, x + 56, 124, w - 64, 22, label, size=13, bold=True, color=GREEN_DARK)
-        deck.label(sid, x + 16, 160, inner, h - 68, "\n".join(lines),
+        deck.card(sid, x, top, w, h)
+        deck.tape(sid, x + w / 2, top, w=64, h=16, color=tapes[n % 3], degrees=deck.tilt(3, 7))
+        deck.mark(sid, x + 24, top + 34, kind, d=13)
+        deck.label(sid, x + 34, top + 22, w - 44, 26, label, size=15, bold=True, color=GREEN_DARK)
+        deck.label(sid, x + 16, top + 60, inner, h - 68, "\n".join(lines),
                    size=size, line_spacing=145)
+    deck.scatter(sid, [(10, 110, 32, 360), (690, 110, 710, 360)], count=3)
 
 
 def _clip(text: str, max_width: float) -> str:
@@ -792,45 +848,41 @@ def _glance(deck: _Deck, plan: dict, weather_days=None):
     per_page, cols = 8, min(4, len(days))
     gap = 14
     w = (BASE_W - MARGIN * 2 - gap * (cols - 1)) / cols
-    size, spacing = 10.5, 130
-    # 1行に入る字数（「・」の1字ぶんを引く）。見積もりの余裕も同じだけ見る
-    one_line = int((w - 24 - 14) / size) * _WRAP_SAFETY - 1
     for start in range(0, len(days), per_page):
         chunk = days[start:start + per_page]
         sid = deck.page_head("旅のあらまし", "日ごとの みどころ" + ("（つづき）" if start else ""))
         rows = math.ceil(len(chunk) / cols)
-        h = 122 if rows > 1 else 168
-        top = 96 if rows > 1 else 112
-        fits = max(1, int((h - 66) // _line_height(size, spacing)))
+        # 1段なら大きく、2段なら詰める
+        h, size = (200, 12.5) if rows == 1 else (124, 10.5)
+        spacing = 135
+        one_line = int((w - 24 - 14) / size) * _WRAP_SAFETY - 1
+        fits = max(1, int((h - 70) // _line_height(size, spacing)))
+        top = _center(rows * h + (rows - 1) * 14)
         for n, (num, body) in enumerate(chunk):
             x = MARGIN + (n % cols) * (w + gap)
             y = top + (n // cols) * (h + 14)
             deck.card(sid, x, y, w, h)
-            deck.pill(sid, x + 12, y + 12, f"{num}日目", size=10, fill=GREEN, color="#ffffff",
-                      outline=None, bold=True, h=22, pad=10)
+            deck.pill(sid, x + 12, y + 12, f"{num}日目", size=10.5, fill=GREEN, color="#ffffff",
+                      outline=None, bold=True, h=24, pad=11)
             day = _date_of(plan.get("travel_date"), num)
-            meta = " ".join(t for t in [_day_date(plan.get("travel_date"), num),
+            meta = "　".join(t for t in [_day_date(plan.get("travel_date"), num),
                                          _weather_for(weather_days, day).split(" ")[0]] if t)
             if meta:
-                deck.label(sid, x + 12, y + 38, w - 20, 18, meta, size=9, color=MUTED)
+                deck.label(sid, x + 12, y + 40, w - 20, 20, meta, size=9.5, color=MUTED)
             spots = [_clip(n, one_line) for n in _highlights(body, places)[:fits]]
             if spots:
-                deck.label(sid, x + 12, y + 56, w - 24, h - 62, "\n".join(f"・{n}" for n in spots),
+                deck.label(sid, x + 12, y + 60, w - 24, h - 66, "\n".join(f"・{n}" for n in spots),
                            size=size, line_spacing=spacing)
 
 
 # タイムラインの寸法
 _TL_X = 246          # 縦線の x
 _TL_TIME_X = 260     # 時刻の欄の左端
-_TL_TEXT_X = 324     # 予定の左端
+_TL_TEXT_X = 326     # 予定の左端
 _TL_TEXT_W = BASE_W - MARGIN - _TL_TEXT_X
-_TL_TOP, _TL_BOTTOM = 52, 372
-_TL_SIZE, _TL_SPACING, _TL_GAP = 12, 120, 9
-
-
-def _entry_height(text: str, width: float) -> float:
-    chars = max(6, int((width - 14) / _TL_SIZE))
-    return _text_height([text], chars, _TL_SIZE, _TL_SPACING)
+_TL_TOP, _TL_BOTTOM = 50, 372
+_TL_SPACING, _TL_GAP = 115, 7
+_TL_SIZES = (14, 13, 12, 11)   # 予定が少ない日ほど大きな字で（11pt なら1枚に10件ほど入る）
 
 
 def _split_time(line: str) -> tuple:
@@ -846,25 +898,62 @@ def _split_time(line: str) -> tuple:
     return start, until, m.group(2)
 
 
-def _timeline_pages(body: list) -> list:
-    """1日の予定を、タイムラインの高さに収まるページに分ける。
+def _split_detail(text: str) -> tuple:
+    """「近江町市場で昼食（海鮮丼・約1時間）」→ ("近江町市場で昼食", "海鮮丼・約1時間")。
 
-    1件は (開始時刻, 終了時刻, 中身, 高さ)。終了時刻があるときは時刻の欄が
-    2行になるので、中身が1行でもその高さを確保する。
+    しおりの定番の形: 何をするかを1行目に、かっこの中の補足（移動手段・所要時間）を
+    小さな2行目に。行の高さがそろい、目で追いやすい。
     """
+    m = re.match(r"^(.+?)\s*[（(](.+?)[）)]\s*(.*)$", text)
+    if not m or not m.group(1).strip():
+        return text, ""
+    detail = m.group(2).strip()
+    if m.group(3).strip():
+        detail += "　" + m.group(3).strip()
+    return m.group(1).strip(), detail
+
+
+def _detail_size(size: float) -> float:
+    return round(size * 0.78, 1)
+
+
+def _entry_parts(start: str, text: str, size: float) -> tuple:
+    """(1行目, 1行目の行数, 2行目)。1行目は2行まで、2行目は1行に収める（「…」で切る）。"""
+    width = (_TL_TEXT_W if start else BASE_W - MARGIN - _TL_TIME_X) - 14
+    main, detail = _split_detail(text) if start else (text, "")
+    per_line = width / size * _WRAP_SAFETY
+    main = _clip(main, per_line * 2)
+    lines = _wrap_lines(main, per_line)
+    if detail:
+        detail = _clip(detail, width / _detail_size(size) * _WRAP_SAFETY)
+    return main, lines, detail
+
+
+def _entry_need(start: str, until: str, text: str, size: float) -> float:
+    """タイムラインの1件の高さ。1行目（1〜2行）＋補足か終了時刻の小さな行。"""
+    _, lines, detail = _entry_parts(start, text, size)
+    need = lines * _line_height(size, _TL_SPACING)
+    if detail or until:
+        need += _line_height(_detail_size(size), 100)
+    return need + _TL_GAP
+
+
+def _timeline_pages(body: list) -> list:
+    """1日の予定を、タイムラインの高さに収まるページに分ける（いちばん小さい字で数える）。
+
+    1件は (開始時刻, 終了時刻, 中身)。
+    """
+    smallest = _TL_SIZES[-1]
     pages, current, used = [], [], 0
     room = _TL_BOTTOM - _TL_TOP
     for line in body:
-        start, until, text = _split_time(line)
-        width = _TL_TEXT_W if start else BASE_W - MARGIN - _TL_TIME_X
-        need = _entry_height(text, width)
-        if until:
-            need = max(need, _line_height(_TL_SIZE, _TL_SPACING) + _line_height(9.5, 110))
-        need += _TL_GAP
-        if current and used + need > room:
+        entry = _split_time(line)
+        need = _entry_need(*entry, smallest)
+        # 最後の1件の下の隙間は要らないので、その分は数えない
+        if current and used + need - _TL_GAP > room:
             pages.append(current)
             current, used = [], 0
-        current.append((start, until, text, need))
+        current.append(entry)
         used += need
     if current:
         pages.append(current)
@@ -881,62 +970,78 @@ def _schedule(deck: _Deck, plan: dict, weather_days=None):
         num, sub, body = days[0]
         days[0] = (num, sub, preface + body)
     single = len(days) == 1 and days[0][0] is None
+    shown = 0
     for num, sub, body in days:
         if not body:
             continue
+        panel, watermark, soft = _DAY_TONES[shown % len(_DAY_TONES)]
+        shown += 1
         pages = _timeline_pages(body)
         for n, page in enumerate(pages):
             sid = deck.slide()
-            # 左の帯: 日付と副題。ページごとに色を変えず、帯の中のテープだけ交互に
-            deck.shape(sid, "RECTANGLE", 0, 0, 212, BASE_H, fill=MEADOW)
-            deck.blob(sid, 108, 296, 96, 84, color=LEAF, alpha=0.7)
-            deck.tape(sid, 106, 26, w=86, h=20,
-                      color=BLUSH if (num or 1) % 2 else "#f6edc8", degrees=-7)
-            deck.label(sid, 30, 58, 170, 18, _spaced("スケジュール"), size=9, color=GOLD, bold=True)
+            # 左の帯: 日付と副題。帯の色は日ごとに巡る
+            deck.shape(sid, "RECTANGLE", 0, 0, 212, BASE_H, fill=panel)
+            deck.blob(sid, 104, 290, 100, 86, color=soft, alpha=0.75)
+            deck.tape(sid, 106, 26, w=86, h=20, color=SURFACE, degrees=deck.tilt(5, 9), alpha=0.7)
+            # 右下に、大きく淡い日付の数字（タイムラインの後ろに敷く）
+            if num:
+                deck.label(sid, 470, 214, 240, 176, f"{num:02d}", size=132, bold=True,
+                           color=watermark, align="END", line_spacing=100)
+            deck.label(sid, 30, 56, 170, 20, _spaced("スケジュール"), size=10, color=GOLD, bold=True)
             big = f"{num}日目" if num else ("日帰り" if single else "スケジュール")
-            deck.label(sid, 26, 76, 180, 50, big, size=30 if num else 24, bold=True, color=GREEN_DARK)
-            y = 128
+            deck.label(sid, 26, 74, 180, 52, big, size=32 if num else 26, bold=True, color=GREEN_DARK)
+            y = 130
             day = _date_of(plan.get("travel_date"), num or 1)
             when = _day_date(plan.get("travel_date"), num or 1)
             if when:
-                deck.label(sid, 30, y, 170, 20, when, size=11, color=INK)
-                y += 22
+                deck.label(sid, 30, y, 172, 22, when, size=12, color=INK)
+                y += 24
             sky = _weather_for(weather_days, day)
             if sky:
                 deck.pill(sid, 30, y + 2, sky, size=10, fill=SURFACE, h=22, pad=10)
                 y += 32
             if sub:
-                deck.label(sid, 30, y, 166, 56, sub, size=11, color=MUTED, line_spacing=130)
+                deck.label(sid, 30, y, 166, 48, _clip(sub, 26), size=11, color=MUTED, line_spacing=130)
             if n:
-                deck.label(sid, 30, 250, 170, 18, "（つづき）", size=10, color=MUTED)
-            deck.image(sid, "mate-head.png", 30, 300, 66, 66)
+                deck.label(sid, 30, 238, 170, 20, "（つづき）", size=10, color=MUTED)
+            deck.image(sid, "mate.png", 22, 262, 84, 112)
 
-            # 右: 時刻のタイムライン
-            total = sum(e[3] for e in page) - _TL_GAP
-            deck.line(sid, _TL_X, _TL_TOP + 6, 0, max(8, total - 6), color=WAVY, weight=2, dash="DOT")
-            y = _TL_TOP
-            for start, until, text, need in page:
+            # 右: 時刻のタイムライン。入る範囲でいちばん大きな字にし、上下の真ん中に
+            room = _TL_BOTTOM - _TL_TOP
+            for size in _TL_SIZES:
+                needs = [_entry_need(st, un, tx, size) for st, un, tx in page]
+                if sum(needs) - _TL_GAP <= room:
+                    break
+            total = sum(needs) - _TL_GAP
+            y = _TL_TOP + max(0.0, (room - total) / 2)
+            line_h = _line_height(size, _TL_SPACING)
+            kinds = [_kind(tx, places) if st else None for st, _, tx in page]
+            deck.legend(sid, _TL_X - 6, 22, [k for k in kinds if k])
+            deck.line(sid, _TL_X, y + line_h / 2, 0, max(8, total - line_h), color=WAVY,
+                      weight=2, dash="DOT")
+            small = _detail_size(size)
+            for (start, until, text), need, kind in zip(page, needs, kinds):
+                mid = y + 3.6 + line_h / 2
+                main, lines, detail = _entry_parts(start, text, size)
+                below = y + lines * line_h
                 if start:
-                    kind = _kind(text, places)
-                    if kind:
-                        # 分類の目印: 線の上に小さな丸いバッジ
-                        emoji, fill = _KINDS[kind]
-                        deck.badge(sid, _TL_X - 11, y - 2, emoji, d=22, fill=fill)
-                    else:
-                        deck.shape(sid, "ELLIPSE", _TL_X - 5, y + 4, 10, 10, fill=GREEN)
-                    deck.label(sid, _TL_TIME_X, y - 3, 60, 20, start, size=_TL_SIZE,
+                    deck.mark(sid, _TL_X, mid, kind, d=11)
+                    deck.label(sid, _TL_TIME_X, y, 66, line_h + 8, start, size=size,
                                bold=True, color=GREEN_DARK, line_spacing=_TL_SPACING)
                     if until:
-                        deck.label(sid, _TL_TIME_X, y + 14, 60, 16, until, size=9.5,
-                                   color=MUTED, line_spacing=110)
-                    deck.label(sid, _TL_TEXT_X - 7, y - 3, _TL_TEXT_W + 7, need, text,
-                               size=_TL_SIZE, line_spacing=_TL_SPACING,
-                               styles=_name_styles(text, places))
+                        deck.label(sid, _TL_TIME_X, y + line_h, 66, 18, until,
+                                   size=small, color=MUTED, line_spacing=100)
+                    deck.label(sid, _TL_TEXT_X - 7, y, _TL_TEXT_W + 7, lines * line_h + 8, main,
+                               size=size, line_spacing=_TL_SPACING,
+                               styles=_name_styles(main, places))
+                    if detail:
+                        deck.label(sid, _TL_TEXT_X - 7, below, _TL_TEXT_W + 7, 18, detail,
+                                   size=small, color=MUTED, line_spacing=100)
                 else:
-                    deck.shape(sid, "ELLIPSE", _TL_X - 3, y + 6, 6, 6, fill=SURFACE,
-                               outline=GREEN, weight=1)
-                    deck.label(sid, _TL_TIME_X - 7, y - 3, BASE_W - MARGIN - _TL_TIME_X + 7, need,
-                               text, size=_TL_SIZE, line_spacing=_TL_SPACING, color=MUTED)
+                    deck.mark(sid, _TL_X, mid, None)
+                    deck.label(sid, _TL_TIME_X - 7, y, BASE_W - MARGIN - _TL_TIME_X + 7,
+                               lines * line_h + 8, main, size=size, line_spacing=_TL_SPACING,
+                               color=MUTED)
                 y += need
 
 
@@ -952,51 +1057,66 @@ def _costs(deck: _Deck, plan: dict):
             return len(line), (COST if "合計" in line else GREEN_DARK)
         return None
 
-    # 1枚目は左に大きな数字、右に内訳。2枚目以降は内訳だけを広く
+    # 1枚目は左に大きな数字、右に内訳。2枚目以降は内訳だけを広く。
+    # ページ分けはいちばん小さい字で数え、入るなら一段大きな字にする
     first_w, wide_w = 392, BASE_W - MARGIN * 2
-    first_chars, wide_chars = int((first_w - 46) / 11.5), int((wide_w - 46) / 11.5)
-    # 1枚に入る行数は、カードの高さ（最大268pt）から内側の余白を引いて決める
-    max_lines = int((268 - 24 - 8) // _line_height(11.5, 130))
-    first = _paginate(lines, first_chars, max_lines, is_heading=lambda s: s.startswith("■"))[:1] if lines else [[]]
+    small, large, spacing = 11.5, 12.5, 132
+    room = 262 - 24 - 8
+
+    def chars(w, size):
+        return int((w - 46) / size)
+
+    def limit(size):
+        return int(room // _line_height(size, spacing))
+
+    heading = lambda s: s.startswith("■")  # noqa: E731
+    first = (_paginate(lines, chars(first_w, small), limit(small), is_heading=heading)[:1]
+             if lines else [[]])
     rest = lines[len(first[0]):]
-    pages = first + (_paginate(rest, wide_chars, max_lines,
-                               is_heading=lambda s: s.startswith("■")) if rest else [])
+    pages = first + (_paginate(rest, chars(wide_w, small), limit(small), is_heading=heading)
+                     if rest else [])
 
     for n, page in enumerate(pages):
         sid = deck.page_head("旅の費用", "費用の見積もり" + ("（つづき）" if n else ""))
+        w = first_w if n == 0 else wide_w
+        x = 288 if n == 0 else MARGIN
+        size = large if _text_height(page, chars(w, large), large, spacing) <= room else small
+        card_h = max(120, min(262, _text_height(page, chars(w, size), size, spacing) + 32)) if page else 0
         if n == 0:
-            # いちばん大事な数字だけを大きく。差し色はここだけに使う
-            deck.blob(sid, MARGIN - 6, 108, 230, 220, color=GLOW, alpha=0.55)
-            deck.shape(sid, "ELLIPSE", MARGIN + 20, 120, 196, 196, fill=SURFACE, outline=BORDER)
-            deck.tape(sid, MARGIN + 118, 124, w=70, h=18, color=BLUSH, degrees=-6)
+            # いちばん大事な数字だけを大きく。差し色はここだけに使う。丸と棒をひとかたまりで真ん中に
+            group = 196 + (44 if total and budget else 0)
+            top = _center(max(group, card_h))
+            cy = top + (max(group, card_h) - group) / 2
+            deck.blob(sid, MARGIN - 6, cy - 12, 230, 220, color=GLOW, alpha=0.55)
+            deck.shape(sid, "ELLIPSE", MARGIN + 20, cy, 196, 196, fill=SURFACE, outline=BORDER)
+            deck.tape(sid, MARGIN + 118, cy + 4, w=70, h=18, color=BLUSH, degrees=deck.tilt(4, 8))
             if total:
-                deck.label(sid, MARGIN + 30, 168, 176, 20, "ひとりあたり", size=11,
+                deck.label(sid, MARGIN + 30, cy + 46, 176, 22, "ひとりあたり", size=11.5,
                            color=MUTED, align="CENTER")
-                size = 26 if total < 10 ** 7 else 20
-                deck.label(sid, MARGIN + 26, 190, 184, 40, f"{total:,}円", size=size,
+                big = 28 if total < 10 ** 7 else 20
+                deck.label(sid, MARGIN + 22, cy + 68, 192, 44, f"{total:,}円", size=big,
                            bold=True, color=COST, align="CENTER")
             if budget:
-                deck.label(sid, MARGIN + 30, 238, 176, 20, f"予算 {budget:,}円",
-                           size=10.5, color=MUTED, align="CENTER")
+                deck.label(sid, MARGIN + 30, cy + 120, 176, 22, f"予算 {budget:,}円",
+                           size=11, color=MUTED, align="CENTER")
             if people and total:
-                deck.label(sid, MARGIN + 30, 256, 176, 20, f"{people}人で {total * people:,}円",
-                           size=10.5, color=MUTED, align="CENTER")
-            _budget_bar(deck, sid, total, budget)
-            x, w, chars = 288, first_w, first_chars
+                deck.label(sid, MARGIN + 30, cy + 140, 176, 22, f"{people}人で {total * people:,}円",
+                           size=11, color=MUTED, align="CENTER")
+            _budget_bar(deck, sid, total, budget, cy + 210)
+            card_y = top + (max(group, card_h) - card_h) / 2
         else:
-            x, w, chars = MARGIN, wide_w, wide_chars
+            card_y = _center(card_h)
         if page:
             text, styles = _join_with_styles(page, pick)
-            h = max(120, min(268, _text_height(page, chars, 11.5, 130) + 30))
-            deck.card(sid, x, 98, w, h, text, size=11.5, line_spacing=130, styles=styles)
+            deck.card(sid, x, card_y, w, card_h, text, size=size, line_spacing=spacing, styles=styles)
 
 
-def _budget_bar(deck: _Deck, sid, total, budget):
+def _budget_bar(deck: _Deck, sid, total, budget, y=330):
     """予算のうち、どれだけ使う見込みかを細い棒で。こえるときはピンクで知らせる。"""
     total, budget = _num(total), _num(budget)
     if not total or not budget:
         return
-    x, y, w, h = MARGIN + 22, 330, 192, 10
+    x, w, h = MARGIN + 22, 192, 10
     ratio = total / budget
     deck.shape(sid, "FLOW_CHART_TERMINATOR", x, y, w, h, fill=MEADOW)
     over = ratio > 1
@@ -1004,7 +1124,7 @@ def _budget_bar(deck: _Deck, sid, total, budget):
                fill=PINK if over else GREEN)
     note = (f"予算より {total - budget:,}円 多め" if over
             else f"予算の {round(ratio * 100)}%（あと {budget - total:,}円）")
-    deck.label(sid, x - 6, y + 12, w + 12, 18, note, size=9.5,
+    deck.label(sid, x - 6, y + 12, w + 12, 20, note, size=10,
                color=PINK if over else GREEN_DARK, align="CENTER")
 
 
@@ -1013,17 +1133,20 @@ def _packing(deck: _Deck, plan: dict):
     if not items:
         return
     sid = deck.page_head("持ちもの", "わすれずに 持っていこう")
-    cols, gap_x, gap_y, h = 3, 14, 12, 30
+    cols, gap_x = 3, 14
     w = (BASE_W - MARGIN * 2 - gap_x * (cols - 1)) / cols
     rows = math.ceil(len(items) / cols)
-    gap_y = min(gap_y, (372 - 100 - rows * h) / max(1, rows - 1)) if rows > 1 else gap_y
+    # 少ないほど大きな札に
+    h, size, gap_y = (40, 13.5, 16) if rows <= 3 else (34, 12, 13) if rows <= 5 else (30, 11.5, 9)
+    top = _center(rows * h + (rows - 1) * gap_y)
+    # 札の内側の余白（左右7.2pt）と「○ 」の幅を引いた残りに収める
+    limit = (w - 16) / size * 0.95 - 2.2
     for n, item in enumerate(items):
         col, row = n % cols, n // cols
-        x, y = MARGIN + col * (w + gap_x), 100 + row * (h + gap_y)
+        x, y = MARGIN + col * (w + gap_x), top + row * (h + gap_y)
         oid = deck.shape(sid, "FLOW_CHART_TERMINATOR", x, y, w, h, fill=SURFACE, outline=BORDER)
-        name = item if _width(item) <= 13 else item[:12] + "…"
-        deck.text(oid, f"○  {name}", size=11.5, line_spacing=100)
-    deck.confetti(sid, [(660, 360, PINK), (676, 350, GREEN), (52, 364, GOLD)])
+        deck.text(oid, f"○  {_clip(item, limit)}", size=size, line_spacing=100)
+    deck.scatter(sid, [(10, 110, 32, 360), (690, 110, 710, 360)], count=3)
 
 
 def _fit_note(note: str, inner_width: float, max_height: float) -> tuple:
@@ -1049,24 +1172,29 @@ def _closing(deck: _Deck, plan: dict):
     deck.shape(sid, "ELLIPSE", 50, 150, 190, 190, fill=GLOW, alpha=0.7)
     deck.shape(sid, "RECTANGLE", 0, 372, BASE_W, 33, fill=MEADOW)
     deck.image(sid, "mate.png", 62, 120, 176, 236)
-    deck.confetti(sid, [(282, 24, PINK), (690, 40, GREEN), (640, 300, GOLD), (40, 90, PINK)])
+    deck.scatter(sid, [(20, 40, 120, 110), (690, 120, 712, 340), (260, 330, 300, 364)], count=4)
 
     # 空行が続くだけの改行は1つにまとめる（吹き出しの高さを無駄にしない）
     note = re.sub(r"\n{2,}", "\n", _clean(plan.get("feedback") or "")).strip()
-    bottom = 160
-    if note:
-        deck.label(sid, 300, 34, 380, 18, _spaced("ちゃむから ひとこと"), size=9, color=GOLD, bold=True)
-        inner_w = 380 - 40
-        note, size = _fit_note(note, inner_w, 170)
-        chars = max(1, int((inner_w - 14) / size))
-        h = max(90, min(200, _text_height(note.split("\n"), chars, size, 145) + 34))
-        # 吹き出しの尾は左下（ちゃむの方）に向く
-        deck.shape(sid, "WEDGE_ROUND_RECTANGLE_CALLOUT", 300, 60, 380, h, fill=SURFACE, outline=BORDER)
-        deck.label(sid, 320, 60 + 16, inner_w, h - 28, note, size=size, line_spacing=145)
-        deck.tape(sid, 640, 62, w=70, h=18, color=BLUSH, degrees=8)
-        bottom = 60 + h + 40
-    deck.label(sid, 300, max(bottom, 170), 400, 50, "いってらっしゃい！🍀",
-               size=30, color=GREEN_DARK, bold=True)
+    bye_h = 52
+    if not note:
+        deck.label(sid, 300, _center(bye_h, 40, 366), 400, bye_h, "いってらっしゃい！🍀",
+                   size=32, color=GREEN_DARK, bold=True)
+        return
+    inner_w = 380 - 40
+    note, size = _fit_note(note, inner_w, 170)
+    chars = max(1, int((inner_w - 14) / size))
+    h = max(90, min(200, _text_height(note.split("\n"), chars, size, 145) + 34))
+    # 見出し・吹き出し・ことばを、ひとかたまりで上下の真ん中に
+    group = 26 + h + 44 + bye_h
+    top = _center(group, 30, 366)
+    deck.label(sid, 300, top, 380, 20, _spaced("ちゃむから ひとこと"), size=10, color=GOLD, bold=True)
+    # 吹き出しの尾は左下（ちゃむの方）に向く
+    deck.shape(sid, "WEDGE_ROUND_RECTANGLE_CALLOUT", 300, top + 26, 380, h, fill=SURFACE, outline=BORDER)
+    deck.label(sid, 320, top + 26 + 16, inner_w, h - 28, note, size=size, line_spacing=145)
+    deck.tape(sid, 640, top + 28, w=70, h=18, color=BLUSH, degrees=deck.tilt(5, 10))
+    deck.label(sid, 300, top + 26 + h + 44, 400, bye_h, "いってらっしゃい！🍀",
+               size=32, color=GREEN_DARK, bold=True)
 
 
 def build_requests(plan: dict, page_size=None, image_url=None, weather_days=None,
@@ -1085,6 +1213,9 @@ def build_requests(plan: dict, page_size=None, image_url=None, weather_days=None
         except (KeyError, TypeError, ZeroDivisionError):
             pass
     deck = _Deck(w_pt, h_pt, image_url)
+    # 飾りの揺らぎは行き先から決める（同じプランなら何度作っても同じ見た目。
+    # hash() は起動のたびに変わるので使わない）
+    deck.rng.seed(zlib.crc32(str(plan.get("destination") or "").encode("utf-8")))
     _cover(deck, plan, weather_days)
     _overview(deck, plan)
     _glance(deck, plan, weather_days)

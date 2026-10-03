@@ -249,8 +249,14 @@ def test_full_width_times_are_normalised():
 def test_timeline_marks_meals_stays_moves_and_bolds_place_names():
     body, _ = SX.build_requests(_plan())
     _, texts = _validate(body)
-    emojis = [t for t in _texts_in_order(body) if t in ("🍱", "🏨", "🚄", "✈️", "✨", "☕")]
-    assert "🍱" in emojis and "🚄" in emojis and "✨" in emojis
+    order = _texts_in_order(body)
+    # 絵文字ではなく色の丸で分ける。日ごとのページに凡例が出る
+    assert {"みどころ", "ごはん", "いどう"} <= set(order)
+    colors = {SX._rgb(c)["red"] for c in (SX.GREEN, SX.PINK, SX.GOLD)}
+    fills = {r["updateShapeProperties"]["shapeProperties"]["shapeBackgroundFill"]["solidFill"]["color"]["rgbColor"]["red"]
+             for r in body if "updateShapeProperties" in r
+             and "shapeBackgroundFill" in r["updateShapeProperties"]["shapeProperties"]}
+    assert colors <= fills
     # 「11:00 🍣 近江町市場で昼食」は食事、「13:00 兼六園」は観光地
     assert SX._kind("🍣 近江町市場で昼食", SX._place_names(_plan())) == "meal"
     assert SX._kind("兼六園（約1時間・バス10分）", ["兼六園"]) == "spot", "観光地をバスの語で移動と取り違えている"
@@ -265,11 +271,11 @@ def test_timeline_marks_meals_stays_moves_and_bolds_place_names():
 
 
 def test_day_panel_shows_that_days_weather():
-    weather = [{"date": "2026-11-04", "emoji": "☔", "tmax": 14.4, "tmin": 8.6}]
+    weather = [{"date": "2026-11-04", "emoji": "☔", "label": "雨", "tmax": 14.4, "tmin": 8.6}]
     body, _ = SX.build_requests(_plan(), weather_days=weather)
     texts = _texts_in_order(body)
-    assert "☔  14° / 9°" in texts
-    assert texts.index("2日目", texts.index("日ごとの みどころ") + 10) < texts.index("☔  14° / 9°")
+    assert "雨 14° / 9°" in texts, "天気は絵文字ではなく言葉で"
+    assert texts.index("2日目", texts.index("日ごとの みどころ") + 10) < texts.index("雨 14° / 9°")
 
 
 def test_cover_shows_themes_as_tags():
@@ -290,7 +296,8 @@ def test_full_width_brackets_stay_as_written():
     """時刻を半角にするのは時刻だけ。「（約1時間）」のかっこまで半角に変えない。"""
     body, _ = SX.build_requests(_plan(schedule=["1日目", "０９：００ 兼六園（約1時間・バス10分＋徒歩5分）"]))
     texts = _texts_in_order(body)
-    assert "09:00" in texts and "兼六園（約1時間・バス10分＋徒歩5分）" in texts
+    # かっこの中は、小さな2行目（補足）になる。全角の「＋」はそのまま
+    assert "09:00" in texts and "兼六園" in texts and "約1時間・バス10分＋徒歩5分" in texts
 
 
 def test_glance_cards_skip_duplicate_names_and_cover_travel_days():
@@ -360,7 +367,106 @@ def test_packing_list_keeps_names_short_and_fits_one_page():
     _, texts = _validate(body)
     pills = [t for t in texts.values() if t.startswith("○  ")]
     assert len(pills) == 21
-    assert "○  とても長い名前の持ちもの…" in pills
+    long = [t for t in pills if t.startswith("○  とても長い")]
+    assert long and long[0].endswith("…"), "長い名前を札に収めていない"
+
+
+def _shape_boxes(body):
+    return {r["createShape"]["objectId"]: r["createShape"]["elementProperties"]
+            for r in body if "createShape" in r}
+
+
+def _box_of_text(body, text):
+    boxes = _shape_boxes(body)
+    for r in body:
+        if "insertText" in r and r["insertText"]["text"] == text:
+            ep = boxes[r["insertText"]["objectId"]]
+            return ep["transform"]["translateY"], ep["size"]["height"]["magnitude"]
+    raise AssertionError(text)
+
+
+def test_generated_text_uses_no_emoji_icons():
+    """アイコンも天気も絵文字を使わない（写実的な絵文字は、ちゃむの水彩と並ぶと浮く）。
+    ブランドの四つ葉 🍀 だけは残す。プランの中身に絵文字があれば、それはそのまま。"""
+    plan = _plan(schedule=["1日目", "08:00 東京駅発", "12:00 近江町市場で昼食", "15:00 兼六園",
+                           "16:45 ホテル日航金沢にチェックイン", "2日目", "10:00 チェックアウト"],
+                 feedback="ゆったり楽しめるプランです。")
+    weather = [{"date": "2026-11-03", "emoji": "☀️", "label": "晴れ", "tmax": 18, "tmin": 9}]
+    body, _ = SX.build_requests(plan, weather_days=weather)
+    for t in _texts_in_order(body):
+        for ch in t:
+            o = ord(ch)
+            emoji = (0x1F000 <= o <= 0x1FAFF and o != 0x1F340) or 0x2600 <= o <= 0x27BF
+            assert not emoji, f"絵文字 {ch!r} が「{t}」に入っている"
+
+
+def test_sparse_pages_are_centred_and_use_bigger_text():
+    """中身が少ないページは上下の真ん中に置き、字を大きくする（下ががらんとしない）。"""
+    plan = _plan(spots=["兼六園"], restaurants=["自由軒"], accommodation=["ホテル日航金沢"],
+                 schedule=["1日目", "10:00 兼六園", "12:00 自由軒で昼食", "2日目", "10:00 帰る"])
+    body, _ = SX.build_requests(plan)
+    _validate(body)
+    # 楽しむことのカード: 上と下の余白がほぼ同じ
+    text_id = next(r["insertText"]["objectId"] for r in body
+                   if "insertText" in r and r["insertText"]["text"] == "・兼六園")
+    page = _shape_boxes(body)[text_id]["pageObjectId"]
+    card = next(r["createShape"]["elementProperties"] for r in body
+                if "createShape" in r and r["createShape"]["shapeType"] == "ROUND_RECTANGLE"
+                and r["createShape"]["elementProperties"]["pageObjectId"] == page)
+    top = card["transform"]["translateY"]
+    bottom = top + card["size"]["height"]["magnitude"]
+    assert abs((top - SX.CONTENT_TOP) - (SX.CONTENT_BOTTOM - bottom)) < 20, (top, bottom)
+    # 予定の少ない日は、いちばん大きな字のタイムラインになる
+    sizes = {r["updateTextStyle"]["objectId"]: r["updateTextStyle"]["style"]["fontSize"]["magnitude"]
+             for r in body if "updateTextStyle" in r and r["updateTextStyle"]["textRange"]["type"] == "ALL"}
+    ids = {r["insertText"]["text"]: r["insertText"]["objectId"] for r in body if "insertText" in r}
+    assert sizes[ids["10:00"]] == SX._TL_SIZES[0]
+    # 予定がぎっしりの日は小さな字に
+    body, _ = SX.build_requests(SHAPES["1日がとても長い"])
+    sizes = {r["updateTextStyle"]["objectId"]: r["updateTextStyle"]["style"]["fontSize"]["magnitude"]
+             for r in body if "updateTextStyle" in r and r["updateTextStyle"]["textRange"]["type"] == "ALL"}
+    ids = {r["insertText"]["text"]: r["insertText"]["objectId"] for r in body if "insertText" in r}
+    assert sizes[ids["00:00"]] == SX._TL_SIZES[-1]
+
+
+def test_a_typical_day_fits_on_one_page():
+    """よくある1日（10件・補足つき）は、1枚に収まる（2枚に割れると読みにくい）。"""
+    plan = _plan(schedule=["1日目"] + [f"{8 + i:02d}:00 予定{i}を楽しむ（徒歩10分・約1時間）" for i in range(10)])
+    body, _ = SX.build_requests(plan)
+    assert "（つづき）" not in _texts_in_order(body)
+
+
+def test_detail_in_brackets_becomes_a_small_second_line():
+    assert SX._split_detail("近江町市場で昼食（海鮮丼・約1時間）") == ("近江町市場で昼食", "海鮮丼・約1時間")
+    assert SX._split_detail("兼六園(約1時間) 雨なら美術館") == ("兼六園", "約1時間　雨なら美術館")
+    assert SX._split_detail("ホテルに戻る") == ("ホテルに戻る", "")
+    assert SX._split_detail("（自由時間）") == ("（自由時間）", ""), "かっこだけの行を空にしてしまう"
+
+
+def test_day_pages_change_colour_as_you_turn_them():
+    body, _ = SX.build_requests(SHAPES["長い旅"])
+    panels = []
+    for i, r in enumerate(body):
+        cs = r.get("createShape")
+        if cs and cs["shapeType"] == "RECTANGLE" and cs["elementProperties"]["size"]["width"]["magnitude"] == 212:
+            fill = body[i + 1]["updateShapeProperties"]["shapeProperties"]["shapeBackgroundFill"]["solidFill"]["color"]["rgbColor"]
+            panels.append(tuple(round(v, 3) for v in fill.values()))
+    days = [c for i, c in enumerate(panels) if i == 0 or c != panels[i - 1]]   # 同じ日の続きはまとめる
+    assert len(days) >= 6 and days[0] != days[1] != days[2] and days[0] == days[3]
+    assert "01" in _texts_in_order(body) and "06" in _texts_in_order(body), "大きな日付の数字が無い"
+
+
+def test_decoration_varies_but_is_repeatable():
+    """テープの角度や紙ふぶきは揺らぐが、同じプランなら何度作っても同じ。"""
+    a, _ = SX.build_requests(_plan())
+    b, _ = SX.build_requests(_plan())
+    c, _ = SX.build_requests(_plan(destination="鎌倉"))
+    assert a == b
+    angles = lambda body: [r["createShape"]["elementProperties"]["transform"].get("shearY")  # noqa: E731
+                           for r in body if "createShape" in r
+                           and "shearY" in r["createShape"]["elementProperties"]["transform"]]
+    assert angles(a) != angles(c)
+    assert len(set(angles(a))) > 2, "どのテープも同じ角度"
 
 
 def test_cards_do_not_overflow():

@@ -81,7 +81,7 @@
         onProgress: (p) => progress.push(p),
       });
       check('1回に1枚ずつ送ること', sent.length === 8 && sent.every((n) => n === 1), sent.join(','));
-      check('同時に送るのは2枚まで', maxInFlight <= 2, maxInFlight);
+      check('同時に送るのは1枚だけ（サーバーのメモリを守る）', maxInFlight === 1, maxInFlight);
       check('全部入ること', result.saved === 8 && result.failed.length === 0, JSON.stringify(result));
       check('入った写真から順に並べること', savedIds.length === 8);
       check('「3 / 8 枚」のような途中の数を出すこと', progress.some((p) => p.done === 3 && p.total === 8));

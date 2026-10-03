@@ -136,6 +136,15 @@ gcloud iam service-accounts add-iam-policy-binding "$SA" \
   --project "$PROJECT_ID"
 
 echo "=== Cloud Run にデプロイ ==="
+# iOSアプリのサインインは、IDトークンの宛先を GOOGLE_IOS_CLIENT_ID で確かめる
+# （api_auth.verify_google_id_token）。渡し忘れると Web 用のIDで確かめることになり、
+# 本番で iOS アプリからサインインできない。クライアントIDは秘密ではないので環境変数で渡す。
+EXTRA_ENV=""
+if [ -n "${GOOGLE_IOS_CLIENT_ID:-}" ]; then
+  EXTRA_ENV=",GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}"
+else
+  echo "⚠ GOOGLE_IOS_CLIENT_ID が src/.env にありません。iOSアプリからはサインインできません"
+fi
 gcloud run deploy "$SERVICE_NAME" \
   --source . \
   --region "$REGION" \
@@ -144,7 +153,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --timeout=3600 \
   --concurrency=20 \
   --max-instances=3 \
-  --set-env-vars "DB_HOST=${DB_HOST},DB_PORT=${DB_PORT},DB_USER=${DB_USER},DB_NAME=${DB_NAME},DB_SSL=true,GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GCS_BUCKET=${GCS_BUCKET}" \
+  --set-env-vars "DB_HOST=${DB_HOST},DB_PORT=${DB_PORT},DB_USER=${DB_USER},DB_NAME=${DB_NAME},DB_SSL=true,GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GCS_BUCKET=${GCS_BUCKET}${EXTRA_ENV}" \
   --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,TAVILY_API_KEY=TAVILY_API_KEY:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,DB_PASS=DB_PASS:latest,SECRET_KEY=SECRET_KEY:latest,STADIA_API_KEY=STADIA_API_KEY:latest,GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest" \
   --project "$PROJECT_ID"
 

@@ -317,11 +317,13 @@ def shared_upload_photos(trip_id: int):
         return jsonify({"error": f"一度にアップロードできるのは{_MAX_FILES_PER_REQUEST}枚までです"}), 400
 
     saved = []
+    unsupported = []
     for f in files:
         if not f or not f.filename:
             continue
         ext = os.path.splitext(f.filename)[1].lower()
         if ext not in _ALLOWED_EXT:  # 拡張子なし("")も弾く（reflection側と同じ判定）
+            unsupported.append(f.filename)
             continue
         data = f.read()
         if not data:
@@ -353,6 +355,9 @@ def shared_upload_photos(trip_id: int):
             "taken_at": str(meta["taken_at"]) if meta.get("taken_at") else None,
         })
     logger.info("共有編集で写真アップロード: trip_id=%s count=%d", trip_id, len(saved))
+    # 1枚も入らず、形式のせいだったときは理由を返す（黙って「成功」にしない）
+    if not saved and unsupported:
+        return jsonify({"error": "対応していない形式の写真です（jpg・png・heic・webp・gif が使えます）"}), 415
     return jsonify({"saved": saved, "count": len(saved)}), 201
 
 

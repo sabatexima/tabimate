@@ -42,11 +42,13 @@
     });
   }
 
-  /* files を1枚ずつ（同時に concurrency 枚まで）送る。
+  /* files を1枚ずつ送る（concurrency は同時に送る枚数。既定の1を変えないこと:
+     サーバーは写真を原寸で開いてサムネイルを作るので、同時に何枚も処理すると
+     Cloud Run のメモリ（512MB）を使い切りかねない）。
      onSaved(写真)   入った写真から順に呼ぶ（画面に並べる）
      onProgress({done, total, ratio})  進み具合（ratio は送ったバイトの割合 0〜1）
      返り値: { saved: 入った枚数, failed: [{name, reason}] } */
-  async function uploadPhotos({ files, url, onSaved, onProgress, concurrency = 2 }) {
+  async function uploadPhotos({ files, url, onSaved, onProgress, concurrency = 1 }) {
     const list = Array.from(files || []);
     const totalBytes = list.reduce((s, f) => s + (f.size || 0), 0) || 1;
     const sentBytes = new Array(list.length).fill(0);

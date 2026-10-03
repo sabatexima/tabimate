@@ -39,7 +39,11 @@ def normalize(data: bytes, filename: str):
     if ext in _HEIC_EXT:
         try:
             img = Image.open(io.BytesIO(data))
-            img = ImageOps.exif_transpose(img).convert("RGB")
+            # 原寸の画像はメモリを食う（1200万画素で約36MB）。回転と色の変換で
+            # 原寸の写しを増やさないよう、変換してから同じ画像の上で回す
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            ImageOps.exif_transpose(img, in_place=True)
             out = io.BytesIO()
             img.save(out, format="JPEG", quality=88)
             return out.getvalue(), "image/jpeg", ".jpg"
@@ -49,11 +53,18 @@ def normalize(data: bytes, filename: str):
 
 
 def thumbnail(data: bytes, max_edge: int = _THUMB_MAX_EDGE):
-    """長辺 max_edge px のJPEGサムネイルを返す。生成できなければ None。"""
+    """長辺 max_edge px のJPEGサムネイルを返す。生成できなければ None。
+
+    先に縮めてから回す。以前は原寸のまま回転・色の変換をしてから縮めていて、
+    1枚で原寸の写しが3つでき（1200万画素で100MB超）、Cloud Run の512MBを
+    写真2枚の同時処理で使い切りかねなかった。JPEG は読み込みの段階で
+    縮めて読める（draft）ので、原寸を丸ごと展開しない。
+    """
     try:
         img = Image.open(io.BytesIO(data))
-        img = ImageOps.exif_transpose(img).convert("RGB")
+        img.draft("RGB", (max_edge * 2, max_edge * 2))   # JPEG のときだけ効く
         img.thumbnail((max_edge, max_edge))
+        img = ImageOps.exif_transpose(img).convert("RGB")
         out = io.BytesIO()
         img.save(out, format="JPEG", quality=82)
         return out.getvalue()

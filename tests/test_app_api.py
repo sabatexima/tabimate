@@ -377,3 +377,23 @@ def test_the_owner_still_gets_their_own_data(env, monkeypatch):
         resp = client.get("/api/plan_geo/99", headers=headers_for(OWNER, "owner@example.com"))
     assert resp.status_code == 200
     assert "秘密のスポット" in resp.get_data(as_text=True)
+
+
+# ----------------------------------------------------------------------
+# 写真アップロード: 形式ではじいたときは理由を返す
+# ----------------------------------------------------------------------
+def test_upload_of_only_unsupported_files_says_why(env):
+    """1枚も入らなかった理由が形式なら 415 と使える形式を返す（201 で黙って0枚、にしない）。"""
+    import io
+    share_trip_with(env, "edit")
+    with env["app"].test_client() as c:
+        own = c.post(f"/reflection/trips/{TRIP['id']}/photos", headers=headers_for(OWNER),
+                     data={"photos": (io.BytesIO(b"x"), "clip.mov")},
+                     content_type="multipart/form-data")
+        shared = c.post(f"/shared/trip/{TRIP['id']}/photos",
+                        headers=headers_for(FRIEND, FRIEND_EMAIL),
+                        data={"photos": (io.BytesIO(b"x"), "clip.mov")},
+                        content_type="multipart/form-data")
+    for r in (own, shared):
+        assert r.status_code == 415
+        assert "heic" in r.get_json()["error"]

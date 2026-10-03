@@ -675,7 +675,6 @@ def test_overnight_trip_is_no_lodging_but_two_days(monkeypatch):
 
 def test_overnight_trip_meals_and_costs():
     """0泊2日: 食事は昼2+夕1、費用テンプレに宿泊費の行が無い。"""
-    import chat.agents as ag
     from chat import prompts
     sections = prompts.day_sections("0泊2日")
     assert "2日目" in sections and "宿泊費" not in sections

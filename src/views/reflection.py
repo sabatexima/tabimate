@@ -453,6 +453,7 @@ def upload_photos(trip_id: int):
         return jsonify({"error": f"一度にアップロードできるのは{_MAX_FILES_PER_REQUEST}枚までです"}), 400
 
     saved = []
+    unsupported = []
     for f in files:
         if not f or not f.filename:
             continue
@@ -460,6 +461,7 @@ def upload_photos(trip_id: int):
         # 許可拡張子のみ受け入れる（拡張子なしも拒否。MIMEだけに頼らない）。
         if ext not in _ALLOWED_EXT:
             logger.debug("非対応拡張子をスキップ: %s", f.filename)
+            unsupported.append(f.filename)
             continue
         data = f.read()
         if not data:
@@ -493,6 +495,9 @@ def upload_photos(trip_id: int):
         })
 
     logger.info("写真アップロード完了: trip_id=%s count=%d", trip_id, len(saved))
+    # 1枚も入らず、形式のせいだったときは理由を返す（黙って「成功」にしない）
+    if not saved and unsupported:
+        return jsonify({"error": "対応していない形式の写真です（jpg・png・heic・webp・gif が使えます）"}), 415
     return jsonify({"saved": saved, "count": len(saved)}), 201
 
 

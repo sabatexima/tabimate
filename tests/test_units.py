@@ -536,3 +536,66 @@ def test_nominatim_query_carries_the_country(monkeypatch):
     geocoding._query_nominatim("Tour Eiffel", country=None)
     geocoding._query_nominatim("兼六園")
     assert [q.get("countrycodes") for q in params_seen] == ["fr", None, "jp"]
+
+
+# ----------------------------------------------------------------------
+# images: サムネイル（先に縮めてから回す）
+# ----------------------------------------------------------------------
+def _jpeg_with_orientation(size, orientation):
+    import io
+    from PIL import Image
+    img = Image.new("RGB", size, (200, 120, 40))
+    exif = Image.Exif()
+    exif[0x0112] = orientation   # Orientation
+    out = io.BytesIO()
+    img.save(out, format="JPEG", exif=exif.tobytes())
+    return out.getvalue()
+
+
+def test_thumbnail_keeps_the_long_edge_and_the_orientation():
+    """縮めてから回しても、仕上がりは「回してから縮めた」ときと同じ向き・大きさ。"""
+    import io
+    from PIL import Image
+    from services import images
+
+    # 横長に撮って「90度回して見る」印（6）が付いた写真 → 縦長のサムネイル
+    thumb = images.thumbnail(_jpeg_with_orientation((4000, 3000), 6))
+    w, h = Image.open(io.BytesIO(thumb)).size
+    assert (w, h) == (360, 480)
+
+    # 印なし・小さい写真は引き伸ばさない
+    thumb = images.thumbnail(_jpeg_with_orientation((300, 200), 1))
+    assert Image.open(io.BytesIO(thumb)).size == (300, 200)
+
+
+def test_thumbnail_returns_none_for_broken_data():
+    from services import images
+    assert images.thumbnail(b"not an image") is None
+
+
+# ----------------------------------------------------------------------
+# logger: Cloud Run ではファイルに書かない（ディスクがメモリの上にあるため）
+# ----------------------------------------------------------------------
+def _file_handlers_when(env_extra):
+    import subprocess
+    code = ("import logging, logger; "
+            "print(sum(isinstance(h, logging.FileHandler) for h in logger.logger.handlers))")
+    env = {k: v for k, v in os.environ.items() if k != "K_SERVICE"}
+    env.update(env_extra)
+    src = os.path.join(os.path.dirname(__file__), "..", "src")
+    out = subprocess.run([sys.executable, "-c", code], cwd=src, env=env,
+                         capture_output=True, text=True, check=True)
+    return int(out.stdout.strip())
+
+
+def test_logger_writes_no_file_on_cloud_run():
+    assert _file_handlers_when({"K_SERVICE": "tabimate"}) == 0
+
+
+def test_logger_file_is_rotated_locally():
+    from logging.handlers import RotatingFileHandler
+    import logger
+    assert _file_handlers_when({}) == 1
+    if not os.getenv("K_SERVICE"):
+        handlers = [h for h in logger.logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert handlers and handlers[0].maxBytes > 0

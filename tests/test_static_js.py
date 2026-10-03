@@ -269,3 +269,16 @@ def test_photo_pages_upload_one_photo_per_request(page, script):
     assert "TabiPhotoUpload.wireUploader" in js
     assert not re.search(r"for \(const \w+ of input\.files\) fd\.append", js), \
         f"{script} が選んだ写真をまとめて1回で送っている"
+
+
+def test_deploy_passes_the_ios_client_id():
+    """iOS のサインインは GOOGLE_IOS_CLIENT_ID でIDトークンの宛先を確かめる。
+
+    deploy.sh が Cloud Run に渡していないと、本番だけ iOS からサインインできない。
+    """
+    deploy = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+    env_line = next(l for l in deploy.splitlines() if "--set-env-vars" in l)
+    assert "${EXTRA_ENV}" in env_line
+    assert 'EXTRA_ENV=",GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}"' in deploy
+    api_auth = (ROOT / "src" / "api_auth.py").read_text(encoding="utf-8")
+    assert "GOOGLE_IOS_CLIENT_ID" in api_auth

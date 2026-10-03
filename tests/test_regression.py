@@ -1383,3 +1383,64 @@ def test_plan_card_escapes_every_field_it_prints():
     # 属性は閉じ引用符で正しく終わり、外へ出ていないこと
     for m in re.finditer(r'data-plan="([^"]*)"', html):
         assert '"' not in m.group(1)
+
+
+# ----------------------------------------------------------------------
+# 広い行き先（「関東」）から AI が決めたエリアは、次のターンでも引き継ぐ
+# ----------------------------------------------------------------------
+def _settled_prev():
+    return {
+        "destination": "箱根", "destination_request": "関東",
+        "destination_note": "温泉が楽しめて東京から近い箱根で組みました",
+        "duration": "1泊2日", "travel_date": "2099年8月1日", "num_people": 2,
+        "budget_limit": 30000, "departure_location": "川崎",
+        "spots": ["箱根神社"], "restaurants": ["田むら銀かつ亭"], "accommodation": ["宿"],
+        "schedule": ["1日目"], "budget_estimate": ["x"], "transport_cost": 3000,
+        "remaining_budget": 27000,
+    }
+
+
+def _chat_with(monkeypatch, state):
+    import chat.chat as C
+    import db
+    captured = {}
+    monkeypatch.setattr(C, "invoke_with_retry", lambda llm, msgs: state)
+    monkeypatch.setattr(C, "_build_user_preferences", lambda uid: "")
+    monkeypatch.setattr(C, "generate_travel_plan",
+                        lambda inputs: (captured.update(inputs), dict(inputs, status="approved"))[1])
+    monkeypatch.setattr(db, "get_last_plan", lambda uid: _settled_prev())
+    C.chat("…", messages_history=[], user_id="u1")
+    return captured
+
+
+def test_follow_up_keeps_the_area_the_ai_chose(monkeypatch):
+    """会話の上では行き先は「関東」のまま。「2日目をゆっくり」で別の場所に作り直さないこと。"""
+    captured = _chat_with(monkeypatch, _complete_state(
+        destination="関東", plan_change_request="2日目をゆっくりにして", edit_targets=["schedule"]))
+    assert captured["destination"] == "箱根"
+    assert captured["destination_request"] == "関東"
+    assert captured["edit_targets"] == ["schedule"], "行き先が変わったと見なして全部作り直している"
+    assert captured["spots"] == ["箱根神社"]
+
+
+def test_asking_for_another_place_settles_again_without_the_last_one(monkeypatch):
+    captured = _chat_with(monkeypatch, _complete_state(
+        destination="関東", plan_change_request="別の場所にして", edit_targets=["sightseeing"]))
+    assert captured["destination"] == "関東", "決め直すには、元の広い行き先から"
+    assert captured["avoid_area"] == "箱根"
+    assert "edit_targets" not in captured or captured["edit_targets"] in ([], ["all"])
+
+
+def test_naming_a_new_place_simply_uses_it(monkeypatch):
+    captured = _chat_with(monkeypatch, _complete_state(
+        destination="日光", plan_change_request="日光にして", edit_targets=["all"]))
+    assert captured["destination"] == "日光"
+    assert not captured.get("avoid_area")
+
+
+def test_another_place_phrases():
+    from chat.chat import _ASK_ANOTHER_PLACE
+    for text in ("別の場所にして", "ほかのところがいい", "違うエリアで", "行き先を変えて", "場所を変えたい", "他の所で"):
+        assert _ASK_ANOTHER_PLACE.search(text), text
+    for text in ("2日目をゆっくり", "宿を変えて", "別の宿にして", "ほかのお店がいい"):
+        assert not _ASK_ANOTHER_PLACE.search(text), text

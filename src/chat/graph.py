@@ -21,7 +21,7 @@ from chat.models import TravelPlanState
 from chat.llm import estimate_cost, USD_TO_JPY
 from logger import get_logger
 from chat.agents import (
-    transport_agent, sightseeing_candidates, sightseeing_expert,
+    settle_destination, transport_agent, sightseeing_candidates, sightseeing_expert,
     gourmet_candidates, gourmet_hunter,
     accommodation_candidates, accommodation_agent,
     timekeeper, cost_manager, balancer,
@@ -113,6 +113,16 @@ def generate_travel_plan(inputs: dict):
     inputs.setdefault("accommodation_candidates", [])
     inputs.setdefault("restaurant_candidates", [])
     inputs.setdefault("weather", "")
+    inputs.setdefault("destination_request", "")
+    inputs.setdefault("destination_note", "")
+    inputs.setdefault("avoid_area", "")
+
+    # 行き先が広すぎる（「日本」「関東」「どこでも」）ときは、先に具体的なエリアを決める。
+    # 交通費・天気・地図・検索はすべてこの行き先で計算するので、いちばん最初にやる。
+    # 部分編集は前回のプラン（決めたエリア）を引き継ぐので、決め直さない。
+    targets = inputs.get("edit_targets") or []
+    if not targets or "all" in targets:
+        inputs.update(settle_destination(inputs))
 
     # 行き先の国を先に調べる。海外なら、費用を円に換算する・名前に現地語名を添える・
     # フライトを行程に組む、といった指示が全エージェントに要る。天気もこの座標を使い回す。

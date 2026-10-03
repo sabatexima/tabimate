@@ -149,6 +149,20 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertFalse(messages[1].plan?.isInfeasible ?? true)
     }
 
+    func testDraftPlanCarriesTheChosenAreaNote() throws {
+        // 「関東」のような広い行き先から、ちゃむが箱根に決めたときの元の言い方と理由
+        let plan = try decode(DraftPlan.self, """
+        {"destination": "箱根", "destination_request": "関東",
+         "destination_note": "温泉が楽しめて東京から近い箱根で組みました", "status": "approved"}
+        """)
+        XCTAssertEqual(plan.destination, "箱根")
+        XCTAssertEqual(plan.destinationRequest, "関東")
+        XCTAssertEqual(plan.destinationNote, "温泉が楽しめて東京から近い箱根で組みました")
+        // 古いプラン（この2つが無い）も読める
+        let old = try decode(DraftPlan.self, #"{"destination": "熱海"}"#)
+        XCTAssertNil(old.destinationRequest)
+    }
+
     func testDraftPlanRoundTripsForSaving() throws {
         // 提示されたプランは、そのまま /save_plan へ送り返せなければならない
         let original = try decode(DraftPlan.self, """

@@ -91,8 +91,11 @@ def _answer(name, days):
     raise AssertionError(f"未知のスキーマ: {name}")
 
 
-def run_pipeline(monkeypatch, inputs, verdicts=("approved",), country="jp"):
-    """本物の generate_travel_plan を1本流し、(最終状態, 渡ったプロンプト) を返す。"""
+def run_pipeline(monkeypatch, inputs, verdicts=("approved",), country="jp", settle=None):
+    """本物の generate_travel_plan を1本流し、(最終状態, 渡ったプロンプト) を返す。
+
+    settle=(エリア, 理由) を渡すと、行き先が広すぎると判断して、そのエリアに決めた体にする。
+    """
     import chat.agents as A
     import chat.graph as G
     from services import geocoding as GC, weather as WX
@@ -107,6 +110,11 @@ def run_pipeline(monkeypatch, inputs, verdicts=("approved",), country="jp"):
         if name == "BalancerOutput":
             return type("R", (), {"status": next(verdict_iter, "approved"),
                                   "feedback": "位置が離れすぎています"})()
+        if name == "DestinationChoice":
+            asked = re.search(r"希望の行き先: (.*)", prompt).group(1)
+            if settle:
+                return type("R", (), {"is_broad": True, "area": settle[0], "reason": settle[1]})()
+            return type("R", (), {"is_broad": False, "area": asked, "reason": ""})()
         # 行程だけは、期間ではなくプロンプトが求めた日数に従う（本物と同じ振る舞い）
         return _answer(name, _requested_days(prompt) if name == "TimekeeperOutput" else days)
 
@@ -186,7 +194,7 @@ def test_prompts_have_no_holes(monkeypatch, duration, country, no_car):
 
     # 呼ばれた顔ぶれが、旅の形どおりであること。宿を取らない行程で宿の
     # エージェントを呼ぶと、返事を捨てるだけの LLM 代がかかる
-    expected = {"TransportOutput", "SightseeingCandidatesOutput", "SightseeingOutput",
+    expected = {"DestinationChoice", "TransportOutput", "SightseeingCandidatesOutput", "SightseeingOutput",
                 "GourmetCandidatesOutput", "GourmetOutput", "TimekeeperOutput",
                 "CostOutput", "BalancerOutput"}
     if nights > 0:
@@ -222,7 +230,9 @@ def test_conditional_instructions_appear_only_when_they_apply(monkeypatch, count
                       "AccommodationCandidatesOutput", "AccommodationOutput",
                       "GourmetCandidatesOutput", "GourmetOutput", "TimekeeperOutput"}
     for name, prompt in prompts:
-        if name != "TransportOutput":
+        # 行き先を決める段は、国を調べる前に動く（どこへ行くかを決める段なので）。
+        # 交通費は海外のとき専用の指示を持つ
+        if name not in ("TransportOutput", "DestinationChoice"):
             assert ("日本円に換算して書き" in prompt) == (country == "fr"), f"{name}: 海外の指示"
         if name in chooses_places:
             has = "運転免許がない" in prompt or "運転しない前提" in prompt
@@ -269,3 +279,72 @@ def test_generated_plan_survives_formatting(monkeypatch, duration):
     payload = plan_payload(state)
     for key in ("destination", "duration", "spots", "schedule"):
         assert payload.get(key), f"控えに {key} が無い"
+
+
+# ----------------------------------------------------------------------
+# 広すぎる行き先（「日本」「関東」）は、先に具体的なエリアを決める
+# ----------------------------------------------------------------------
+def test_broad_destination_is_settled_before_anything_is_priced(monkeypatch):
+    """「関東」のまま交通費を見積もらず、決めたエリア（箱根）で最初から組むこと。"""
+    state, prompts = run_pipeline(monkeypatch, _inputs("1泊2日", "jp", destination="関東"),
+                                  settle=("箱根", "温泉が楽しめて東京から近い箱根で組みました"))
+    assert [n for n, _ in prompts][0] == "DestinationChoice", "行き先を決める前に何かが動いている"
+    assert state["destination"] == "箱根"
+    assert state["destination_request"] == "関東"
+    assert state["destination_note"] == "温泉が楽しめて東京から近い箱根で組みました"
+    for name, prompt in prompts[1:]:
+        assert "関東" not in prompt, f"{name}: 決める前の「関東」で考えている"
+    transport = next(p for n, p in prompts if n == "TransportOutput")
+    assert "目的地: 箱根" in transport
+
+    # プランのカードで、何を選んだかを伝える
+    from chat.formatter import _format_plan, plan_payload
+    payload = plan_payload(state)
+    assert payload["destination_request"] == "関東"
+    html = _format_plan(payload)
+    assert "「関東」の中から、温泉が楽しめて東京から近い箱根で組みました" in html
+    assert "別の場所にして" in html
+
+
+def test_specific_destination_is_left_alone(monkeypatch):
+    state, prompts = run_pipeline(monkeypatch, _inputs("1泊2日", "jp"))
+    assert state["destination"] == "金沢"
+    assert not state.get("destination_request") and not state.get("destination_note")
+    from chat.formatter import _format_plan, plan_payload
+    assert "plan-destination-note" not in _format_plan(plan_payload(state))
+
+
+def test_destination_step_failure_keeps_the_original(monkeypatch):
+    """行き先の判断が失敗しても、生成そのものは止めない（元の行き先で続ける）。"""
+    import chat.agents as A
+    calls = {"n": 0}
+
+    def broken(bound, prompt):
+        calls["n"] += 1
+        raise RuntimeError("AI が落ちた")
+    monkeypatch.setattr(A, "invoke_with_retry", broken)
+    monkeypatch.setattr(A, "llm", _FakeLLM())
+    assert A.settle_destination({"destination": "関東"}) == {}
+    assert calls["n"] == 1
+
+
+def test_partial_edit_does_not_settle_again(monkeypatch):
+    """部分編集（「2日目をゆっくり」）は、前回決めたエリアをそのまま使う。"""
+    inputs = _inputs("1泊2日", "jp", destination="箱根", edit_targets=["schedule"],
+                     spots=["箱根神社"], restaurants=["田むら銀かつ亭"], accommodation=["宿"],
+                     schedule=["1日目", "09:00 箱根神社"], budget_estimate=["合計 1円"],
+                     transport_cost=5000, remaining_budget=395000,
+                     destination_request="関東", destination_note="箱根で組みました")
+    state, prompts = run_pipeline(monkeypatch, inputs, settle=("日光", "日光で組みました"))
+    assert "DestinationChoice" not in [n for n, _ in prompts]
+    assert state["destination"] == "箱根" and state["destination_note"] == "箱根で組みました"
+
+
+def test_destination_prompt_knows_what_to_weigh():
+    from chat import prompts as P
+    text = P.destination_prompt({"destination": "関東", "departure_location": "東京", "duration": "日帰り",
+                                 "themes": ["温泉"], "no_car": True, "avoid_area": "箱根",
+                                 "budget_limit": 20000, "travel_date": "2026年11月3日"})
+    for must in ("関東", "東京", "日帰り", "温泉", "20000", "2026年11月3日",
+                 "公共交通機関", "「箱根」以外から選ぶ", "地図で検索できる一般的な地名"):
+        assert must in text, must

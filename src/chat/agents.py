@@ -26,7 +26,7 @@ from chat.llm import llm, llm_strong, invoke_with_retry, build_search_context
 from chat import prompts as P
 from logger import get_logger
 from chat.models import (
-    TransportOutput, SightseeingOutput, GourmetOutput,
+    DestinationChoice, TransportOutput, SightseeingOutput, GourmetOutput,
     TimekeeperOutput, AccommodationOutput, CostOutput, BalancerOutput,
     SightseeingCandidatesOutput, GourmetCandidatesOutput, AccommodationCandidatesOutput,
 )
@@ -121,6 +121,35 @@ def _is_car(mode: str) -> bool:
     for not_a_car in ("電車", "汽車", "自転車", "乗車", "下車", "駐車", "列車", "停車"):
         m = m.replace(not_a_car, "")
     return any(w in m for w in _CAR_WORDS)
+
+
+def settle_destination(state: TravelPlanState):
+    """行き先が広すぎる（「日本」「関東」「どこでも」など）とき、具体的なエリアを1つ決める。
+
+    交通費・天気・地図・検索はすべて行き先で決まるので、生成のいちばん最初に呼ぶ。
+    広すぎる行き先のまま進むと、交通費を「東京→日本」で見積もってから観光地を
+    京都に決める、といった食い違いが起きる。
+
+    決めたときは destination を決めたエリアに置き換え、元の言い方と理由を
+    destination_request / destination_note に残す（プランのカードでお客さまに伝える）。
+    判断できない・失敗したときは何も変えない（元の行き先で生成を続ける）。
+    """
+    dest = str(state.get("destination") or "").strip()
+    if not dest:
+        return {}
+    prompt = P.destination_prompt(state)
+    try:
+        structured_llm = llm.with_structured_output(DestinationChoice)
+        response = invoke_with_retry(structured_llm, prompt)
+    except Exception:
+        log.warning("行き先の判断に失敗。元の行き先のまま進めます: destination=%s", dest, exc_info=True)
+        return {}
+    area = str(response.area or "").strip()
+    if not response.is_broad or not area or area == dest:
+        return {}
+    log.info("🧭 行き先が広いため具体化: %s → %s（%s）", dest, area, response.reason)
+    return {"destination": area, "destination_request": dest,
+            "destination_note": str(response.reason or "").strip()}
 
 
 def transport_agent(state: TravelPlanState):

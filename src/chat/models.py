@@ -32,6 +32,11 @@ class TravelPlanState(TypedDict):
     dest_country: str  # ISO 3166-1 小文字（"jp","fr"…）。不明なら ""（＝国内扱い）
     is_overseas: bool
     user_preferences: str  # 過去の★評価から得た好み（参考）。無ければ空
+    # 行き先が広すぎた（「日本」「関東」「どこでも」）ときに、AI が決めた具体的なエリアの記録。
+    # destination は決めたエリア（例: 箱根）に置き換わり、元の言い方はこちらに残す。
+    destination_request: str  # お客さまが言った行き先（例: 関東）。決め直していなければ空
+    destination_note: str     # 決めた理由（お客さまに見せる1文）。決め直していなければ空
+    avoid_area: str           # 「別の場所にして」のとき、前回決めたエリア（選ばない）
     special_requirements: List[str]
     transport_cost: int
     remaining_budget: int
@@ -60,6 +65,19 @@ class TravelPlanState(TypedDict):
     spot_candidates: List[str]
     accommodation_candidates: List[str]
     restaurant_candidates: List[str]
+
+
+class DestinationChoice(BaseModel):
+    """行き先が旅程を組むには広すぎるかの判断と、広すぎるときに決めた具体的なエリア。"""
+    is_broad: bool = Field(
+        description="希望の行き先が、旅程を組むには広すぎる・特定されていないなら true。"
+                    "市区町村や観光地としてまとまったエリアなら false")
+    area: str = Field(
+        description="旅程を組む行き先。広すぎる場合は選んだ具体的なエリア（地図で検索できる一般的な地名。"
+                    "例: 箱根・日光・湯布院・台北）。広すぎない場合は希望の行き先をそのまま")
+    reason: str = Field(
+        description="広すぎる場合だけ、選んだ行き先と理由をお客さまに伝える1文"
+                    "（例:「温泉が楽しめて東京から近い箱根で組みました」）。広すぎない場合は空文字")
 
 
 class TransportOutput(BaseModel):

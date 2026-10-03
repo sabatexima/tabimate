@@ -71,6 +71,10 @@ D) すでにプラン提示済みで、変更要望ではない雑談・お礼�
 """
 
 
+# 「別の場所にして」のように、行き先を決め直してほしいという言い方
+_ASK_ANOTHER_PLACE = re.compile(r"(別|ほか|他|違う|ちがう)の?(場所|ところ|所|エリア|行き先|地域)|場所を変え|行き先を変え")
+
+
 def _system_prompt() -> SystemMessage:
     """本日の日付を差し込んだシステムプロンプトを返す（相対日付の換算に必要）。"""
     from datetime import date
@@ -348,6 +352,21 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 前回の成果物を引き継いで対象領域だけを再生成する（指定外はそのまま保持）。
     # 変更要望はあるが対象が空の場合は、全体作り直し(["all"])として扱う。
     targets = state.edit_targets or (["all"] if state.plan_change_request else [])
+
+    # 広い行き先（「関東」）から AI が決めたエリア（「箱根」）は、会話の上ではまだ
+    # 「関東」のまま。前回そう決めたのなら、決めたエリアを引き継ぐ。でないと
+    # 「2日目をゆっくり」の一言で行き先が変わったと見なされ、別の場所で作り直される。
+    # 「別の場所にして」と言われたときだけ、前回のエリアを外して決め直させる。
+    if prev and prev.get("destination_request") and \
+            str(state.destination or "").strip() == str(prev["destination_request"]).strip():
+        if _ASK_ANOTHER_PLACE.search(state.plan_change_request or ""):
+            inputs["avoid_area"] = prev.get("destination") or ""
+            targets = ["all"]
+            logger.info("別の場所の希望: %s 以外で決め直す", inputs["avoid_area"])
+        else:
+            inputs["destination"] = state.destination = prev["destination"]
+            inputs["destination_request"] = prev["destination_request"]
+            inputs["destination_note"] = prev.get("destination_note") or ""
 
     # 期間・日程・行き先・人数・予算といった基本条件が前回から変わった場合は、
     # 部分編集では整合が取れない（旧日数のスケジュールや旧予算の残額を引き継いで

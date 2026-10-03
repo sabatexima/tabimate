@@ -46,6 +46,18 @@
   }
   .plan-error strong, .plan-warning strong { color: var(--danger-hover); }
 
+  /* 広い行き先から AI がエリアを決めたときの「◯◯で組みました」 */
+  .plan-destination-note {
+    margin: 10px 16px 4px;
+    padding: 10px 14px;
+    background: #f1f8ec;
+    border-radius: 12px;
+    font-size: 0.9em;
+    line-height: 1.6;
+    color: var(--text-main);
+  }
+  .plan-destination-note span { font-size: 0.9em; color: var(--text-muted); }
+
   .plan-edit-hint {
     margin: 10px 16px 0;
     padding: 10px 14px;

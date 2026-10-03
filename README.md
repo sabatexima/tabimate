@@ -288,6 +288,7 @@ tabimate/
 `chat/graph.py` defines a `StateGraph` chaining functions from `chat/agents.py`, with `TravelPlanState` (a TypedDict) flowing between them. The wording of every agent's instructions lives in `chat/prompts.py`; `agents.py` keeps only the logic (search, budget maths, validation, routing the retries).
 
 ```
+(before generating) if the destination is too broad ("Japan", "Kanto", "anywhere"), pick one concrete area that fits the themes, season, length and budget
 (before generating) look up the destination's country and centre once — overseas adds instructions to every agent
 (in parallel, ahead of the graph) transport · sightseeing_candidates · weather
 START

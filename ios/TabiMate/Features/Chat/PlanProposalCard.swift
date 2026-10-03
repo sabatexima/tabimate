@@ -18,6 +18,9 @@ struct PlanProposalCard: View {
                 if plan.isInfeasible {
                     infeasibleBody
                 } else {
+                    if let note = destinationNote {
+                        destinationNoteView(note)
+                    }
                     sections
                     if let feedback = plan.feedback, !feedback.isEmpty {
                         review(feedback)
@@ -74,6 +77,28 @@ struct PlanProposalCard: View {
                         restaurants: plan.restaurants ?? [],
                         accommodation: plan.accommodation ?? [],
                         budgetEstimate: plan.budgetEstimate ?? [])
+    }
+
+    /// 広い行き先から決めたエリアを伝える一文（「関東」の中から、箱根で組みました）。
+    private var destinationNote: String? {
+        guard let request = plan.destinationRequest, !request.isEmpty,
+              let note = plan.destinationNote, !note.isEmpty else { return nil }
+        return "🍀 「\(request)」の中から、\(note)"
+    }
+
+    private func destinationNoteView(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(text)
+                .font(.body_)
+                .lineSpacing(4)
+                .foregroundStyle(Theme.Palette.textMain)
+            Text("ほかの場所がよければ「別の場所にして」「日光にして」のように送ってくださいね。")
+                .font(.meta)
+                .foregroundStyle(Theme.Palette.textMuted)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Palette.glowCream.opacity(0.28))
     }
 
     private func review(_ text: String) -> some View {

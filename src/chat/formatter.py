@@ -37,6 +37,10 @@ def plan_payload(state: dict) -> dict:
     """保存・再編集に必要なフィールドだけを取り出す（上のコメントの用途2つで共用）。"""
     return {
         "destination":          state.get("destination"),
+        # 広い行き先（「関東」）から AI が決めたときの、元の言い方と理由。
+        # 次のターンで「2日目をゆっくり」と言われたとき、決めたエリアを引き継ぐのに使う
+        "destination_request":  state.get("destination_request") or "",
+        "destination_note":     state.get("destination_note") or "",
         "travel_date":          state.get("travel_date"),
         "duration":             state.get("duration"),
         "num_people":           state.get("num_people"),
@@ -161,6 +165,16 @@ def _format_plan(state: dict) -> str:
 
     save_button = f'<div class="plan-save-area"><button class="plan-save-btn" data-plan="{plan_json}">このプランを保存する</button></div>'
 
+    # 広い行き先（「関東」）から AI がエリアを決めたときは、何を選んだかを最初に伝える
+    destination_note = ""
+    if state.get("destination_request") and state.get("destination_note"):
+        destination_note = (
+            '<div class="plan-destination-note">'
+            f'🍀 「{esc(state["destination_request"])}」の中から、{esc(state["destination_note"])}'
+            '<br><span>ほかの場所がよければ「別の場所にして」「日光にして」のように送ってくださいね。</span>'
+            '</div>'
+        )
+
     # プランは「出して終わり」ではなく、チャットで調整できることを案内する
     edit_hint = ""
     if status == "approved":
@@ -194,6 +208,7 @@ def _format_plan(state: dict) -> str:
     ])
 
     return _no_blank_lines(header + f"""
+  {destination_note}
   <div class="plan-accordion">{accordions}</div>
   {book}
   {footer}

@@ -220,10 +220,15 @@ struct DraftPlan: Codable, Hashable {
     var schedule: [String]?
     var accommodation: [String]?
     var budgetEstimate: [String]?
+    /// 「関東」のような広い行き先から、ちゃむが具体的なエリアを決めたときの元の言い方と理由。
+    var destinationRequest: String?
+    var destinationNote: String?
 
     enum CodingKeys: String, CodingKey {
         case destination, duration, status, feedback, themes, spots
         case restaurants, schedule, accommodation
+        case destinationRequest = "destination_request"
+        case destinationNote = "destination_note"
         case travelDate = "travel_date"
         case numPeople = "num_people"
         case budgetLimit = "budget_limit"

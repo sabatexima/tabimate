@@ -286,6 +286,7 @@ tabimate/
 `chat/graph.py` が `StateGraph` を組み、`chat/agents.py` の関数をノードとしてつなぎます。状態は `TravelPlanState`（TypedDict）で流れます。各エージェントに渡す指示文の文面は `chat/prompts.py` にまとめてあり、`agents.py` には検索・予算の計算・検証・差し戻しの処理だけを置いています。
 
 ```
+（生成の前に）行き先が広すぎれば（「日本」「関東」「どこでも」）、テーマ・季節・期間・予算に合う具体的なエリアを1つ決める
 （生成の前に）行き先の国と座標を1回だけ引く → 海外なら各エージェントに指示を足す
 （並列で先に）transport · sightseeing_candidates · 天気予報
 START

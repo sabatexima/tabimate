@@ -1,4 +1,10 @@
-"""完成した旅行プラン状態を、チャットに表示するHTMLカードへ整形するモジュール。"""
+"""完成した旅行プラン状態を、チャットに表示するHTMLカードへ整形するモジュール。
+
+プランは HTML のままDBに保存しない。chat_messages には目印の文字列
+（PLAN_MARKER）と構造化データ（plan_json）だけを残し、画面に出すたびに
+render_plan_message() でHTMLを組み直す。こうしておけば、カードの見た目を
+変えても、過去のプランが古い形のまま残ったり崩れたりしない。
+"""
 
 import html
 import json
@@ -7,6 +13,10 @@ from logger import get_logger
 
 
 logger = get_logger("formatter")
+
+# プランを提示したAIメッセージの content に入れる目印。HTMLはここに入れない。
+# LLMへ渡す会話履歴でもこの文字列のまま使う（プラン本文でトークンを食わない）。
+PLAN_MARKER = "[旅行プランを生成しました]"
 
 
 def booking_url(destination: str) -> str:
@@ -100,18 +110,36 @@ def _format_plan(state: dict) -> str:
     status = state.get("status")
     logger.debug("フォーマット開始: destination=%s, status=%s", state.get("destination"), status)
 
+    def val(key: str) -> str:
+        """欠けている項目は空にする。保存済みの古いプランには無い項目がありうる。"""
+        v = state.get(key)
+        return "" if v is None else esc(v)
+
+    def yen(value) -> str:
+        """金額を「12,345」の形にする。数として読めなければ None。"""
+        try:
+            return f"{int(value):,}"
+        except (TypeError, ValueError):
+            return None
+
     # 金額と「円/人」は途中で改行されると読みにくい（「…円/」＋「人」の泣き別れ）ため分割禁止にする
-    _total = state.get("total_per_person")
-    _cost_line = (f'💴 費用の目安: <span style="white-space:nowrap">{_total:,}円/人</span>'
-                  if _total else f'💴 予算上限: <span style="white-space:nowrap">{state["budget_limit"]:,}円/人</span>')
+    _total = yen(state.get("total_per_person")) if state.get("total_per_person") else None
+    _limit = yen(state.get("budget_limit"))
+    if _total:
+        _cost_line = f'💴 費用の目安: <span style="white-space:nowrap">{_total}円/人</span>'
+    elif _limit:
+        _cost_line = f'💴 予算上限: <span style="white-space:nowrap">{_limit}円/人</span>'
+    else:
+        _cost_line = ""
+    _cost_span = f"<span>{_cost_line}</span>" if _cost_line else ""
     header = f"""<div class="plan-card">
   <div class="plan-summary-block">
-    <div class="plan-title">🗾 旅行プラン：{esc(state['destination'])}</div>
+    <div class="plan-title">🗾 旅行プラン：{val('destination')}</div>
     <div class="plan-summary-grid">
-      <span>📍 出発地: {esc(state['departure_location'])}</span>
-      <span>⏱️ 期間: {esc(state['duration'])}</span>
-      <span>👥 人数: {esc(state['num_people'])}人</span>
-      <span>{_cost_line}</span>
+      <span>📍 出発地: {val('departure_location')}</span>
+      <span>⏱️ 期間: {val('duration')}</span>
+      <span>👥 人数: {val('num_people')}人</span>
+      {_cost_span}
     </div>
   </div>"""
 
@@ -172,3 +200,25 @@ def _format_plan(state: dict) -> str:
   {edit_hint}
   {save_button}
 </div>""")
+
+
+def render_plan_message(content: str, plan: dict | None) -> str:
+    """保存されたAIメッセージ1件を、画面に出す文字列にする（/get_messages 用）。
+
+    ・plan（plan_json）があれば、それからプランカードを組み直す。いまの見た目で
+      出るので、カードの形を変えても過去のプランが古いまま残らない。
+    ・plan が無く、content が昔の保存形式（HTMLのプランカード）なら、空行だけ
+      落として返す（_no_blank_lines の説明にある崩れを防ぐ）。plan_json 列が
+      できる前のプランがこれに当たる。
+    ・それ以外（ふつうの返事）は手を付けない。段落を分ける空行を消すと潰れる。
+
+    組み直しに失敗しても履歴全体を落とさないよう、元の content に戻す。
+    """
+    if plan:
+        try:
+            return _format_plan(plan)
+        except Exception:
+            logger.exception("保存済みプランの表示に失敗。保存時の文字列で代用します")
+    if content and '<div class="plan-card">' in content:
+        return _no_blank_lines(content)
+    return content

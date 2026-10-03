@@ -215,18 +215,28 @@ def test_plan_card_survives_markdown():
         assert broken is None, f"{name}: {broken}"
 
 
-def test_old_plans_in_history_are_repaired(monkeypatch):
-    """直す前に保存されたプランも、開き直したときは崩れないこと。
-
-    保存されているのは古いHTMLのままなので、formatter を直しただけでは
-    履歴を開いた人には壊れて見える。返すときにも手当てする。
-    """
+def _get_messages_as(monkeypatch, rows):
+    """/get_messages を、DBの代わりに rows（plan 付きの行）を返すようにして叩く。"""
     import json as _json
 
     import app as app_mod
     import db
-    import views.planner as P
 
+    monkeypatch.setattr(db, "get_chat_messages_with_plans", lambda uid: [dict(r) for r in rows])
+    app_mod.app.config["TESTING"] = True
+    with app_mod.app.test_client() as c:
+        with c.session_transaction() as sess:
+            sess["user_id"] = "u-1"
+            sess["user_email"] = "u@example.com"
+        return _json.loads(c.get("/get_messages").data)
+
+
+def test_old_plans_in_history_are_repaired(monkeypatch):
+    """plan_json が無い昔のプラン（HTMLで保存）も、開き直したときは崩れないこと。
+
+    保存されているのは古いHTMLのままなので、formatter を直しただけでは
+    履歴を開いた人には壊れて見える。返すときにも手当てする。
+    """
     broken = ('<div class="plan-card">\n  <div class="plan-accordion">\n'
               '    <details><summary>✨ 主要観光地</summary></details>\n'
               '    \n'                      # 宿泊が空 → 空白だけの行
@@ -235,21 +245,80 @@ def test_old_plans_in_history_are_repaired(monkeypatch):
     # ふつうの返事。段落を分ける空行は絶対に消してはいけない
     plain = 'どこに行きましょう？\n\n- 熱海\n- 箱根'
 
-    monkeypatch.setattr(db, "get_chat_messages", lambda uid: [
-        {"role": "user", "content": "千葉に日帰りで"},
-        {"role": "ai", "content": broken},
-        {"role": "ai", "content": plain},
+    got = _get_messages_as(monkeypatch, [
+        {"role": "user", "content": "千葉に日帰りで", "plan": None},
+        {"role": "ai", "content": broken, "plan": None},
+        {"role": "ai", "content": plain, "plan": None},
     ])
-    app_mod.app.config["TESTING"] = True
-    with app_mod.app.test_client() as c:
-        with c.session_transaction() as sess:
-            sess["user_id"] = "u-1"
-            sess["user_email"] = "u@example.com"
-        got = _json.loads(c.get("/get_messages").data)
 
     assert _markdown_breaks_out(got[1]["content"]) is None, "古いプランが直っていない"
     assert got[2]["content"] == plain, "ふつうの返事の空行まで消している（段落が潰れる）"
-    assert P._repair_plan_html(plain) == plain
+    assert all("plan" not in m for m in got), "Web版に plan を二重に返している"
+
+
+def test_plans_are_stored_as_data_and_drawn_on_read(monkeypatch):
+    """プランは目印＋plan_json で保存し、/get_messages がいまの見た目で組み立てること。
+
+    保存時のHTMLが残っていても（plan_json がある昔の行）、plan_json の方から作り直す。
+    そうしないと、カードの見た目を変えるたびに過去のプランが古い形で残る。
+    """
+    from chat.formatter import PLAN_MARKER, plan_payload
+
+    plan = plan_payload(_sample_plan_state())
+    got = _get_messages_as(monkeypatch, [
+        {"role": "user", "content": "静岡に日帰りで", "plan": None},
+        {"role": "ai", "content": PLAN_MARKER, "plan": plan},
+        {"role": "ai", "content": '<div class="plan-card">古い見た目</div>', "plan": plan},
+    ])
+
+    for m in got[1:]:
+        assert '<div class="plan-card">' in m["content"]
+        assert "静岡" in m["content"]
+        assert "古い見た目" not in m["content"]
+        assert 'class="plan-save-btn" data-plan=' in m["content"], "保存ボタンが無い"
+        assert _markdown_breaks_out(m["content"]) is None
+
+
+def test_broken_saved_plan_does_not_break_the_whole_history(monkeypatch):
+    """plan_json が欠けていても壊れていても、履歴の取得そのものは落ちないこと。"""
+    from chat import formatter
+    from chat.formatter import PLAN_MARKER
+
+    # 昔の plan_json には無い項目がある（budget_limit / departure_location など）
+    got = _get_messages_as(monkeypatch, [
+        {"role": "ai", "content": PLAN_MARKER, "plan": {"destination": "熱海", "status": "approved"}},
+    ])
+    assert "熱海" in got[0]["content"]
+    assert "None" not in got[0]["content"], "欠けた項目が「None」と出ている"
+
+    # 組み立てで例外が出ても、その行は保存時の文字列で代用して返す
+    def boom(_):
+        raise RuntimeError("壊れたプラン")
+    monkeypatch.setattr(formatter, "_format_plan", boom)
+    got = _get_messages_as(monkeypatch, [
+        {"role": "ai", "content": PLAN_MARKER, "plan": {"destination": "熱海"}},
+        {"role": "ai", "content": "ふつうの返事", "plan": None},
+    ])
+    assert got[0]["content"] == PLAN_MARKER
+    assert got[1]["content"] == "ふつうの返事"
+
+
+def test_chat_returns_marker_not_html_and_history_hides_plans(monkeypatch):
+    """chat() はHTMLを返さず目印を返す。LLMへの履歴では、新旧どちらのプランも目印になる。"""
+    from chat import chat as C
+    from chat.formatter import PLAN_MARKER
+
+    lc = C._build_lc_messages([
+        {"role": "user", "content": "熱海へ"},
+        {"role": "ai", "content": PLAN_MARKER},
+        {"role": "ai", "content": '<div class="plan-card">昔の保存形式</div>'},
+    ])
+    assert [m.content for m in lc[2:]] == [PLAN_MARKER, PLAN_MARKER]
+
+    import inspect
+    src = inspect.getsource(C.chat)
+    assert "_format_plan" not in src, "chat() がまたHTMLを作っている（保存はデータだけにする）"
+    assert "return PLAN_MARKER, plan_payload(final_state)" in src
 
 
 def test_booking_url_is_google_maps_not_rakuten():

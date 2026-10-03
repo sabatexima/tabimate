@@ -250,8 +250,8 @@ struct DraftPlan: Codable, Hashable {
 
 /// 相談の1発言。ai の発言にはプラン案が添えられることがある。
 ///
-/// Web版は content に HTML が入るが、アプリはその HTML を使わない。
-/// 代わりに plan（構造化データ）を受け取り、SwiftUI で組み直して描く。
+/// プランを提示した発言の content は目印の文字列だけで、中身は plan（構造化データ）にある。
+/// アプリは plan を受け取り、SwiftUI で組み直して描く。
 struct ChatMessage: Codable, Identifiable, Hashable {
     /// サーバーは id を返さないので、表示のために手元で採番する。
     var id = UUID()

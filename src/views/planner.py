@@ -405,33 +405,22 @@ def reset_chat():
     return json.dumps({'status': 'OK'}), 200, {'Content-Type': 'application/json'}
 
 
-def _repair_plan_html(content: str) -> str:
-    """古いプランカードに残っている空行を落とす。プランカード以外には触らない。
-
-    画面は marked.parse() を通してから描くので、空行があるとそこでHTMLの
-    解釈が打ち切られ、続きの `<details>` が文字のまま出てしまう
-    （chat.formatter._no_blank_lines に詳しく書いてある）。
-
-    formatter 側は直したが、**直す前に保存されたプラン**が履歴に残っている。
-    それを開き直したときも崩れないよう、返す前にここでも同じ手当てをする。
-    ふつうの返事はMarkdownの段落を空行で分けているので、絶対に触らないこと。
-    """
-    if '<div class="plan-card">' not in content:
-        return content
-    from chat.formatter import _no_blank_lines
-    return _no_blank_lines(content)
-
-
 @planner.route('/get_messages')
 @login_required
 def get_messages():
-    """ログイン中ユーザーのチャット履歴をJSONで返す（画面復元用）。"""
-    from db import get_chat_messages
+    """ログイン中ユーザーのチャット履歴をJSONで返す（画面復元用）。
 
-    messages = get_chat_messages(session['user_id'])
+    プランはDBにHTMLで入っていない（目印と plan_json だけ）。ここで毎回
+    いまの見た目のプランカードに組み立ててから返す。
+    """
+    from chat.formatter import render_plan_message
+    from db import get_chat_messages_with_plans
+
+    messages = get_chat_messages_with_plans(session['user_id'])
     for m in messages:
-        if m.get('role') == 'ai' and m.get('content'):
-            m['content'] = _repair_plan_html(m['content'])
+        plan = m.pop('plan', None)
+        if m.get('role') == 'ai':
+            m['content'] = render_plan_message(m.get('content') or '', plan)
     return json.dumps(messages), 200, {'Content-Type': 'application/json'}
 
 
@@ -440,8 +429,9 @@ def get_messages():
 def api_chat_messages():
     """チャット履歴を、AIが提示したプランの構造化データ付きで返す（アプリ用）。
 
-    Web版の /get_messages は content のHTMLをそのまま描画するが、アプリは
-    プランをネイティブに組み立てるため plan キーを使う。
+    Web版の /get_messages はサーバーで組んだプランカードのHTMLを返すが、アプリは
+    プランをネイティブに組み立てるため plan キーを使う。プランの行の content は
+    目印（PLAN_MARKER）だけなので、アプリはそれを表示に使わないこと。
     """
     from db import get_chat_messages_with_plans
     messages = get_chat_messages_with_plans(session['user_id'])

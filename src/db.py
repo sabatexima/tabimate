@@ -512,8 +512,9 @@ def get_chat_messages(google_user_id: str) -> list:
 def get_chat_messages_with_plans(google_user_id: str) -> list:
     """チャット履歴を、AIが提示したプランの構造化データ付きで返す（ネイティブアプリ用）。
 
-    Web版は content のHTMLに data-plan 属性で埋め込んだJSONを読むが、アプリは
-    HTMLを解釈しない。同じ内容を plan キーで素直に受け取れるようにする。
+    プランを提示した行の content は目印（chat.formatter.PLAN_MARKER）だけで、
+    中身は plan_json にある。Web版（/get_messages）はここから毎回プランカードを
+    組み立て、アプリは plan キーをそのまま使って画面を組む。
     プランを伴わないメッセージの plan は None。
     """
     with _get_engine().connect() as conn:

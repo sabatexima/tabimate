@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from chat.llm import llm, invoke_with_retry
 from chat.graph import generate_travel_plan
-from chat.formatter import _format_plan, plan_payload
+from chat.formatter import PLAN_MARKER, plan_payload
 from logger import get_logger
 
 logger = get_logger("chat")
@@ -77,7 +77,6 @@ def _system_prompt() -> SystemMessage:
     return SystemMessage(content=_SYSTEM_PROMPT_TEMPLATE.format(today=date.today().strftime('%Y年%m月%d日')))
 
 
-_PLAN_PLACEHOLDER = "[旅行プランを生成しました]"
 
 # 「あと◯つで完成！ 🍀…・」進捗プレフィックス（_with_progress が付与する行）。
 # これがLLMへの履歴に混ざると、LLMが真似て自分の返答にも付け、二重表示になる。
@@ -199,13 +198,14 @@ def _normalize_travel_date(travel_date):
 
 def _build_lc_messages(messages_history: list) -> list:
     """会話履歴をLangChainのメッセージリストに変換する。
-    プランHTMLはトークン節約のためプレースホルダーに置き換える。
+    プランは PLAN_MARKER のまま渡す（中身でトークンを食わない）。
+    昔の保存形式（HTMLのプランカード）が残っていれば、それも PLAN_MARKER に置き換える。
     履歴は直近 _MAX_HISTORY_MESSAGES 件までに絞る。"""
     lc_messages = [_system_prompt()]
     for m in messages_history[-_MAX_HISTORY_MESSAGES:]:
         content = m["content"]
         if m["role"] == "ai" and content.startswith("<div"):
-            content = _PLAN_PLACEHOLDER
+            content = PLAN_MARKER
         elif m["role"] == "ai":
             # 進捗プレフィックスはLLMに見せない（真似て二重に付けるのを防ぐ）
             content = _strip_progress(content)
@@ -228,7 +228,7 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
 
     Returns:
         (response, plan) のタプル。
-        - response: 質問文 or 整形済みプランHTML（str）。キャンセル時は None
+        - response: 質問文、またはプランを作ったときは PLAN_MARKER（str）。キャンセル時は None
         - plan: プランを生成したときだけ、その構造化データ（dict）。それ以外は None
           呼び出し側はこれをメッセージ行と一緒にDB保存し、次回の部分編集で読み戻す。
     """
@@ -389,10 +389,11 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
         logger.info("プラン生成後にリクエストがキャンセルされました: request_id=%s", request_id)
         return None, None
 
-    formatted = _format_plan(final_state)
     logger.info("プラン生成が完了しました: request_id=%s, status=%s", request_id, final_state.get("status"))
-    # プランの構造化データも返し、呼び出し側でメッセージ行と一緒にDB保存させる
-    return formatted, plan_payload(final_state)
+    # HTMLは返さない。本文は目印だけにして、構造化データを呼び出し側でメッセージ行と
+    # 一緒にDB保存させる。表示用のHTMLは /get_messages が毎回組み直す
+    # （chat.formatter.render_plan_message）
+    return PLAN_MARKER, plan_payload(final_state)
 
 
 class _PlanEditIntent(BaseModel):

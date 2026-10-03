@@ -31,6 +31,7 @@ Slides API は文字の大きさを自動で縮めてくれない（API から�
 
 import math
 import re
+import unicodedata
 from datetime import date, timedelta
 
 from logger import get_logger
@@ -64,7 +65,8 @@ MARGIN = 44              # 左右の余白（行の頭をここにそろえる�
 
 # 「1日目」「【2日目】金沢」「3日目：市内」などの見出し行（agents.py の _days_in と同じ規則）
 _DAY_RE = re.compile(r'^[【\[]?\s*(\d+)\s*日目[】\]]?\s*[:：]?\s*(.*)$')
-_TIME_RE = re.compile(r'^\s*(\d{1,2}[:：]\d{2}(?:\s*[〜~\-–]\s*\d{1,2}[:：]\d{2})?)\s*(.*)$')
+# \d は全角の数字にも当たる（「０９：００」も時刻として拾う）
+_TIME_RE = re.compile(r'^\s*(\d{1,2}[:：]\d{2}(?:\s*[〜~\-–－]\s*\d{1,2}[:：]\d{2})?)\s*(.*)$')
 _DATE_RE = re.compile(r'(\d{4})\D+(\d{1,2})\D+(\d{1,2})')
 _WEEKDAYS = "月火水木金土日"
 
@@ -140,6 +142,10 @@ def split_days(schedule: list) -> list:
             if num is not None or body:
                 days.append((num, sub, body))
             num, sub, body = int(m.group(1)), m.group(2).strip(), []
+            # 「【2日目】09:00 美術館」のように見出しと予定が1行のときは、
+            # 後ろは副題ではなく1つ目の予定（副題にすると、その日が空に見えて消える）
+            if _TIME_RE.match(sub):
+                body, sub = [sub], ""
         else:
             body.append(line)
     if num is not None or body:
@@ -147,16 +153,103 @@ def split_days(schedule: list) -> list:
     return days
 
 
-def _day_date(travel_date, day_num) -> str:
-    """旅行日が具体的な日付なら、N日目の日付を「11月4日（水）」の形で返す。"""
-    m = _DATE_RE.search(str(travel_date or ""))
+def _half(text: str) -> str:
+    """全角の数字・コロンを半角にする（「０９：００」→「09:00」）。"""
+    return unicodedata.normalize("NFKC", text)
+
+
+def _date_of(travel_date, day_num):
+    """旅行日が具体的な日付なら、N日目の日付（date）。分からなければ None。"""
+    m = _DATE_RE.search(_half(str(travel_date or "")))
     if not m or not day_num:
-        return ""
+        return None
     try:
-        d = date(int(m.group(1)), int(m.group(2)), int(m.group(3))) + timedelta(days=day_num - 1)
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3))) + timedelta(days=day_num - 1)
     except ValueError:
+        return None
+
+
+def _day_date(travel_date, day_num) -> str:
+    """N日目の日付を「11月4日（水）」の形で。分からなければ空。"""
+    d = _date_of(travel_date, day_num)
+    return f"{d.month}月{d.day}日（{_WEEKDAYS[d.weekday()]}）" if d else ""
+
+
+def _weather_for(weather_days, d) -> str:
+    """その日の天気を「☀️ 12° / 5°」の形で。予報が無ければ空。"""
+    if not d or not weather_days:
         return ""
-    return f"{d.month}月{d.day}日（{_WEEKDAYS[d.weekday()]}）"
+    for w in weather_days:
+        if w.get("date") == d.isoformat():
+            temps = ""
+            if w.get("tmax") is not None and w.get("tmin") is not None:
+                temps = f"  {round(w['tmax'])}° / {round(w['tmin'])}°"
+            return f"{w.get('emoji', '')}{temps}".strip()
+    return ""
+
+
+# ----------------------------------------------------------------------
+# タイムラインの1行を読む: 時刻・中身・分類・太字にする地名
+# ----------------------------------------------------------------------
+_MEAL_RE = re.compile(r"昼食|夕食|朝食|ランチ|ディナー|ごはん|食事|食べ歩き|BBQ|バーベキュー")
+_CAFE_RE = re.compile(r"カフェ|ひと休み|一休み|おやつ|スイーツ|ティー")
+_STAY_RE = re.compile(r"チェックイン|チェックアウト|就寝|宿に戻|ホテルに戻|旅館に戻|ホテルで休")
+_FLY_RE = re.compile(r"空港|フライト|航空|搭乗|[A-Z]{2}\s?\d{2,4}便|\(AF|（AF|便）")
+_MOVE_RE = re.compile(r"(発|着)([（(、\s]|$)|移動|で[^、。]{1,14}へ|へ向かう|帰路|帰宅")
+
+# 分類ごとの目印（バッジの絵文字と色）
+_KINDS = {
+    "stay":   ("🏨", "#fbf3d5"),
+    "meal":   ("🍱", BLUSH),
+    "cafe":   ("☕", BLUSH),
+    "fly":    ("✈️", MEADOW),
+    "move":   ("🚄", MEADOW),
+    "spot":   ("✨", LEAF),
+}
+
+
+def _place_names(plan: dict) -> list:
+    """プランの観光地・お店・宿の名前（「（現地語名）」は外す）。長い順に並べる。"""
+    names = set()
+    for key in ("spots", "restaurants", "accommodation"):
+        for raw in plan.get(key) or []:
+            base = re.split(r"[（(]", str(raw))[0].strip()
+            if len(base) >= 2:
+                names.add(base)
+    return sorted(names, key=len, reverse=True)
+
+
+def _kind(text: str, places: list) -> str | None:
+    """予定の分類。宿 > 食事 > カフェ > 観光地（名前が先頭にある） > 飛行機 > 移動。"""
+    if _STAY_RE.search(text):
+        return "stay"
+    if _MEAL_RE.search(text):
+        return "meal"
+    if _CAFE_RE.search(text):
+        return "cafe"
+    if any(text.startswith(n) for n in places):
+        return "spot"
+    if _FLY_RE.search(text):
+        return "fly"
+    if _MOVE_RE.search(text):
+        return "move"
+    if any(n in text for n in places):
+        return "spot"
+    return None
+
+
+def _name_styles(text: str, places: list) -> list:
+    """予定の中に出てくる地名を太字にする範囲（UTF-16 の位置）。重ならないように。"""
+    taken, styles = [], []
+    for name in places:
+        i = text.find(name)
+        if i < 0 or any(i < b and a < i + len(name) for a, b in taken):
+            continue
+        taken.append((i, i + len(name)))
+        start = _u16(text[:i])
+        style, fields = _bold()
+        styles.append((start, start + _u16(name), style, fields))
+    return styles
 
 
 class _Deck:
@@ -428,6 +521,18 @@ def _cover(deck: _Deck, plan: dict, weather_days):
     if x > MARGIN + 12:
         y += 34
 
+    # 旅のテーマは、ハッシュタグ風の小さな札に（3つまで）
+    themes = [str(t).strip() for t in plan.get("themes") or [] if str(t).strip()][:3]
+    if themes:
+        x = MARGIN + 12
+        for t in themes:
+            label = f"# {t}" if _width(t) <= 8 else f"# {t[:7]}…"
+            if x + _width(label) * 9.5 + 20 > 430:
+                break
+            x = deck.pill(sid, x, y, label, size=9.5, fill=MEADOW, color=GREEN_DARK,
+                          outline=None, h=20, pad=10) + 6
+        y += 28
+
     cost = plan.get("total_per_person") or plan.get("budget_limit")
     if cost:
         label = "ひとりあたりの目安" if plan.get("total_per_person") else "ひとりあたりの予算"
@@ -476,10 +581,81 @@ def _overview(deck: _Deck, plan: dict):
                    size=size, line_spacing=145)
 
 
+def _clip(text: str, max_width: float) -> str:
+    """1行に収まるよう、幅を超えるぶんを「…」にする。"""
+    if _width(text) <= max_width:
+        return text
+    out = ""
+    for ch in text:
+        if _width(out + ch) > max_width - 1:
+            break
+        out += ch
+    return out.rstrip("、。・ 　(（") + "…"
+
+
+def _highlights(body: list, places: list) -> list:
+    """その日のみどころ。プランの地名が出てくる順に（ある名前を含む短い名前は省く）。
+
+    地名が1つも無い日（移動だけの日など）は、その日の予定の頭から拾う。
+    """
+    found = []
+    for line in body:
+        text = _split_time(line)[2]
+        # 出てくる順。同じ位置なら長い名前（「近江町市場 いきいき亭」）を先に
+        hits = sorted((text.find(n), -len(n), n) for n in places if n in text)
+        for _, _, name in hits:
+            if any(name in f or f in name for f in found):
+                continue
+            found.append(name)
+    if not found:
+        for line in body:
+            text = re.split(r"[（(]", _split_time(line)[2])[0].strip()
+            if text and not text.startswith("※"):
+                found.append(text)
+    return found
+
+
+def _glance(deck: _Deck, plan: dict, weather_days=None):
+    """旅のあらまし: 1日1枚の小さなカードで、日程を一目で見渡す（2日以上の旅だけ）。"""
+    days = [(num, body) for num, _, body in split_days(plan.get("schedule")) if num]
+    if len(days) < 2:
+        return
+    places = _place_names(plan)
+    # 3日以下なら、その日数で横幅を分ける（カードが広くなり、名前を切らずに済む）
+    per_page, cols = 8, min(4, len(days))
+    gap = 14
+    w = (BASE_W - MARGIN * 2 - gap * (cols - 1)) / cols
+    size, spacing = 10.5, 130
+    # 1行に入る字数（「・」の1字ぶんを引く）。見積もりの余裕も同じだけ見る
+    one_line = int((w - 24 - 14) / size) * _WRAP_SAFETY - 1
+    for start in range(0, len(days), per_page):
+        chunk = days[start:start + per_page]
+        sid = deck.page_head("旅のあらまし", "日ごとの みどころ" + ("（つづき）" if start else ""))
+        rows = math.ceil(len(chunk) / cols)
+        h = 122 if rows > 1 else 168
+        top = 96 if rows > 1 else 112
+        fits = max(1, int((h - 66) // _line_height(size, spacing)))
+        for n, (num, body) in enumerate(chunk):
+            x = MARGIN + (n % cols) * (w + gap)
+            y = top + (n // cols) * (h + 14)
+            deck.card(sid, x, y, w, h)
+            deck.pill(sid, x + 12, y + 12, f"{num}日目", size=10, fill=GREEN, color="#ffffff",
+                      outline=None, bold=True, h=22, pad=10)
+            day = _date_of(plan.get("travel_date"), num)
+            meta = " ".join(t for t in [_day_date(plan.get("travel_date"), num),
+                                         _weather_for(weather_days, day).split(" ")[0]] if t)
+            if meta:
+                deck.label(sid, x + 12, y + 38, w - 20, 18, meta, size=9, color=MUTED)
+            spots = [_clip(n, one_line) for n in _highlights(body, places)[:fits]]
+            if spots:
+                deck.label(sid, x + 12, y + 56, w - 24, h - 62, "\n".join(f"・{n}" for n in spots),
+                           size=size, line_spacing=spacing)
+
+
 # タイムラインの寸法
 _TL_X = 246          # 縦線の x
-_TL_TIME_X = 262     # 時刻の左端
-_TL_TEXT_X = 318     # 予定の左端
+_TL_TIME_X = 260     # 時刻の欄の左端
+_TL_TEXT_X = 324     # 予定の左端
 _TL_TEXT_W = BASE_W - MARGIN - _TL_TEXT_X
 _TL_TOP, _TL_BOTTOM = 52, 372
 _TL_SIZE, _TL_SPACING, _TL_GAP = 12, 120, 9
@@ -490,31 +666,46 @@ def _entry_height(text: str, width: float) -> float:
     return _text_height([text], chars, _TL_SIZE, _TL_SPACING)
 
 
+def _split_time(line: str) -> tuple:
+    """「09:00〜11:00 兼六園」→ ("09:00", "〜11:00", "兼六園")。時刻が無ければ ("", "", 行)。"""
+    # 合わせるのは元の行のまま（全角のかっこ等を半角に変えて見せないため）。
+    # 半角にするのは時刻の部分だけ
+    m = _TIME_RE.match(line)
+    if not m or not m.group(2):
+        return "", "", line
+    times = re.split(r"\s*[〜~\-–]\s*", _half(m.group(1)))
+    start = times[0]
+    until = f"〜{times[1]}" if len(times) > 1 else ""
+    return start, until, m.group(2)
+
+
 def _timeline_pages(body: list) -> list:
-    """1日の予定を、タイムラインの高さに収まるページに分ける。"""
-    entries = []
-    for line in body:
-        m = _TIME_RE.match(line)
-        if m and m.group(2):
-            entries.append((m.group(1).replace("：", ":"), m.group(2)))
-        else:
-            entries.append(("", line))
+    """1日の予定を、タイムラインの高さに収まるページに分ける。
+
+    1件は (開始時刻, 終了時刻, 中身, 高さ)。終了時刻があるときは時刻の欄が
+    2行になるので、中身が1行でもその高さを確保する。
+    """
     pages, current, used = [], [], 0
     room = _TL_BOTTOM - _TL_TOP
-    for time, text in entries:
-        width = _TL_TEXT_W if time else BASE_W - MARGIN - _TL_TIME_X
-        need = _entry_height(text, width) + _TL_GAP
+    for line in body:
+        start, until, text = _split_time(line)
+        width = _TL_TEXT_W if start else BASE_W - MARGIN - _TL_TIME_X
+        need = _entry_height(text, width)
+        if until:
+            need = max(need, _line_height(_TL_SIZE, _TL_SPACING) + _line_height(9.5, 110))
+        need += _TL_GAP
         if current and used + need > room:
             pages.append(current)
             current, used = [], 0
-        current.append((time, text, need))
+        current.append((start, until, text, need))
         used += need
     if current:
         pages.append(current)
     return pages
 
 
-def _schedule(deck: _Deck, plan: dict):
+def _schedule(deck: _Deck, plan: dict, weather_days=None):
+    places = _place_names(plan)
     days = split_days(plan.get("schedule"))
     # 「1日目」より前の行（海外の「※時刻はすべて現地時刻」など）は、それだけで
     # 1枚にせず、1日目の頭に載せる
@@ -538,10 +729,15 @@ def _schedule(deck: _Deck, plan: dict):
             big = f"{num}日目" if num else ("日帰り" if single else "スケジュール")
             deck.label(sid, 26, 76, 180, 50, big, size=30 if num else 24, bold=True, color=GREEN_DARK)
             y = 128
+            day = _date_of(plan.get("travel_date"), num or 1)
             when = _day_date(plan.get("travel_date"), num or 1)
             if when:
                 deck.label(sid, 30, y, 170, 20, when, size=11, color=INK)
                 y += 22
+            sky = _weather_for(weather_days, day)
+            if sky:
+                deck.pill(sid, 30, y + 2, sky, size=10, fill=SURFACE, h=22, pad=10)
+                y += 32
             if sub:
                 deck.label(sid, 30, y, 166, 56, sub, size=11, color=MUTED, line_spacing=130)
             if n:
@@ -549,16 +745,26 @@ def _schedule(deck: _Deck, plan: dict):
             deck.image(sid, "mate-head.png", 30, 300, 66, 66)
 
             # 右: 時刻のタイムライン
-            total = sum(h for _, _, h in page) - _TL_GAP
+            total = sum(e[3] for e in page) - _TL_GAP
             deck.line(sid, _TL_X, _TL_TOP + 6, 0, max(8, total - 6), color=WAVY, weight=2, dash="DOT")
             y = _TL_TOP
-            for time, text, need in page:
-                if time:
-                    deck.shape(sid, "ELLIPSE", _TL_X - 5, y + 4, 10, 10, fill=GREEN)
-                    deck.label(sid, _TL_TIME_X - 7, y - 3, 62, 20, time, size=_TL_SIZE,
+            for start, until, text, need in page:
+                if start:
+                    kind = _kind(text, places)
+                    if kind:
+                        # 分類の目印: 線の上に小さな丸いバッジ
+                        emoji, fill = _KINDS[kind]
+                        deck.badge(sid, _TL_X - 11, y - 2, emoji, d=22, fill=fill)
+                    else:
+                        deck.shape(sid, "ELLIPSE", _TL_X - 5, y + 4, 10, 10, fill=GREEN)
+                    deck.label(sid, _TL_TIME_X, y - 3, 60, 20, start, size=_TL_SIZE,
                                bold=True, color=GREEN_DARK, line_spacing=_TL_SPACING)
+                    if until:
+                        deck.label(sid, _TL_TIME_X, y + 14, 60, 16, until, size=9.5,
+                                   color=MUTED, line_spacing=110)
                     deck.label(sid, _TL_TEXT_X - 7, y - 3, _TL_TEXT_W + 7, need, text,
-                               size=_TL_SIZE, line_spacing=_TL_SPACING)
+                               size=_TL_SIZE, line_spacing=_TL_SPACING,
+                               styles=_name_styles(text, places))
                 else:
                     deck.shape(sid, "ELLIPSE", _TL_X - 3, y + 6, 6, 6, fill=SURFACE,
                                outline=GREEN, weight=1)
@@ -604,6 +810,7 @@ def _costs(deck: _Deck, plan: dict):
                 deck.label(sid, MARGIN + 30, 256, 176, 20,
                            f"{plan['num_people']}人で {int(total) * int(plan['num_people']):,}円",
                            size=10.5, color=MUTED, align="CENTER")
+            _budget_bar(deck, sid, total, plan.get("budget_limit"))
             x, w, chars = 288, first_w, first_chars
         else:
             x, w, chars = MARGIN, wide_w, wide_chars
@@ -611,6 +818,26 @@ def _costs(deck: _Deck, plan: dict):
             text, styles = _join_with_styles(page, pick)
             h = max(120, min(268, _text_height(page, chars, 11.5, 130) + 30))
             deck.card(sid, x, 98, w, h, text, size=11.5, line_spacing=130, styles=styles)
+
+
+def _budget_bar(deck: _Deck, sid, total, budget):
+    """予算のうち、どれだけ使う見込みかを細い棒で。こえるときはピンクで知らせる。"""
+    try:
+        total, budget = int(total or 0), int(budget or 0)
+    except (TypeError, ValueError):
+        return
+    if total <= 0 or budget <= 0:
+        return
+    x, y, w, h = MARGIN + 22, 330, 192, 10
+    ratio = total / budget
+    deck.shape(sid, "FLOWCHART_TERMINATOR", x, y, w, h, fill=MEADOW)
+    over = ratio > 1
+    deck.shape(sid, "FLOWCHART_TERMINATOR", x, y, max(h * 1.6, w * min(ratio, 1)), h,
+               fill=PINK if over else GREEN)
+    note = (f"予算より {total - budget:,}円 多め" if over
+            else f"予算の {round(ratio * 100)}%（あと {budget - total:,}円）")
+    deck.label(sid, x - 6, y + 12, w + 12, 18, note, size=9.5,
+               color=PINK if over else GREEN_DARK, align="CENTER")
 
 
 def _packing(deck: _Deck, plan: dict):
@@ -691,7 +918,8 @@ def build_requests(plan: dict, page_size=None, image_url=None, weather_days=None
     deck = _Deck(w_pt, h_pt, image_url)
     _cover(deck, plan, weather_days)
     _overview(deck, plan)
-    _schedule(deck, plan)
+    _glance(deck, plan, weather_days)
+    _schedule(deck, plan, weather_days)
     _costs(deck, plan)
     _packing(deck, plan)
     _closing(deck, plan)

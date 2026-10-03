@@ -132,6 +132,11 @@ SHAPES = {
     "持ちもの多め": _plan(packing_list=[f"持ちもの{i}" for i in range(30)]),
     "長い総評": _plan(feedback="とても" * 150),
     "1日がとても長い": _plan(schedule=["1日目"] + [f"{i:02d}:00 予定{i}" for i in range(40)]),
+    "時刻の幅": _plan(schedule=["1日目"] + [f"{9 + i:02d}:00〜{10 + i:02d}:30 予定{i}（説明が少し長めの行）"
+                                          for i in range(12)]),
+    "2週間": _plan(duration="13泊14日", travel_date="2026年12月28日", themes=["温泉", "雪景色"],
+                 schedule=sum(([f"{d}日目"] + [f"{9 + i:02d}:00 予定{d}-{i}" for i in range(6)]
+                               for d in range(1, 15)), [])),
 }
 
 
@@ -194,7 +199,9 @@ def test_schedule_gets_one_page_per_day_and_splits_long_days():
     body, _ = SX.build_requests(SHAPES["長い旅"])
     _validate(body)
     texts = _texts_in_order(body)
-    assert [t for t in texts if re.fullmatch(r"\d日目", t)] == [f"{d}日目" for d in range(1, 7)]
+    # 「旅のあらまし」のカードに1回、その日のページに1回
+    assert all(texts.count(f"{d}日目") == 2 for d in range(1, 7))
+    assert "日ごとの みどころ" in texts
     # 日付が具体的なので、各日の左の帯に曜日つきの日付が出る
     assert "11月3日（火）" in texts and "11月8日（日）" in texts
 
@@ -204,6 +211,105 @@ def test_schedule_gets_one_page_per_day_and_splits_long_days():
     assert texts.count("1日目") >= 2 and "（つづき）" in texts
     # 40行がどれも1回ずつ、どこかのページに載っていること（取りこぼし・重複が無い）
     assert sorted(_timeline(texts)) == sorted((f"{i:02d}:00", f"予定{i}") for i in range(40))
+
+
+def test_time_ranges_take_two_lines_and_do_not_overlap():
+    """「09:00〜11:00」は時刻の欄に入りきらない。開始と終了を2行にし、高さも確保する。"""
+    plan = _plan(schedule=["1日目", "09:00〜11:00 兼六園", "11:30-12:30 近江町市場で昼食", "13:00 美術館"])
+    body, _ = SX.build_requests(plan)
+    _validate(body)
+    texts = _texts_in_order(body)
+    assert "09:00" in texts and "〜11:00" in texts and "〜12:30" in texts
+    assert "兼六園" in texts, "時刻を外した中身が予定の欄に出ていない"
+    # 次の行の時刻が、前の行の2行目（終了時刻）に重ならない
+    boxes = {r["createShape"]["objectId"]: r["createShape"]["elementProperties"]
+             for r in body if "createShape" in r}
+    y_of = {r["insertText"]["text"]: boxes[r["insertText"]["objectId"]]["transform"]["translateY"]
+            for r in body if "insertText" in r}
+    assert y_of["11:30"] >= y_of["〜11:00"] + 16
+
+
+def test_day_header_with_the_first_item_on_the_same_line_keeps_the_item():
+    """「【2日目】09:00 美術館」で、その日の予定が消えないこと（実際に消えていた）。"""
+    plan = _plan(schedule=["【1日目】09:00 東京駅発", "10:00 金沢着", "【2日目】 09:00 美術館"])
+    body, _ = SX.build_requests(plan)
+    _validate(body)
+    texts = _texts_in_order(body)
+    assert "東京駅発" in texts and "美術館" in texts
+    assert texts.count("2日目") == 2, "2日目のページが無い"
+
+
+def test_full_width_times_are_normalised():
+    plan = _plan(schedule=["１日目", "０９：００ 出発", "２日目", "１０：００ 帰る"])
+    body, _ = SX.build_requests(plan)
+    texts = _texts_in_order(body)
+    assert "09:00" in texts and "10:00" in texts
+
+
+def test_timeline_marks_meals_stays_moves_and_bolds_place_names():
+    body, _ = SX.build_requests(_plan())
+    _, texts = _validate(body)
+    emojis = [t for t in _texts_in_order(body) if t in ("🍱", "🏨", "🚄", "✈️", "✨", "☕")]
+    assert "🍱" in emojis and "🚄" in emojis and "✨" in emojis
+    # 「11:00 🍣 近江町市場で昼食」は食事、「13:00 兼六園」は観光地
+    assert SX._kind("🍣 近江町市場で昼食", SX._place_names(_plan())) == "meal"
+    assert SX._kind("兼六園（約1時間・バス10分）", ["兼六園"]) == "spot", "観光地をバスの語で移動と取り違えている"
+    assert SX._kind("江ノ電で長谷へ（約5分）", []) == "move"
+    assert SX._kind("羽田空港発（AF293）", []) == "fly"
+    assert SX._kind("ホテル日航金沢にチェックイン", ["ホテル日航金沢"]) == "stay"
+    # 地名は予定の中で太字になる（UTF-16 の位置で）
+    text = "🍣 近江町市場 いきいき亭で昼食"
+    styles = SX._name_styles(text, ["近江町市場 いきいき亭", "近江町市場"])
+    units = text.encode("utf-16-le")
+    assert [units[a * 2:b * 2].decode("utf-16-le") for a, b, _, _ in styles] == ["近江町市場 いきいき亭"]
+
+
+def test_day_panel_shows_that_days_weather():
+    weather = [{"date": "2026-11-04", "emoji": "☔", "tmax": 14.4, "tmin": 8.6}]
+    body, _ = SX.build_requests(_plan(), weather_days=weather)
+    texts = _texts_in_order(body)
+    assert "☔  14° / 9°" in texts
+    assert texts.index("2日目", texts.index("日ごとの みどころ") + 10) < texts.index("☔  14° / 9°")
+
+
+def test_cover_shows_themes_as_tags():
+    body, _ = SX.build_requests(_plan(themes=["食", "街歩き", "とても長いテーマの名前です"]))
+    texts = _texts_in_order(body)
+    assert "# 食" in texts and "# 街歩き" in texts and "# とても長いテー…" in texts
+
+
+def test_budget_bar_says_how_much_is_left_or_over():
+    body, _ = SX.build_requests(_plan())
+    assert "予算の 85%（あと 12,000円）" in _texts_in_order(body)
+    body, _ = SX.build_requests(_plan(total_per_person=86000))
+    assert "予算より 6,000円 多め" in _texts_in_order(body)
+    _validate(body)
+
+
+def test_full_width_brackets_stay_as_written():
+    """時刻を半角にするのは時刻だけ。「（約1時間）」のかっこまで半角に変えない。"""
+    body, _ = SX.build_requests(_plan(schedule=["1日目", "０９：００ 兼六園（約1時間・バス10分＋徒歩5分）"]))
+    texts = _texts_in_order(body)
+    assert "09:00" in texts and "兼六園（約1時間・バス10分＋徒歩5分）" in texts
+
+
+def test_glance_cards_skip_duplicate_names_and_cover_travel_days():
+    places = SX._place_names(_plan(spots=["近江町市場"], restaurants=["近江町市場 いきいき亭"]))
+    assert SX._highlights(["11:00 近江町市場 いきいき亭で昼食", "13:00 近江町市場を散策"], places) \
+        == ["近江町市場 いきいき亭"], "同じ場所を2回挙げている"
+    # 地名の出てこない移動だけの日も、空のカードにしない
+    assert SX._highlights(["09:00 チェックアウト", "10:00 RER B線で空港へ（約50分）"], places) \
+        == ["チェックアウト", "RER B線で空港へ"]
+    assert SX._clip("オテル・デュ・ルーヴル・パリ", 8) == "オテル・デュ…"
+
+
+def test_glance_page_is_only_for_multi_day_trips():
+    body, _ = SX.build_requests(SHAPES["日帰り"])
+    assert "日ごとの みどころ" not in _texts_in_order(body)
+    body, _ = SX.build_requests(_plan(duration="13泊14日", schedule=sum(
+        ([f"{d}日目", f"09:00 予定{d}"] for d in range(1, 15)), [])))
+    texts = _texts_in_order(body)
+    assert texts.count("日ごとの みどころ") == 1 and texts.count("日ごとの みどころ（つづき）") == 1
 
 
 def test_note_before_day_one_rides_on_day_one():

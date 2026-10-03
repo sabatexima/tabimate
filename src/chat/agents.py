@@ -123,6 +123,21 @@ def _is_car(mode: str) -> bool:
     return any(w in m for w in _CAR_WORDS)
 
 
+def _clearly_specific(destination: str) -> bool:
+    """地図の行政界から、市町村くらいの広さだと分かる行き先か。
+
+    分からない（見つからない・通信できない・行政界が無く既定の半径になった）ときは
+    False（＝AI に判断させる）。「関東」「どこでも」はここで弾かれず、AI に回る。
+    """
+    try:
+        from services.geocoding import _MAX_DIST_KM
+        from services.weather import dest_center
+        center = dest_center(destination)
+    except Exception:
+        return False
+    return bool(center) and float(center.get("radius_km") or _MAX_DIST_KM) < _MAX_DIST_KM
+
+
 def settle_destination(state: TravelPlanState):
     """行き先が広すぎる（「日本」「関東」「どこでも」など）とき、具体的なエリアを1つ決める。
 
@@ -136,6 +151,10 @@ def settle_destination(state: TravelPlanState):
     """
     dest = str(state.get("destination") or "").strip()
     if not dest:
+        return {}
+    # 地図で市町村くらいの広さだと分かる行き先は、AI に聞くまでもない（呼び出しと
+    # 1〜2秒の待ちを省く。照会は後で国を調べるのと同じもので、結果は使い回される）
+    if not state.get("avoid_area") and _clearly_specific(dest):
         return {}
     prompt = P.destination_prompt(state)
     try:
@@ -176,6 +195,13 @@ def transport_agent(state: TravelPlanState):
     response = invoke_with_retry(structured_llm, prompt)
     remaining = state["budget_limit"] - response.transport_cost
     if remaining <= 0:
+        if state.get("destination_request"):
+            # 行き先は AI が選んだもの。お客さまの行き先が悪いような言い方をしない
+            raise ValueError(
+                f"「{state['destination_request']}」の中から選んだ「{state['destination']}」でも、"
+                f"往復交通費（{response.transport_cost:,}円/人）が予算上限（{state['budget_limit']:,}円/人）を"
+                "超えてしまいました。予算を増やすか、出発地から近い行き先を教えてください。"
+            )
         raise ValueError(
             f"往復交通費（{response.transport_cost:,}円/人）が予算上限（{state['budget_limit']:,}円/人）を超えています。予算を増やすか目的地を変更してください。"
         )

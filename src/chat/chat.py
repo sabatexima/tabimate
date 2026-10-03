@@ -123,6 +123,7 @@ class ConversationState(BaseModel):
     is_complete: bool = Field(False, description="プランを生成/再生成すべきならTrue（新規作成 or 既存プランの変更要望）。雑談や条件不足ならFalse")
     plan_change_request: Optional[str] = Field(None, description="既にプラン提示済みで、ユーザーがそのプランの変更を求めている場合の具体的な変更指示。新規作成や雑談の場合はNull")
     edit_targets: Optional[List[str]] = Field(None, description="既存プランの変更時、変更が必要な領域だけを列挙（sightseeing/gourmet/accommodation/schedule/budget/transport、全体なら['all']）。新規作成や雑談はNull")
+    wants_other_destination: Optional[bool] = Field(None, description="既にプラン提示済みで、旅行先そのものを別の場所にしてほしいが、具体的な地名は言っていない場合 true（例:「別の場所にして」「ほかの所がいい」）。宿やお店だけを変えたい場合・地名を言った場合・新規作成や雑談は false")
     next_question: str = Field("", description="is_complete=Falseのときにユーザーへ返す文（次に聞く質問、または雑談への自然な返答）。is_complete=Trueなら空文字")
 
 
@@ -359,7 +360,12 @@ def chat(user_message: str, messages_history=None, request_id=None, active_reque
     # 「別の場所にして」と言われたときだけ、前回のエリアを外して決め直させる。
     if prev and prev.get("destination_request") and \
             str(state.destination or "").strip() == str(prev["destination_request"]).strip():
-        if _ASK_ANOTHER_PLACE.search(state.plan_change_request or ""):
+        # 決め手は会話を読む AI の判断（「宿を別の場所に」を行き先の変更と取り違えない）。
+        # 読み取れなかったときだけ、言い回しで補う
+        another = state.wants_other_destination
+        if another is None:
+            another = bool(_ASK_ANOTHER_PLACE.search(state.plan_change_request or ""))
+        if another:
             inputs["avoid_area"] = prev.get("destination") or ""
             targets = ["all"]
             logger.info("別の場所の希望: %s 以外で決め直す", inputs["avoid_area"])

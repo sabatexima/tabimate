@@ -124,9 +124,13 @@ def run_pipeline(monkeypatch, inputs, verdicts=("approved",), country="jp", sett
     monkeypatch.setattr(A, "invoke_with_retry", invoke)
     monkeypatch.setattr(A, "build_search_context", lambda qs: "【参考】検索結果")
     monkeypatch.setattr(GC, "verify_place_exists", lambda n, c=None, **kw: True)
+    # 地図の照会の代わり。広い地名は行政界が大きい（半径300km）として返す
+    # 「どこでも」「近場」は地図に無い（見つからない）
+    broad, vague = {"関東", "日本", "九州", "北海道"}, {"どこでも", "近場"}
     monkeypatch.setattr(GC, "geocode_center",
-                        lambda q: {"lat": 36.0, "lng": 137.0, "radius_km": 80.0,
-                                   "country_code": country})
+                        lambda q: None if q in vague else
+                        {"lat": 36.0, "lng": 137.0, "radius_km": 300.0 if q in broad else 80.0,
+                         "country_code": country})
     monkeypatch.setattr(GC, "geocode_one", lambda q, **kw: {"lat": 36.0, "lng": 137.0})
     monkeypatch.setattr(WX, "forecast", lambda *a, **kw: [
         {"date": "2099-08-01", "label": "晴れ", "tmin": 20, "tmax": 30, "code": 0}])
@@ -194,7 +198,8 @@ def test_prompts_have_no_holes(monkeypatch, duration, country, no_car):
 
     # 呼ばれた顔ぶれが、旅の形どおりであること。宿を取らない行程で宿の
     # エージェントを呼ぶと、返事を捨てるだけの LLM 代がかかる
-    expected = {"DestinationChoice", "TransportOutput", "SightseeingCandidatesOutput", "SightseeingOutput",
+    # 金沢・パリは地図で市の広さと分かるので、行き先を決める AI は呼ばない
+    expected = {"TransportOutput", "SightseeingCandidatesOutput", "SightseeingOutput",
                 "GourmetCandidatesOutput", "GourmetOutput", "TimekeeperOutput",
                 "CostOutput", "BalancerOutput"}
     if nights > 0:
@@ -348,3 +353,29 @@ def test_destination_prompt_knows_what_to_weigh():
     for must in ("関東", "東京", "日帰り", "温泉", "20000", "2026年11月3日",
                  "公共交通機関", "「箱根」以外から選ぶ", "地図で検索できる一般的な地名"):
         assert must in text, must
+
+
+
+def test_city_sized_destination_skips_the_extra_ai_call(monkeypatch):
+    """地図で市の広さと分かる行き先は、行き先を決める AI を呼ばない（待ちとお金を省く）。"""
+    _, prompts = run_pipeline(monkeypatch, _inputs("1泊2日", "jp"), settle=("日光", "x"))
+    assert "DestinationChoice" not in [n for n, _ in prompts]
+
+
+def test_unknown_or_vague_names_still_ask_the_ai(monkeypatch):
+    """地図で見つからない「どこでも」「近場」は、AI に判断させる。"""
+    state, prompts = run_pipeline(monkeypatch, _inputs("1泊2日", "jp", destination="どこでも"),
+                                  settle=("箱根", "箱根で組みました"))
+    assert [n for n, _ in prompts][0] == "DestinationChoice"
+    assert state["destination"] == "箱根"
+
+
+def test_over_budget_after_the_ai_chose_the_area_says_so(monkeypatch):
+    import chat.agents as A
+    monkeypatch.setattr(A, "llm", _FakeLLM())
+    monkeypatch.setattr(A, "invoke_with_retry",
+                        lambda bound, prompt: type("R", (), {"transport_cost": 99999})())
+    state = dict(_inputs("1泊2日", "jp", destination="箱根", budget_limit=20000),
+                 destination_request="関東", transport_mode="おまかせ")
+    with pytest.raises(ValueError, match="「関東」の中から選んだ「箱根」でも"):
+        A.transport_agent(state)

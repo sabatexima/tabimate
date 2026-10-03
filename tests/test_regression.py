@@ -1444,3 +1444,20 @@ def test_another_place_phrases():
         assert _ASK_ANOTHER_PLACE.search(text), text
     for text in ("2日目をゆっくり", "宿を変えて", "別の宿にして", "ほかのお店がいい"):
         assert not _ASK_ANOTHER_PLACE.search(text), text
+
+
+
+def test_moving_only_the_hotel_does_not_change_the_destination(monkeypatch):
+    """「宿を別の場所にして」は宿だけの話。会話の AI がそう判断したら、行き先は箱根のまま。"""
+    captured = _chat_with(monkeypatch, _complete_state(
+        destination="関東", plan_change_request="宿を別の場所にして", edit_targets=["accommodation"],
+        wants_other_destination=False))
+    assert captured["destination"] == "箱根" and not captured.get("avoid_area")
+    assert captured["edit_targets"] == ["accommodation"]
+
+
+def test_the_conversation_ai_decides_another_place_even_without_the_phrase(monkeypatch):
+    captured = _chat_with(monkeypatch, _complete_state(
+        destination="関東", plan_change_request="もうちょっと海っぽい所がいいな", edit_targets=["all"],
+        wants_other_destination=True))
+    assert captured["avoid_area"] == "箱根" and captured["destination"] == "関東"

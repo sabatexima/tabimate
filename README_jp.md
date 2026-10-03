@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13">
   <img src="https://img.shields.io/badge/Flask-3.1-000000?logo=flask&logoColor=white" alt="Flask 3.1">
   <img src="https://img.shields.io/badge/LangGraph-1.2-1C3C3C" alt="LangGraph 1.2">
-  <img src="https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
+  <img src="https://img.shields.io/badge/Gemini-3.8%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
   <img src="https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?logo=googlecloud&logoColor=white" alt="Cloud Run">
   <img src="https://img.shields.io/badge/Code-MIT-4fa83a" alt="Code: MIT">
   <img src="https://img.shields.io/badge/Artwork-CC%20BY--NC%204.0-f08ba0" alt="Artwork: CC BY-NC 4.0">
@@ -135,7 +135,7 @@ SwiftUI のネイティブアプリが [`ios/`](ios/) にあります。同じ�
 
 | | |
 |---|---|
-| 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
+| 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.8 Flash / 3.1 Flash-Lite · Tavily Search |
 | ⚙️ **バックエンド** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **地図・位置** | Leaflet · Stadia Maps（水彩）· Google Places · OSM Nominatim · 国土地理院（日本のみ） |
 | ☁️ **インフラ** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
@@ -357,7 +357,7 @@ START
 | `GCS_BUCKET` | 条件 | 設定すると GCS、無ければローカルのファイルシステム |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | 保存先 · 署名URLの有効期間 · 署名用SA |
 | `REDIS_URL` | | 生成中の状態をインスタンス間で共有する |
-| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | 使うモデルの上書き（既定 `gemini-3.6-flash` / `gemini-3.1-flash-lite`）。新モデルを1行で戻せます |
+| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | 使うモデルの上書き（既定 `gemini-3.8-flash` / `gemini-3.1-flash-lite`）。新モデルを1行で戻せます |
 | `MAX_CONTENT_LENGTH_MB` | | 1リクエストあたりのアップロード上限（既定100） |
 | `SEARCH_SNIPPET_CHARS` / `SEARCH_QUERY_CHARS` | | Web検索の結果をどこまで残すかと、1クエリあたりの上限（600 / 2400）。モデルに渡す量を抑える |
 | `INTERPRETER_MODEL` | | 付箋づくりとベストショット選びに使うモデル（既定 `gemini-3.1-flash-lite`） |

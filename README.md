@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13">
   <img src="https://img.shields.io/badge/Flask-3.1-000000?logo=flask&logoColor=white" alt="Flask 3.1">
   <img src="https://img.shields.io/badge/LangGraph-1.2-1C3C3C" alt="LangGraph 1.2">
-  <img src="https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
+  <img src="https://img.shields.io/badge/Gemini-3.8%20Flash-4285F4?logo=googlegemini&logoColor=white" alt="Gemini">
   <img src="https://img.shields.io/badge/Cloud%20Run-deployed-4285F4?logo=googlecloud&logoColor=white" alt="Cloud Run">
   <img src="https://img.shields.io/badge/Code-MIT-4fa83a" alt="Code: MIT">
   <img src="https://img.shields.io/badge/Artwork-CC%20BY--NC%204.0-f08ba0" alt="Artwork: CC BY-NC 4.0">
@@ -137,7 +137,7 @@ It talks to the endpoints under `/auth/app/*` and `/api/*` listed below, authent
 
 | | |
 |---|---|
-| 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.6 Flash / 3.1 Flash-Lite · Tavily Search |
+| 🧠 **AI** | LangGraph 1.2 · LangChain · Gemini 3.8 Flash / 3.1 Flash-Lite · Tavily Search |
 | ⚙️ **Backend** | Flask 3.1 · SQLAlchemy 2.0 · MySQL 8.0 / TiDB · gunicorn |
 | 🗺️ **Maps & Geo** | Leaflet · Stadia Maps (watercolor) · Google Places · OSM Nominatim · GSI (domestic only) |
 | ☁️ **Infra** | Cloud Run · Docker · Cloud Storage · Secret Manager · Google OAuth 2.0 · GitHub Actions |
@@ -359,7 +359,7 @@ Set in `src/.env` (local) or Cloud Run env / Secret Manager. `src/.env` is Git-i
 | `GCS_BUCKET` | cond. | Uses GCS when set, else the local filesystem |
 | `LOCAL_UPLOAD_DIR` / `SIGNED_URL_TTL_SECONDS` / `GCS_SIGNER_SA` | | Local dir · signed-URL TTL · signer SA |
 | `REDIS_URL` | | Share in-flight generation state across instances |
-| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override models (defaults `gemini-3.6-flash` / `gemini-3.1-flash-lite`) — roll back a new model with one line |
+| `GEMINI_MODEL_STRONG` / `GEMINI_MODEL_LITE` | | Override models (defaults `gemini-3.8-flash` / `gemini-3.1-flash-lite`) — roll back a new model with one line |
 | `MAX_CONTENT_LENGTH_MB` | | Upload size cap per request (default 100) |
 | `SEARCH_SNIPPET_CHARS` / `SEARCH_QUERY_CHARS` | | How much of each web-search result is kept, and the cap per query (600 / 2400) — trims what reaches the model |
 | `INTERPRETER_MODEL` | | Model used for sticky notes and best-shot picking (default `gemini-3.1-flash-lite`) |

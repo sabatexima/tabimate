@@ -312,7 +312,7 @@ AIに渡してください。** これ1つで、そのまま作れるように�
 
 技術の版（README と同じ）:
 Python 3.13 / Flask 3.1 / SQLAlchemy 2.0 / LangGraph 1.2 /
-Gemini 3.6 Flash・3.1 Flash-Lite / Leaflet / SwiftUI（iOS 17+）・Swift 6 /
+Gemini 3.8 Flash・3.1 Flash-Lite / Leaflet / SwiftUI（iOS 17+）・Swift 6 /
 Cloud Run・Cloud Storage・Secret Manager
 
 サーバーの動かし方: gunicorn、**ワーカー1 × スレッド20**、タイムアウト3600秒。

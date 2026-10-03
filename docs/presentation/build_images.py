@@ -311,7 +311,7 @@ def fig_architecture():
       <div class="down">↓</div>
 
       <div class="lane"><div class="ln">たよる先</div><div class="row">
-        {box("✨", "Gemini", "3.6 Flash / 3.1 Flash-Lite")}
+        {box("✨", "Gemini", "3.8 Flash / 3.1 Flash-Lite")}
         {box("🔎", "Tavily", "Web検索")}
         {box("📍", "Google Places", "実在するお店だけ残す")}
         {box("🗺️", "Stadia · OSM · 地理院", "水彩タイルと座標解決")}
@@ -376,7 +376,7 @@ def fig_sticker():
 # ----------------------------------------------------------------------
 def fig_stack():
     groups = [
-        ("🧠", "AI", ["LangGraph 1.2", "LangChain", "Gemini 3.6 Flash", "Gemini 3.1 Flash-Lite",
+        ("🧠", "AI", ["LangGraph 1.2", "LangChain", "Gemini 3.8 Flash", "Gemini 3.1 Flash-Lite",
                       "Tavily Search"]),
         ("⚙️", "バックエンド", ["Python 3.13", "Flask 3.1", "SQLAlchemy 2.0",
                             "MySQL 8.0 / TiDB", "gunicorn"]),

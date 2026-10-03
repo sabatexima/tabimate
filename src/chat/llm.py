@@ -20,7 +20,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env
 
 # モデルIDは環境変数で差し替え可能にする（新モデルが出たとき .env の1行で戻せる）。
 _MODEL_LITE = os.getenv("GEMINI_MODEL_LITE", "gemini-3.1-flash-lite")
-_MODEL_STRONG = os.getenv("GEMINI_MODEL_STRONG", "gemini-3.6-flash")
+_MODEL_STRONG = os.getenv("GEMINI_MODEL_STRONG", "gemini-3.8-flash")
 
 # 候補出し・選定・会話抽出など回数の多い軽作業用。
 # 3.5-flash-lite は品質は上だが値上げ（入力+20%/出力+67%）のため、
@@ -34,8 +34,11 @@ llm = ChatGoogleGenerativeAI(
 )
 
 # 推論・数値判断が重要なノード（タイムキーパー、費用=cost_manager、審査=balancer）用。
-# gemini-3.6-flash は 3.5-flash と同等の知能（AA Intelligence Index 50）ながら
-# 出力単価 -17%（$9.00→$7.50）かつ出力トークンも約17%減で、実質コスト減。
+# gemini-3.8-flash（2026-09 GA）は AA Intelligence Index 57（既定の思考量 medium）で、
+# 3.6-flash の 50 より一段上。単価は 2026年末まで $0.75/$3.75 の導入価格、
+# 2027年からは 3.6-flash と同じ $1.50/$7.50 なので、値上げなしで賢くなる。
+# 3.8 は temperature を無視する（決定性は thinking_level 側で決まる）ため 0 は効かないが害もない。
+# thinking_level="minimal" は 3.8 で受け付けられずエラーになるので指定しないこと。
 llm_strong = ChatGoogleGenerativeAI(
     model=_MODEL_STRONG,
     temperature=0,
@@ -53,6 +56,8 @@ MODEL_PRICING_USD_PER_M = {
     "gemini-3.5-flash-lite": (0.30, 2.50),
     "gemini-3.5-flash": (1.50, 9.00),
     "gemini-3.6-flash": (1.50, 7.50),
+    # 2026年末までは導入価格 (0.75, 3.75)。概算が低く出すぎないよう通常価格で見積もる
+    "gemini-3.8-flash": (1.50, 7.50),
 }
 USD_TO_JPY = 150  # 概算用の固定レート
 
